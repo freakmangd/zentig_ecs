@@ -53,3 +53,31 @@ pub fn addTupleField(comptime self: Self, comptime index: usize, comptime T: typ
 pub fn Build(comptime self: Self) type {
     return @Type(Type{ .Struct = self.type_def });
 }
+
+pub fn prettyPrint(comptime T: type) *const [std.fmt.count(getFmt(T), getArgs(T)):0]u8 {
+    return std.fmt.comptimePrint(getFmt(T), getArgs(T));
+}
+
+fn getFmt(comptime T: type) []const u8 {
+    var fmt: []const u8 = "struct [";
+    inline for (std.meta.fields(T)) |_| {
+        fmt = fmt ++ "{s}: {s} ";
+    }
+    return fmt ++ "],";
+}
+
+fn getArgs(comptime T: type) std.meta.Tuple(&[_]type{[]const u8} ** (std.meta.fields(T).len * 2)) {
+    var out: std.meta.Tuple(&[_]type{[]const u8} ** (std.meta.fields(T).len * 2)) = undefined;
+
+    const MAX_DEPTH = 10;
+    comptime var depth: usize = 0;
+    comptime var i: usize = 0;
+    const out_fields = std.meta.fields(T);
+    inline for (out_fields) |field| {
+        out[i] = field.name;
+        out[i + 1] = if (std.meta.trait.isContainer(field.type) and depth < MAX_DEPTH) prettyPrint(field.type) else @typeName(field.type);
+        i += 2;
+    }
+
+    return out;
+}

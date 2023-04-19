@@ -8,7 +8,7 @@ pub const Sprite = struct {
 };
 
 pub fn register(world: anytype) anyerror!void {
-    world.addSystemsToStage(ecs.stages.DRAW, &.{
+    world.addSystemsToStage("DRAW", &.{
         draw_sprites,
     });
 }
