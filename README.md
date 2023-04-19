@@ -7,12 +7,24 @@ It's heavily inspired by everything that makes [bevy_ecs](https://github.com/bev
 ### __WARNING: This library _DOES NOT WORK___
 There currently is an issue with the compiler, or something, I actually don't know really.
 This is the compiler message I get when building:
+
 ```
 src\ecs.zig:234:13: error: TODO (LLVM): implement const of pointer type '[TODO fix internal compiler bug regarding dump]' (value.Value.Tag.function)
         pub fn init(alloc: Allocator) !Self {
 ```
 
-Which I don't _think_ is my fault... probably...
+This has to do with the fact I gather function pointers at comptime, which isn't supported yet.
+
+## Installation
+```cmd
+cd dir_with_build_file
+git clone https://github.com/freakmangd/zentig_ecs.git lib/zentig_ecs
+```
+
+`build.zig`
+```zig
+@import("lib/zentig_ecs/lib.zig").addAsPackage("zentig", exe);
+```
 
 ## Simple
 
