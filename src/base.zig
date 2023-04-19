@@ -7,6 +7,6 @@ pub const Transform = struct {
     scale: ecs.Vec3 = ecs.Vec3.one(),
 };
 
-pub fn register(comptime world: *ecs.WorldBuilder) anyerror!void {
+pub fn include(comptime world: *ecs.WorldBuilder) anyerror!void {
     world.addComponents(.{Transform});
 }
