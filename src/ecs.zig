@@ -9,8 +9,6 @@ pub const base = @import("base.zig");
 
 pub const Entity = usize;
 
-/// `info` should be a tuple of structs that have
-/// the def `fn register(world: anytype) anyerror!void`
 pub const WorldBuilder = struct {
     const Self = @This();
 
@@ -50,11 +48,9 @@ pub const WorldBuilder = struct {
         return self;
     }
 
-    pub fn include(comptime self: *Self, more_info: anytype) anyerror!void {
-        inline for (more_info) |inf| {
-            if (std.meta.trait.hasFn("register")(inf)) {
-                try inf.register(self);
-            }
+    pub fn include(comptime self: *Self, comptime includes: []const *const fn (comptime *WorldBuilder) anyerror!void) anyerror!void {
+        inline for (includes) |inc| {
+            try inc(self);
         }
     }
 
@@ -175,9 +171,9 @@ pub const WorldBuilder = struct {
 test WorldBuilder {
     const MyWorld = comptime blk: {
         var wb = WorldBuilder.new();
-        try wb.include(.{
-            base,
-            game_file,
+        try wb.include(&.{
+            base.register,
+            game_file.register,
         });
         break :blk wb.Build();
     };
@@ -220,8 +216,8 @@ fn World(comptime CompHolder: type, comptime Stages: type) type {
             self.entities.deinit();
         }
 
-        pub fn runStageList(self: *Self, stage_ids: []const []const u8) anyerror!void {
-            for (stage_ids) |sid| {
+        pub fn runStageList(self: *Self, stage_names: []const []const u8) anyerror!void {
+            for (stage_names) |sid| {
                 try self.stages.runStage(self, sid);
             }
         }
@@ -334,9 +330,9 @@ pub fn Query(comptime q: anytype, comptime options: anytype) type {
 test World {
     const MyWorld = comptime blk: {
         var wb = WorldBuilder.new();
-        try wb.include(.{
-            base,
-            game_file,
+        try wb.include(&.{
+            base.register,
+            game_file.register,
         });
         break :blk wb.Build();
     };
@@ -357,7 +353,7 @@ test World {
 const game_file = struct {
     pub fn register(comptime world: *WorldBuilder) anyerror!void {
         world.addComponents(.{Sprite});
-        try world.include(.{player_file});
+        try world.include(&.{player_file.register});
     }
 
     pub const Sprite = struct {
@@ -369,7 +365,7 @@ const player_file = struct {
     pub fn register(comptime world: *WorldBuilder) anyerror!void {
         world.addComponents(.{Player});
         world.addUpdateSystems(.{player_speach});
-        try world.include(.{player_weapons_file});
+        try world.include(&.{player_weapons_file.register});
     }
 
     pub const Player = struct {

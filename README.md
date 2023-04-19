@@ -79,7 +79,7 @@ The `.include()` function in `WorldBuilder` makes it easy to compartmentalize yo
 
 `player.zig`:
 ```zig
-pub fn register(comptime wb: WorldBuilder) anyerror!void {
+pub fn register(comptime wb: *WorldBuilder) anyerror!void {
   wb.addComponents(.{ Player, PlayerGun, PlayerHUD });
   wb.addSystems(.{ update_player, update_gun, update_hud });
   try wb.include(...);
@@ -93,12 +93,12 @@ const ztg = @import("zentig");
 
 // This would most likely be a player.zig file instead
 const player = struct {
-  // This is called when the containing struct is passed into a .include() call on a WorldBuilder
-  pub fn register(comptime world: ztg.WorldBuilder) anyerror!void {
+  // This is called when passed into a .include() call on a WorldBuilder
+  pub fn register(comptime wb: *ztg.WorldBuilder) anyerror!void {
     // All components used in the world must be added before .Build() is called on the WorldBuilder
-    world.addComponents(.{Player});
+    wb.addComponents(.{Player});
     // Adds a system to the UPDATE stage of the world, systems can only be added during comptime
-    world.addUpdateSystems(.{player_speak});
+    wb.addUpdateSystems(.{player_speak});
   }
   
   // A basic component
@@ -128,8 +128,8 @@ pub fn main() !void {
   const MyWorld = comptime blk: {
     var wb = ztg.WorldBuilder.new();
     try wb.include(.{
-      ztg.base,
-      player,
+      ztg.base.register,
+      player.register,
     });
     break :blk wb.Build();
   };

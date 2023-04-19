@@ -1,8 +1,6 @@
 // Currently, this version of WorldBuilder does not work, as
 // function pointers at comptime are a lil wonkey
 
-/// `info` should be a tuple of structs that have
-/// the def `fn register(world: anytype) anyerror!void`
 pub const WorldBuilder = struct {
     const Self = @This();
 

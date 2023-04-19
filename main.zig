@@ -3,7 +3,7 @@ const ztg = @import("zentig");
 
 // This would most likely be a player.zig file instead
 const player = struct {
-    pub fn register(comptime world: ztg.WorldBuilder) anyerror!void {
+    pub fn register(comptime world: *ztg.WorldBuilder) anyerror!void {
         // All components used in the world must be added before .Build() is called on the WorldBuilder
         world.addComponents(.{Player});
         // Adds a system to the UPDATE stage of the world, systems can only be added during comptime
