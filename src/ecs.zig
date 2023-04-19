@@ -120,21 +120,9 @@ pub const WorldBuilder = struct {
         };
     }
 
-    pub fn __Stages(comptime T: type) type {
-        return struct {
-            inner: T,
-
-            pub fn runStage(self: @This(), world: anytype, comptime stage_name: []const u8) anyerror!void {
-                _ = self;
-                _ = world;
-                _ = stage_name;
-            }
-        };
-    }
-
     pub fn Build(comptime self: Self) type {
         const CompHolder = self.compholder.Build();
-        return World(CompHolder, __Stages(CompileStagesList(self.stage_defs)));
+        return World(CompHolder, Stages(CompileStagesList(self.stage_defs)));
     }
 
     fn getArgsForSystem(world: anytype, comptime SysFn: type) anyerror!std.meta.ArgsTuple(SysFn) {
@@ -182,7 +170,6 @@ pub const WorldBuilder = struct {
             const Stage = sdef.def.Build();
             final = final.addField(sdef.name, Stage, null);
         }
-        @compileLog(TypeBuilder.prettyPrint(final.Build()));
         return final.Build();
     }
 };
@@ -359,15 +346,14 @@ test World {
     var world = try MyWorld.init(testing.allocator);
     defer world.deinit();
 
-    //const player_ent = try world.newEnt();
-    //try world.giveEntBundle(player_ent, player_file.PlayerBundle, .{
-    //    .p = .{ .name = "Player" },
-    //    .tran = .{},
-    //    .sprite = .{ .img = 0 },
-    //});
+    const player_ent = try world.newEnt();
+    try world.giveEntBundle(player_ent, player_file.PlayerBundle, .{
+        .p = .{ .name = "Player" },
+        .tran = .{},
+        .sprite = .{ .img = 0 },
+    });
 
-    //try world.runStage("UPDATE");
-    //try world.runUpdateStages();
+    try world.runStage("UPDATE");
 }
 
 const game_file = struct {
