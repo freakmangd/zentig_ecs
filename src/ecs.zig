@@ -16,7 +16,6 @@ pub const WorldBuilder = struct {
 
     const StageDef = struct {
         name: []const u8,
-        next: ?usize,
         def: TypeBuilder,
     };
 
@@ -41,10 +40,9 @@ pub const WorldBuilder = struct {
             .stage_defs = &.{},
         };
 
-        for (DEFAULT_STAGES, 1..) |name, i| {
+        for (DEFAULT_STAGES) |name| {
             self.stage_defs = self.stage_defs ++ &[_]StageDef{.{
                 .name = name,
-                .next = if (i == DEFAULT_STAGES.len) null else i,
                 .def = TypeBuilder.new(true, .Auto),
             }};
         }
