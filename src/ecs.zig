@@ -88,29 +88,29 @@ pub const WorldBuilder = struct {
     }
 
     // TODO: This function sucks ass
-    pub fn addSystemsToStage(comptime self: *Self, comptime stage_name: []const u8, systems: anytype) void {
-        for (self.stage_defs, 0..) |sdef, i| {
-            if (std.mem.eql(u8, sdef.name, stage_name)) {
-                var _sdef = sdef;
+    //pub fn addSystemsToStage(comptime self: *Self, comptime stage_name: []const u8, systems: anytype) void {
+    //    for (self.stage_defs, 0..) |sdef, i| {
+    //        if (std.mem.eql(u8, sdef.name, stage_name)) {
+    //            var _sdef = sdef;
 
-                for (systems) |sys| {
-                    _sdef.def = _sdef.def.addTupleField(sdef.def.type_def.fields.len, comptime @TypeOf(sys), &sys);
-                }
+    //            for (systems) |sys| {
+    //                _sdef.def = _sdef.def.addTupleField(sdef.def.type_def.fields.len, comptime @TypeOf(sys), &sys);
+    //            }
 
-                var _stage_defs: [self.stage_defs.len]StageDef = undefined;
-                std.mem.copy(StageDef, &_stage_defs, self.stage_defs);
+    //            var _stage_defs: [self.stage_defs.len]StageDef = undefined;
+    //            std.mem.copy(StageDef, &_stage_defs, self.stage_defs);
 
-                _stage_defs[i] = _sdef;
+    //            _stage_defs[i] = _sdef;
 
-                self.stage_defs = &_stage_defs;
-                break;
-            }
-        }
-    }
+    //            self.stage_defs = &_stage_defs;
+    //            break;
+    //        }
+    //    }
+    //}
 
-    pub fn addUpdateSystems(comptime self: *Self, systems: anytype) void {
-        addSystemsToStage(self, "UPDATE", systems);
-    }
+    //pub fn addUpdateSystems(comptime self: *Self, systems: anytype) void {
+    //    addSystemsToStage(self, "UPDATE", systems);
+    //}
 
     pub fn Stages(comptime Inner: type) type {
         return struct {
@@ -142,7 +142,8 @@ pub const WorldBuilder = struct {
     }
 
     pub fn Build(comptime self: Self) type {
-        return World(self.compholder.Build(), self.resources.Build(), Stages(CompileStagesList(self.stage_defs)));
+        const CompHolder = self.compholder.Build();
+        return World(CompHolder, std.meta.Tuple(self.include_list), self.resources.Build()); //, Stages(CompileStagesList(self.stage_defs)));
     }
 
     fn getArgsForSystem(world: anytype, comptime SysFn: type) anyerror!std.meta.ArgsTuple(SysFn) {
@@ -207,23 +208,27 @@ test WorldBuilder {
     _ = MyWorld;
 }
 
-fn World(comptime CompHolder: type, comptime Resources: type, comptime StagesList: type) type {
+fn World(comptime CompHolder: type, comptime IncludeList: type, comptime Resources: type) type {
     return struct {
         const Self = @This();
+
+        const System = *const fn (*Self) anyerror!void;
+        const SystemList = std.ArrayList(System);
+        const Stages = std.ArrayList(SystemList);
 
         alloc: Allocator,
 
         entities: std.ArrayList(Entity),
         next_ent: Entity = 0,
 
-        stages_list: StagesList,
+        stages_list: Stages,
         components: CompHolder,
         resources: Resources,
 
         pub fn init(alloc: Allocator) !Self {
             var self = Self{
                 .alloc = alloc,
-                .stages_list = .{ .inner = .{} },
+                .stages_list = std.ArrayList(SystemList).init(alloc),
                 .components = undefined,
                 .resources = .{},
                 .entities = std.ArrayList(Entity).init(alloc),
@@ -232,6 +237,16 @@ fn World(comptime CompHolder: type, comptime Resources: type, comptime StagesLis
 
             inline for (std.meta.fields(CompHolder)) |field| {
                 @field(self.components, field.name) = field.type.init(alloc);
+            }
+
+            inline for (std.meta.fields(STAGES_LIST)) |_| {
+                try self.stages_list.append(SystemList.init(alloc));
+            }
+
+            inline for (std.meta.fields(IncludeList)) |inc| {
+                if (comptime std.meta.trait.hasFn("register")(inc.type)) {
+                    try inc.type.register(&self);
+                }
             }
 
             return self;
@@ -251,14 +266,32 @@ fn World(comptime CompHolder: type, comptime Resources: type, comptime StagesLis
             }
         }
 
-        pub fn runStageList(self: *Self, stage_ids: []const []const u8) anyerror!void {
+        pub fn register(self: *Self, registers_tuple: anytype) anyerror!void {
+            inline for (registers_tuple) |reg| {
+                try reg(self);
+            }
+        }
+
+        pub fn addSystemsToStage(self: *Self, stage_id: usize, systems: []const *const fn (*Self) anyerror!void) Allocator.Error!void {
+            for (systems) |sys| {
+                try self.stages_list.items[stage_id].append(sys);
+            }
+        }
+
+        pub fn addUpdateSystems(self: *Self, systems: []const *const fn (*Self) anyerror!void) Allocator.Error!void {
+            try self.addSystemsToStage(stages.UPDATE, systems);
+        }
+
+        pub fn runStageList(self: *Self, stage_ids: []const usize) anyerror!void {
             for (stage_ids) |sid| {
                 try runStage(self, sid);
             }
         }
 
-        pub fn runStage(self: *Self, comptime stage_id: []const u8) anyerror!void {
-            self.stages_list.runStage(self, stage_id);
+        pub fn runStage(self: *Self, comptime stage_id: usize) anyerror!void {
+            for (self.stages_list.items[stage_id].items) |sys| {
+                try sys(self);
+            }
         }
 
         pub fn runInitStages(self: *Self) anyerror!void {

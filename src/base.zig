@@ -35,10 +35,6 @@ pub fn Init(comptime options: InitOptions) type {
         pub fn include(comptime world: *ecs.WorldBuilder) !void {
             world.addComponents(.{Transform});
             world.addResource(Time, .{});
-
-            const MLib = Lib(*world.Build());
-            world.addSystemsToStage("PRE_UPDATE", .{MLib.pre_update_time_wrapper});
-            // TODO: FIXED_UPDATE = world.addSystem();
         }
 
         pub fn register(world: anytype) !void {
