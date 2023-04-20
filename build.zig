@@ -1,7 +1,23 @@
 const std = @import("std");
+const zentig = @import("lib.zig");
 
 pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    const example = b.addExecutable(.{
+        .name = "Example",
+        .root_source_file = .{ .path = "src/example.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+
+    zentig.addAsPackage("zentig", example);
+
+    const run_example_cmd = b.addRunArtifact(example);
+
+    const run_example_step = b.step("example", "Run the example");
+    run_example_step.dependOn(&run_example_cmd.step);
 
     const main_tests = b.addTest(.{
         .root_source_file = .{ .path = "src/tests.zig" },
