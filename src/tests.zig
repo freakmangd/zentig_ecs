@@ -13,7 +13,7 @@ test "ztg.World" {
         .sprite = .{ .img = 0 },
     });
 
-    try world.runStage(ztg.stages.UPDATE);
+    try world.runStage("UPDATE");
 }
 
 const game_file = struct {
@@ -39,10 +39,7 @@ const game_file = struct {
 const player_file = struct {
     pub fn include(comptime world: *ztg.WorldBuilder) anyerror!void {
         world.addComponents(.{Player});
-    }
-
-    pub fn register(world: *game_file.MyWorld) anyerror!void {
-        try world.addUpdateSystems(&.{player_speach});
+        world.addUpdateSystems(.{player_speach});
     }
 
     pub const Player = struct {
@@ -55,10 +52,7 @@ const player_file = struct {
         sprite: game_file.Sprite,
     };
 
-    fn player_speach(world: *game_file.MyWorld) anyerror!void {
-        var q = try world.query(.{ Player, ztg.base.Transform }, .{});
-        defer q.deinit(world.alloc);
-
+    fn player_speach(q: ztg.Query(.{ Player, ztg.base.Transform }, .{})) anyerror!void {
         for (q.items(.a), q.items(.b)) |player, trn| {
             try std.testing.expectFmt("My name is Player, and I'm located at 10 10.", "My name is {s}, and I'm located at {} {}.", .{
                 player.name,

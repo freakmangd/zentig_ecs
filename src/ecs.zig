@@ -46,14 +46,12 @@ pub const WorldBuilder = struct {
     compholder: TypeBuilder,
     resources: TypeBuilder,
     stage_defs: []const StageDef,
-    include_list: []const type,
 
     pub fn new() Self {
         var self = Self{
             .compholder = TypeBuilder.new(false, .Auto),
             .resources = TypeBuilder.new(false, .Auto),
             .stage_defs = &.{},
-            .include_list = &.{},
         };
 
         for (DEFAULT_STAGES) |name| {
@@ -74,7 +72,6 @@ pub const WorldBuilder = struct {
                 @compileError("Included struct " ++ @typeName(inc) ++ " has neither an include fn nor a register fn, make sure you're not supposed to add a field of the struct");
             }
         }
-        self.include_list = self.include_list ++ includes;
     }
 
     pub fn addComponents(comptime self: *Self, comps: anytype) void {
@@ -88,29 +85,31 @@ pub const WorldBuilder = struct {
     }
 
     // TODO: This function sucks ass
-    //pub fn addSystemsToStage(comptime self: *Self, comptime stage_name: []const u8, systems: anytype) void {
-    //    for (self.stage_defs, 0..) |sdef, i| {
-    //        if (std.mem.eql(u8, sdef.name, stage_name)) {
-    //            var _sdef = sdef;
+    pub fn addSystemsToStage(comptime self: *Self, comptime stage_name: []const u8, systems: anytype) void {
+        if (comptime !std.meta.trait.isTuple(@TypeOf(systems))) @compileError("Expected tuple for @TypeOf(systems).");
 
-    //            for (systems) |sys| {
-    //                _sdef.def = _sdef.def.addTupleField(sdef.def.type_def.fields.len, comptime @TypeOf(sys), &sys);
-    //            }
+        for (self.stage_defs, 0..) |sdef, i| {
+            if (std.mem.eql(u8, sdef.name, stage_name)) {
+                var _sdef = sdef;
 
-    //            var _stage_defs: [self.stage_defs.len]StageDef = undefined;
-    //            std.mem.copy(StageDef, &_stage_defs, self.stage_defs);
+                for (systems) |sys| {
+                    _sdef.def = _sdef.def.addTupleField(sdef.def.type_def.fields.len, comptime @TypeOf(sys), &sys);
+                }
 
-    //            _stage_defs[i] = _sdef;
+                var _stage_defs: [self.stage_defs.len]StageDef = undefined;
+                std.mem.copy(StageDef, &_stage_defs, self.stage_defs);
 
-    //            self.stage_defs = &_stage_defs;
-    //            break;
-    //        }
-    //    }
-    //}
+                _stage_defs[i] = _sdef;
 
-    //pub fn addUpdateSystems(comptime self: *Self, systems: anytype) void {
-    //    addSystemsToStage(self, "UPDATE", systems);
-    //}
+                self.stage_defs = &_stage_defs;
+                break;
+            }
+        }
+    }
+
+    pub fn addUpdateSystems(comptime self: *Self, systems: anytype) void {
+        addSystemsToStage(self, "UPDATE", systems);
+    }
 
     pub fn Stages(comptime Inner: type) type {
         return struct {
@@ -124,11 +123,11 @@ pub const WorldBuilder = struct {
             // }
             inner: Inner,
 
-            pub fn runStage(this: @This(), world: anytype, comptime stage_name: []const u8) anyerror!void {
+            pub fn runStage(comptime this: @This(), world: anytype, comptime stage_name: []const u8) anyerror!void {
                 const stage = @field(this.inner, stage_name);
 
                 inline for (std.meta.fields(@TypeOf(stage))) |stage_field| {
-                    var args = try getArgsForSystem(world, std.meta.Child(stage_field.type));
+                    var args = try getArgsForSystem(world, stage_field.type);
                     defer deinitArgsForSystem(&args, world.alloc);
 
                     if (@TypeOf(args[0]) == Allocator) {
@@ -143,7 +142,7 @@ pub const WorldBuilder = struct {
 
     pub fn Build(comptime self: Self) type {
         const CompHolder = self.compholder.Build();
-        return World(CompHolder, std.meta.Tuple(self.include_list), self.resources.Build()); //, Stages(CompileStagesList(self.stage_defs)));
+        return World(CompHolder, self.resources.Build(), Stages(CompileStagesList(self.stage_defs)));
     }
 
     fn getArgsForSystem(world: anytype, comptime SysFn: type) anyerror!std.meta.ArgsTuple(SysFn) {
@@ -157,19 +156,25 @@ pub const WorldBuilder = struct {
                 @compileError("A system argument of Allocator must be the first argument.");
             }
 
-            const queryTypeInfo = std.meta.fieldInfo(MultiArrayListElem(Param), .QueryType);
-            const optsTypeInfo = std.meta.fieldInfo(MultiArrayListElem(Param), .OptionsType);
+            if (comptime std.meta.trait.isContainer(Param) and @hasDecl(Param, "Elem")) {
+                const query_ti = std.meta.fieldInfo(MultiArrayListElem(Param), .QueryType);
+                const opts_ti = std.meta.fieldInfo(MultiArrayListElem(Param), .OptionsType);
 
-            out[i] = try world.query(
-                @ptrCast(
-                    *const queryTypeInfo.type,
-                    queryTypeInfo.default_value.?,
-                ).*,
-                @ptrCast(
-                    *const optsTypeInfo.type,
-                    optsTypeInfo.default_value.?,
-                ).*,
-            );
+                out[i] = try world.query(
+                    @ptrCast(
+                        *const query_ti.type,
+                        query_ti.default_value.?,
+                    ).*,
+                    @ptrCast(
+                        *const opts_ti.type,
+                        opts_ti.default_value.?,
+                    ).*,
+                );
+            } else if (comptime std.meta.trait.isSingleItemPtr(Param)) {
+                out[i] = world.getResPtr(std.meta.Child(Param));
+            } else {
+                out[i] = world.getRes(Param);
+            }
         }
 
         return out;
@@ -179,7 +184,7 @@ pub const WorldBuilder = struct {
         inline for (std.meta.fields(@TypeOf(args.*))) |args_field| {
             if (args_field.type == Allocator) continue;
 
-            if (@hasDecl(args_field.type, "deinit")) {
+            if (comptime std.meta.trait.isContainer(args_field.type) and @hasDecl(args_field.type, "deinit")) {
                 @field(args, args_field.name).deinit(alloc);
             }
         }
@@ -189,7 +194,7 @@ pub const WorldBuilder = struct {
         var final = TypeBuilder.new(false, .Auto);
         for (stage_defs) |sdef| {
             const Stage = sdef.def.Build();
-            final = final.addField(sdef.name, Stage, null);
+            final = final.addField(sdef.name, Stage, &Stage{});
         }
         return final.Build();
     }
@@ -199,7 +204,7 @@ const MyWorld = blk: {
     var wb = WorldBuilder.new();
     wb.include(.{
         base.Init(.{}),
-        physics.Init(),
+        physics,
     });
     break :blk wb.Build();
 };
@@ -208,27 +213,22 @@ test WorldBuilder {
     _ = MyWorld;
 }
 
-fn World(comptime CompHolder: type, comptime IncludeList: type, comptime Resources: type) type {
+fn World(comptime CompHolder: type, comptime Resources: type, comptime StagesList: type) type {
     return struct {
         const Self = @This();
-
-        const System = *const fn (*Self) anyerror!void;
-        const SystemList = std.ArrayList(System);
-        const Stages = std.ArrayList(SystemList);
+        const __stages = StagesList{ .inner = .{} };
 
         alloc: Allocator,
 
         entities: std.ArrayList(Entity),
         next_ent: Entity = 0,
 
-        stages_list: Stages,
         components: CompHolder,
         resources: Resources,
 
         pub fn init(alloc: Allocator) !Self {
             var self = Self{
                 .alloc = alloc,
-                .stages_list = std.ArrayList(SystemList).init(alloc),
                 .components = undefined,
                 .resources = .{},
                 .entities = std.ArrayList(Entity).init(alloc),
@@ -239,75 +239,41 @@ fn World(comptime CompHolder: type, comptime IncludeList: type, comptime Resourc
                 @field(self.components, field.name) = field.type.init(alloc);
             }
 
-            inline for (std.meta.fields(STAGES_LIST)) |_| {
-                try self.stages_list.append(SystemList.init(alloc));
-            }
-
-            inline for (std.meta.fields(IncludeList)) |inc| {
-                if (comptime std.meta.trait.hasFn("register")(inc.type)) {
-                    try inc.type.register(&self);
-                }
-            }
-
             return self;
         }
 
         pub fn deinit(self: *Self) void {
             self.entities.deinit();
 
-            for (self.stages_list.items) |stage| {
-                stage.deinit();
-            }
-
-            self.stages_list.deinit();
-
             inline for (std.meta.fields(CompHolder)) |field| {
                 @field(self.components, field.name).deinit();
             }
         }
 
-        pub fn register(self: *Self, registers_tuple: anytype) anyerror!void {
-            inline for (registers_tuple) |reg| {
-                try reg(self);
-            }
-        }
-
-        pub fn addSystemsToStage(self: *Self, stage_id: usize, systems: []const *const fn (*Self) anyerror!void) Allocator.Error!void {
-            for (systems) |sys| {
-                try self.stages_list.items[stage_id].append(sys);
-            }
-        }
-
-        pub fn addUpdateSystems(self: *Self, systems: []const *const fn (*Self) anyerror!void) Allocator.Error!void {
-            try self.addSystemsToStage(stages.UPDATE, systems);
-        }
-
-        pub fn runStageList(self: *Self, stage_ids: []const usize) anyerror!void {
+        pub fn runStageList(self: *Self, stage_ids: []const []const u8) anyerror!void {
             for (stage_ids) |sid| {
                 try runStage(self, sid);
             }
         }
 
-        pub fn runStage(self: *Self, comptime stage_id: usize) anyerror!void {
-            for (self.stages_list.items[stage_id].items) |sys| {
-                try sys(self);
-            }
+        pub fn runStage(self: *Self, comptime stage_id: []const u8) anyerror!void {
+            try __stages.runStage(self, stage_id);
         }
 
         pub fn runInitStages(self: *Self) anyerror!void {
-            inline for (.{ stages.PRE_INIT, stages.INIT, stages.POST_INIT }) |stage| {
+            inline for (.{ "PRE_INIT", "INIT", "POST_INIT" }) |stage| {
                 try runStage(self, stage);
             }
         }
 
         pub fn runUpdateStages(self: *Self) anyerror!void {
-            inline for (.{ stages.PRE_UPDATE, stages.UPDATE, stages.POST_UPDATE }) |stage| {
+            inline for (.{ "PRE_UPDATE", "UPDATE", "POST_UPDATE" }) |stage| {
                 try runStage(self, stage);
             }
         }
 
         pub fn runDrawStages(self: *Self) anyerror!void {
-            inline for (.{ stages.PRE_DRAW, stages.DRAW, stages.POST_DRAW }) |stage| {
+            inline for (.{ "PRE_DRAW", "DRAW", "POST_DRAW" }) |stage| {
                 try runStage(self, stage);
             }
         }

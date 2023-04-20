@@ -30,25 +30,14 @@ const InitOptions = struct {
 
 pub fn Init(comptime options: InitOptions) type {
     return struct {
-        var FIXED_UPDATE = 0;
-
         pub fn include(comptime world: *ecs.WorldBuilder) !void {
             world.addComponents(.{Transform});
             world.addResource(Time, .{});
+            world.addSystemsToStage("PRE_UPDATE", .{pre_update_time_wrapper});
         }
 
-        pub fn register(world: anytype) !void {
-            const MLib = Lib(@TypeOf(world));
-            try world.addSystemsToStage(ecs.stages.PRE_UPDATE, &.{MLib.pre_update_time_wrapper});
-        }
-
-        pub fn Lib(comptime WorldPtr: type) type {
-            return struct {
-                fn pre_update_time_wrapper(world: WorldPtr) !void {
-                    var time = world.getResPtr(Time);
-                    try options.pre_update_time(time);
-                }
-            };
+        fn pre_update_time_wrapper(time: *Time) !void {
+            try options.pre_update_time(time);
         }
     };
 }

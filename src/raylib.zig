@@ -7,8 +7,8 @@ pub const Sprite = struct {
     color: rl.Color,
 };
 
-pub fn register(comptime world: *ecs.WorldBuilder) anyerror!void {
-    world.addSystemsToStage("DRAW", &.{
+pub fn include(comptime world: *ecs.WorldBuilder) anyerror!void {
+    world.addSystemsToStage("DRAW", .{
         draw_sprites,
     });
 }
