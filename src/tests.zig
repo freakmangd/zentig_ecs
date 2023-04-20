@@ -19,7 +19,10 @@ test "ztg.World" {
 const game_file = struct {
     const MyWorld = blk: {
         var wb = ztg.WorldBuilder.new();
-        wb.include(.{ ztg.base, game_file });
+        wb.include(.{
+            ztg.base.Init(.{}),
+            game_file,
+        });
         break :blk wb.Build();
     };
 
