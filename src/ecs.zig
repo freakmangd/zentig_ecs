@@ -281,19 +281,19 @@ fn World(comptime CompHolder: type, comptime IncludeList: type) type {
         }
 
         pub fn runInitStages(self: *Self) anyerror!void {
-            inline for (.{ "PRE_INIT", "INIT", "POST_INIT" }) |stage| {
+            inline for (.{ stages.PRE_INIT, stages.INIT, stages.POST_INIT }) |stage| {
                 try runStage(self, stage);
             }
         }
 
         pub fn runUpdateStages(self: *Self) anyerror!void {
-            inline for (.{ "PRE_UPDATE", "UPDATE", "POST_UPDATE" }) |stage| {
+            inline for (.{ stages.PRE_UPDATE, stages.UPDATE, stages.POST_UPDATE }) |stage| {
                 try runStage(self, stage);
             }
         }
 
         pub fn runDrawStages(self: *Self) anyerror!void {
-            inline for (.{ "PRE_DRAW", "DRAW", "POST_DRAW" }) |stage| {
+            inline for (.{ stages.PRE_DRAW, stages.DRAW, stages.POST_DRAW }) |stage| {
                 try runStage(self, stage);
             }
         }
@@ -356,7 +356,7 @@ fn World(comptime CompHolder: type, comptime IncludeList: type) type {
         fn assertComponent(comptime Component: type) void {
             comptime {
                 if (!std.meta.trait.hasField(@typeName(Component))(CompHolder)) {
-                    @compileError("Cannot use component of type " ++ @typeName(Component) ++ " as it has not been added to the world.");
+                    @compileError("Cannot use component of type stages." ++ @typeName(Component) ++ " as it has not been added to the world.");
                 }
             }
         }
