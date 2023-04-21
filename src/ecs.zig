@@ -31,16 +31,18 @@ pub const WorldBuilder = struct {
         def: TypeBuilder,
     };
 
-    const DEFAULT_STAGES = [_][]const u8{
-        "PRE_INIT",
-        "INIT",
-        "POST_INIT",
-        "PRE_UPDATE",
-        "UPDATE",
-        "POST_UPDATE",
-        "PRE_DRAW",
-        "DRAW",
-        "POST_DRAW",
+    const DEFAULT_STAGES = struct {
+        // zig fmt: off
+        const PRE_INIT    = 0;
+        const INIT        = 1;
+        const POST_INIT   = 2;
+        const PRE_UPDATE  = 3;
+        const UPDATE      = 4;
+        const POST_UPDATE = 5;
+        const PRE_DRAW    = 6;
+        const DRAW        = 7;
+        const POST_DRAW   = 8;
+        // zig fmt: on
     };
 
     compholder: TypeBuilder,
@@ -54,9 +56,9 @@ pub const WorldBuilder = struct {
             .stage_defs = &.{},
         };
 
-        for (DEFAULT_STAGES) |name| {
-            self.stage_defs = self.stage_defs ++ &[_]StageDef{.{
-                .name = name,
+        for (@typeInfo(DEFAULT_STAGES).Struct.decls) |decl| {
+            self.stage_defs = self.stage_defs ++ .{.{
+                .name = decl.name,
                 .def = TypeBuilder.new(true, .Auto),
             }};
         }
@@ -88,23 +90,35 @@ pub const WorldBuilder = struct {
     pub fn addSystemsToStage(comptime self: *Self, comptime stage_name: []const u8, systems: anytype) void {
         if (comptime !std.meta.trait.isTuple(@TypeOf(systems))) @compileError("Expected tuple for @TypeOf(systems).");
 
-        for (self.stage_defs, 0..) |sdef, i| {
+        // if stage is part of DEFAULT_STAGES, we already know the index
+        if (comptime @hasDecl(DEFAULT_STAGES, stage_name)) {
+            const stage_index = @field(DEFAULT_STAGES, stage_name);
+            addSystemsToStage_final(self, self.stage_defs[stage_index], stage_index, systems);
+            return;
+        }
+
+        var i: usize = DEFAULT_STAGES.POST_DRAW + 1;
+        while (i < self.stage_defs.len) {
+            const sdef = self.stage_defs[i];
+
             if (std.mem.eql(u8, sdef.name, stage_name)) {
-                var _sdef = sdef;
-
-                for (systems) |sys| {
-                    _sdef.def = _sdef.def.addTupleField(sdef.def.type_def.fields.len, comptime @TypeOf(sys), &sys);
-                }
-
-                var _stage_defs: [self.stage_defs.len]StageDef = undefined;
-                std.mem.copy(StageDef, &_stage_defs, self.stage_defs);
-
-                _stage_defs[i] = _sdef;
-
-                self.stage_defs = &_stage_defs;
-                break;
+                addSystemsToStage_final(self, sdef, i, systems);
+                return;
             }
         }
+
+        @compileError("Cannot find stage " ++ stage_name ++ " in world.");
+    }
+
+    fn addSystemsToStage_final(comptime self: *Self, comptime sdef: StageDef, stage_index: usize, systems: anytype) void {
+        var _stage_defs: [self.stage_defs.len]StageDef = undefined;
+        std.mem.copy(StageDef, &_stage_defs, self.stage_defs);
+
+        for (systems) |sys| {
+            _stage_defs[stage_index].def = _stage_defs[stage_index].def.addTupleField(sdef.def.type_def.fields.len, comptime @TypeOf(sys), &sys);
+        }
+
+        self.stage_defs = &_stage_defs;
     }
 
     pub fn addUpdateSystems(comptime self: *Self, systems: anytype) void {
@@ -124,6 +138,8 @@ pub const WorldBuilder = struct {
             inner: Inner,
 
             pub fn runStage(comptime this: @This(), world: anytype, comptime stage_name: []const u8) anyerror!void {
+                if (comptime !@hasField(@TypeOf(this.inner), stage_name)) @compileError("World does not have stage " ++ stage_name ++ " to run.");
+
                 const stage = @field(this.inner, stage_name);
 
                 inline for (std.meta.fields(@TypeOf(stage))) |stage_field| {

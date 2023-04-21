@@ -1,6 +1,16 @@
 const std = @import("std");
 const ztg = @import("zentig");
 
+// Constructing the world must be done at comptime
+const MyWorld = blk: {
+    var wb = ztg.WorldBuilder.new();
+    wb.include(.{
+        ztg.base.Init(.{}),
+        player,
+    });
+    break :blk wb.Build();
+};
+
 // This would most likely be a player.zig file instead
 const player = struct {
     // This is called when passed into a .include() call on a WorldBuilder
@@ -24,23 +34,14 @@ const player = struct {
     };
 
     // A basic system
-    pub fn player_speak(query: ztg.Query(.{ Player, ztg.base.Transform }, .{})) !void {
+    pub fn player_speak(query: ztg.Query(.{ Player, ztg.base.Transform }, .{}), time: ztg.base.Time) !void {
         // Query is a wrapper for MultiArrayList, where all the types you passed into the
         // original tuple get indexed as "a" through "z".
         for (query.items(.a), query.items(.b)) |plr, trn| {
             std.debug.print("My name is {s}, and I'm located at {} {}.\n", .{ plr.name, trn.pos.x, trn.pos.y });
+            std.debug.print("The current frame is {}\n", .{time.frameCount});
         }
     }
-};
-
-// Constructing the world must be done at comptime
-const MyWorld = blk: {
-    var wb = ztg.WorldBuilder.new();
-    wb.include(.{
-        ztg.base.Init(.{}),
-        player,
-    });
-    break :blk wb.Build();
 };
 
 pub fn main() !void {
@@ -60,5 +61,5 @@ pub fn main() !void {
     });
 
     // runs all the functions added to the UPDATE stage
-    try world.runStage("UPDATE");
+    try world.runStage("UPDAFAFW");
 }
