@@ -128,15 +128,12 @@ const player = struct {
   }
 };
 
-// Constructing the world must be done at comptime
-const MyWorld = blk: {
-  var wb = ztg.WorldBuilder.new();
-  wb.include(.{
-    ztg.base.Init(.{}),
-    player,
-  });
-  break :blk wb.Build();
-};
+// Constructing the world type must be done at comptime
+// `.new(anytype)` passes `anytype` to `.include(anytype)`
+const MyWorld = ztg.WorldBuilder.new(.{
+  ztg.base.Init(.{}),
+  player,
+}).Build();
 
 pub fn main() !void {
   var gpa = std.heap.GeneralPurposeAllocator(.{}) {};

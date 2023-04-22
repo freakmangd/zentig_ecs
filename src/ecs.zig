@@ -1,12 +1,10 @@
 const std = @import("std");
 const testing = std.testing;
 const util = @import("util.zig");
+const base = @import("mods/base.zig");
+const physics = @import("mods/physics.zig");
 const TypeBuilder = @import("type_builder.zig");
 const Allocator = std.mem.Allocator;
-
-pub usingnamespace util;
-pub const base = @import("base.zig");
-pub const physics = @import("physics.zig");
 
 pub const Entity = usize;
 
@@ -22,6 +20,21 @@ const STAGES_LIST = struct {
     POST_DRAW: usize = 8,
 };
 pub const stages = STAGES_LIST{};
+
+const TypeMap = struct {
+    types: []const type = &.{},
+
+    pub fn append(comptime self: *TypeMap, comptime T: type) void {
+        self.types = self.types ++ &[_]type{T};
+    }
+
+    pub fn has(comptime self: TypeMap, comptime T: type) bool {
+        for (self.types) |t| {
+            if (t == T) return true;
+        }
+        return false;
+    }
+};
 
 pub const WorldBuilder = struct {
     const Self = @This();
@@ -49,11 +62,14 @@ pub const WorldBuilder = struct {
     resources: TypeBuilder,
     stage_defs: []const StageDef,
 
-    pub fn new() Self {
+    included: TypeMap,
+
+    pub fn new(comptime includes: anytype) Self {
         var self = Self{
             .compholder = TypeBuilder.new(false, .Auto),
             .resources = TypeBuilder.new(false, .Auto),
             .stage_defs = &.{},
+            .included = .{},
         };
 
         for (@typeInfo(DEFAULT_STAGES).Struct.decls) |decl| {
@@ -63,15 +79,20 @@ pub const WorldBuilder = struct {
             }};
         }
 
+        self.include(includes);
+
         return self;
     }
 
     pub fn include(comptime self: *Self, comptime includes: anytype) void {
         inline for (includes) |inc| {
             if (comptime std.meta.trait.hasFn("include")(inc)) {
+                if (comptime self.included.has(inc)) return;
+
                 inc.include(self) catch |err| @compileError("Cound not build world, error in include. Error: " ++ err);
-            } else if (comptime !std.meta.trait.hasFn("register")(inc)) {
-                @compileError("Included struct " ++ @typeName(inc) ++ " has neither an include fn nor a register fn, make sure you're not supposed to add a field of the struct");
+                self.included.append(inc);
+            } else {
+                @compileError("Struct " ++ @typeName(inc) ++ "does not have an fn include, it should not be passed to include.");
             }
         }
     }
@@ -172,7 +193,7 @@ pub const WorldBuilder = struct {
                 @compileError("A system argument of Allocator must be the first argument.");
             }
 
-            if (comptime std.meta.trait.isContainer(Param) and @hasDecl(Param, "Elem")) {
+            if (comptime std.meta.trait.isContainer(Param) and @hasDecl(Param, "Field")) {
                 const query_ti = std.meta.fieldInfo(MultiArrayListElem(Param), .QueryType);
                 const opts_ti = std.meta.fieldInfo(MultiArrayListElem(Param), .OptionsType);
 
@@ -219,7 +240,7 @@ pub const WorldBuilder = struct {
 const MyWorld = blk: {
     var wb = WorldBuilder.new();
     wb.include(.{
-        base.Init(.{}),
+        base,
         physics,
     });
     break :blk wb.Build();
@@ -317,10 +338,8 @@ fn World(comptime CompHolder: type, comptime Resources: type, comptime StagesLis
         }
 
         pub fn query(self: *Self, comptime q: anytype, comptime options: anytype) !Query(q, options) {
-            comptime {
-                inline for (q) |Q| {
-                    assertComponent(Q);
-                }
+            inline for (q) |Q| {
+                assertComponent(Q);
             }
 
             var result = Query(q, options){};
@@ -329,7 +348,7 @@ fn World(comptime CompHolder: type, comptime Resources: type, comptime StagesLis
             var comp0_iter = comp0s.iterator();
 
             comp_loop: while (comp0_iter.next()) |comp| {
-                var res_item: Query(q, options).Elem = undefined;
+                var res_item: MultiArrayListElem(Query(q, options)) = undefined;
 
                 inline for (q, 0..) |Q, i| {
                     if (i == 0) {
