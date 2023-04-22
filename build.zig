@@ -5,19 +5,26 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const example = b.addExecutable(.{
-        .name = "Example",
-        .root_source_file = .{ .path = "src/example.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
+    const examples = [_]struct { []const u8, []const u8 }{
+        .{ "example", "examples/example.zig" },
+        .{ "example-input", "examples/input_example.zig" },
+    };
 
-    zentig.addAsPackage("zentig", example);
+    for (examples) |ex_info| {
+        const example = b.addExecutable(.{
+            .name = ex_info[0],
+            .root_source_file = .{ .path = ex_info[1] },
+            .target = target,
+            .optimize = optimize,
+        });
 
-    const run_example_cmd = b.addRunArtifact(example);
+        zentig.addAsModule("zentig", example);
 
-    const run_example_step = b.step("example", "Run the example");
-    run_example_step.dependOn(&run_example_cmd.step);
+        const run_example_cmd = b.addRunArtifact(example);
+
+        const run_example_step = b.step(ex_info[0], "Run the example");
+        run_example_step.dependOn(&run_example_cmd.step);
+    }
 
     const main_tests = b.addTest(.{
         .root_source_file = .{ .path = "src/tests.zig" },

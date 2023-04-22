@@ -1,15 +1,14 @@
 const std = @import("std");
 const ztg = @import("zentig");
+const rl = @import("raylib");
+const ztgrl = ztg.Raylib(rl);
 
 // Constructing the world must be done at comptime
-const MyWorld = blk: {
-    var wb = ztg.WorldBuilder.new();
-    wb.include(.{
-        ztg.base.Init(.{}),
-        player,
-    });
-    break :blk wb.Build();
-};
+// `.new(anytype)` passes `anytype` to `.include(anytype)`
+const MyWorld = ztg.WorldBuilder.new(.{
+    ztg.base,
+    player,
+}).Build();
 
 // This would most likely be a player.zig file instead
 const player = struct {
@@ -60,6 +59,8 @@ pub fn main() !void {
         .{ .pos = ztg.Vec3.new(10, 10, 10) },
     });
 
-    // runs all the functions added to the UPDATE stage
-    try world.runStage("UPDAFAFW");
+    // runs the PRE_UPDATE, UPDATE, and POST_UPDATE stages.
+    try world.runUpdateStages();
+    // it is recommended over runStage("UPDATE") as some built-in module systems use PRE_UPDATE
+    // and POST_UPDATE, such as input and physics
 }

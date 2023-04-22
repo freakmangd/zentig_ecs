@@ -1,5 +1,5 @@
 const std = @import("std");
-const ecs = @import("ecs.zig");
+const ecs = @import("../ecs.zig");
 
 pub const PhysBody = struct {
     vel: ecs.Vec3,

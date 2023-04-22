@@ -20,7 +20,7 @@ const game_file = struct {
     const MyWorld = blk: {
         var wb = ztg.WorldBuilder.new();
         wb.include(.{
-            ztg.base.Init(.{}),
+            ztg.base,
             game_file,
         });
         break :blk wb.Build();
