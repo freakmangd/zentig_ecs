@@ -1,5 +1,5 @@
 const std = @import("std");
-const ecs = @import("../../ecs.zig");
+const ztg = @import("../../init.zig");
 
 pub fn Init(comptime rl: type) type {
     return struct {
@@ -8,9 +8,9 @@ pub fn Init(comptime rl: type) type {
             color: rl.Color,
         };
 
-        pub fn include(comptime world: *ecs.WorldBuilder) !void {
+        pub fn include(comptime world: *ztg.WorldBuilder) !void {
             world.include(.{
-                ecs.base,
+                ztg.base,
             });
             world.addComponents(.{
                 Sprite,
@@ -23,11 +23,11 @@ pub fn Init(comptime rl: type) type {
             });
         }
 
-        fn pre_update_time(time: *ecs.base.Time) void {
+        fn pre_update_time(time: *ztg.base.Time) void {
             time.dt = rl.GetFrameTime();
         }
 
-        pub fn draw_sprites(alloc: std.mem.Allocator, query: ecs.Query(.{ Sprite, ecs.base.Position }, .{})) anyerror!void {
+        pub fn draw_sprites(alloc: std.mem.Allocator, query: ztg.Query(.{ Sprite, ztg.base.Position }, .{})) anyerror!void {
             var slice = query.slice();
             defer slice.deinit(alloc);
 
