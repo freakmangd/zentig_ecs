@@ -1,8 +1,8 @@
 const std = @import("std");
 
 pub const Vec2 = struct {
-    x: f32,
-    y: f32,
+    x: f32 = 0.0,
+    y: f32 = 0.0,
 
     pub inline fn new(x: f32, y: f32) Vec2 {
         return .{ .x = x, .y = y };
@@ -14,6 +14,10 @@ pub const Vec2 = struct {
 
     pub inline fn one() Vec2 {
         return .{ .x = 1, .y = 1 };
+    }
+
+    pub inline fn zero() Vec2 {
+        return .{};
     }
 
     pub inline fn as(self: Vec2, comptime T: type) @Vector(2, T) {
@@ -65,15 +69,56 @@ pub const Vec2 = struct {
     pub inline fn scale(v0: Vec2, v1: Vec2) Vec2 {
         return .{ .x = v0.x * v1.x, .y = v0.y * v1.y };
     }
+
+    pub fn setNormalized(self: *Vec2) error{DivideByZero}!void {
+        const m = length(self);
+        if (m == 0) return error.DivideByZero;
+        self.x /= m;
+        self.y /= m;
+    }
+
+    pub fn setNegated(self: *Vec2) void {
+        self.x = -self.x;
+        self.y = -self.y;
+    }
+
+    pub fn plusEql(self: *Vec2, other: Vec2) void {
+        self.x += other.x;
+        self.y += other.y;
+    }
+
+    pub fn subEql(self: *Vec2, other: Vec2) void {
+        self.x -= other.x;
+        self.y -= other.y;
+    }
+
+    pub fn mulEql(self: *Vec2, scalar: f32) void {
+        self.x *= scalar;
+        self.y *= scalar;
+    }
+
+    pub fn divEql(self: *Vec2, scalar: f32) void {
+        self.x /= scalar;
+        self.y /= scalar;
+    }
+
+    pub fn scaleEql(self: *Vec2, other: Vec2) void {
+        self.x = self.x * other.x;
+        self.y = self.y * other.y;
+    }
 };
 
 pub const Vec3 = struct {
-    x: f32,
-    y: f32,
-    z: f32,
+    x: f32 = 0.0,
+    y: f32 = 0.0,
+    z: f32 = 0.0,
 
     pub inline fn new(x: f32, y: f32, z: f32) Vec3 {
         return .{ .x = x, .y = y, .z = z };
+    }
+
+    pub inline fn zero() Vec3 {
+        return .{};
     }
 
     pub inline fn one() Vec3 {
@@ -133,13 +178,57 @@ pub const Vec3 = struct {
     pub inline fn scale(v0: Vec3, v1: Vec3) Vec3 {
         return .{ .x = v0.x * v1.x, .y = v0.y * v1.y, .z = v0.z * v1.z };
     }
+
+    pub fn setNormalized(self: *Vec3) error{DivideByZero}!void {
+        const m = length(self);
+        if (m == 0) return error.DivideByZero;
+        self.x /= m;
+        self.y /= m;
+        self.z /= m;
+    }
+
+    pub fn setNegated(self: *Vec3) void {
+        self.x = -self.x;
+        self.y = -self.y;
+        self.z = -self.z;
+    }
+
+    pub fn plusEql(self: *Vec3, other: Vec3) void {
+        self.x += other.x;
+        self.y += other.y;
+        self.z += other.z;
+    }
+
+    pub fn subEql(self: *Vec3, other: Vec3) void {
+        self.x -= other.x;
+        self.y -= other.y;
+        self.z -= other.z;
+    }
+
+    pub fn mulEql(self: *Vec3, scalar: f32) void {
+        self.x *= scalar;
+        self.y *= scalar;
+        self.z *= scalar;
+    }
+
+    pub fn divEql(self: *Vec3, scalar: f32) void {
+        self.x /= scalar;
+        self.y /= scalar;
+        self.z /= scalar;
+    }
+
+    pub fn scaleEql(self: *Vec3, other: Vec3) void {
+        self.x = self.x * other.x;
+        self.y = self.y * other.y;
+        self.z = self.z * other.z;
+    }
 };
 
 pub const Quaternion = struct {
-    x: f32,
-    y: f32,
-    z: f32,
-    w: f32,
+    x: f32 = 0.0,
+    y: f32 = 0.0,
+    z: f32 = 0.0,
+    w: f32 = 0.0,
 
     // TODO: actually make quaternions work lmao
     pub fn identity() Quaternion {
