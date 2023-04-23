@@ -38,20 +38,20 @@ pub fn Init(comptime rl: type) type {
 
         pub const InputWrapper = struct {
             pub const ButtonType = union(enum) {
-                keyboard: c_int,
+                keyboard: rl.KeyboardKey,
                 gamepad: struct {
                     gamepad_num: c_int = 0,
-                    button: c_int,
+                    button: rl.KeyboardKey,
                 },
             };
 
             pub const AxisType = union(enum) {
                 keyboard: struct {
-                    positive: c_int,
-                    negative: c_int,
+                    positive: rl.KeyboardKey,
+                    negative: rl.KeyboardKey,
                 },
                 gamepad: struct {
-                    axis: c_int,
+                    axis: rl.KeyboardKey,
                     gamepad_num: c_int = 0,
                 },
             };
