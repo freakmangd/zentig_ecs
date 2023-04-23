@@ -27,12 +27,12 @@ pub fn Init(comptime rl: type) type {
             time.dt = rl.GetFrameTime();
         }
 
-        pub fn draw_sprites(alloc: std.mem.Allocator, query: ztg.Query(.{ Sprite, ztg.base.Position }, .{})) anyerror!void {
+        pub fn draw_sprites(alloc: std.mem.Allocator, query: ztg.Query(.{ Sprite, ztg.base.Transform }, .{})) anyerror!void {
             var slice = query.slice();
             defer slice.deinit(alloc);
 
-            for (slice.items(.a), slice.items(.b)) |spr, pos| {
-                rl.DrawTexture(spr.tex, @floatToInt(c_int, pos.x), @floatToInt(c_int, pos.y), spr.color);
+            for (slice.items(.a), slice.items(.b)) |spr, trn| {
+                rl.DrawTexture(spr.tex, @floatToInt(c_int, trn.pos.x), @floatToInt(c_int, trn.pos.y), spr.color);
             }
         }
 
