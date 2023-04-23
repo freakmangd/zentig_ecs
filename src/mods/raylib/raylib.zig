@@ -41,7 +41,7 @@ pub fn Init(comptime rl: type) type {
                 keyboard: rl.KeyboardKey,
                 gamepad: struct {
                     gamepad_num: c_int = 0,
-                    button: rl.KeyboardKey,
+                    button: rl.GamepadButton,
                 },
             };
 
@@ -51,7 +51,7 @@ pub fn Init(comptime rl: type) type {
                     negative: rl.KeyboardKey,
                 },
                 gamepad: struct {
-                    axis: rl.KeyboardKey,
+                    axis: c_int,
                     gamepad_num: c_int = 0,
                 },
             };
