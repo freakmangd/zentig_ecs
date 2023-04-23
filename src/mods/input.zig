@@ -95,6 +95,7 @@ pub fn ControllerBuilder(comptime input_wrapper: type) type {
         const ButtonType = input_wrapper.ButtonType;
         const AxisType = input_wrapper.AxisType;
 
+        const getAxis = input_wrapper.getAxis;
         const getButtonPressed = input_wrapper.getButtonPressed;
         const getButtonDown = input_wrapper.getButtonDown;
         const getButtonReleased = input_wrapper.getButtonReleased;
