@@ -12,15 +12,15 @@ fn Input(comptime input_wrapper: type, comptime Controller: type) type {
             wb.addResource(Self, .{
                 .controllers = undefined,
             });
-            wb.addSystemsToStage("PRE_INIT", .{pre_init_input});
-            wb.addSystemsToStage("PRE_UPDATE", .{pre_update_input});
+            wb.addSystemsToStage(ztg.stages.pre_init, .{pri_input});
+            wb.addSystemsToStage(ztg.stages.pre_update, .{pru_input});
         }
 
-        fn pre_init_input(alloc: std.mem.Allocator, self: *Self) !void {
+        fn pri_input(alloc: std.mem.Allocator, self: *Self) !void {
             self.controllers = std.ArrayList(Controller).init(alloc);
         }
 
-        fn pre_update_input(self: *Self) anyerror!void {
+        fn pru_input(self: *Self) anyerror!void {
             for (self.controllers.items) |*ct| {
                 inline for (std.meta.fields(Controller)) |field| {
                     switch (field.type) {

@@ -39,7 +39,7 @@ const game_file = struct {
 const player_file = struct {
     pub fn include(comptime world: *ztg.WorldBuilder) anyerror!void {
         world.addComponents(.{Player});
-        world.addUpdateSystems(.{player_speach});
+        world.addUpdateSystems(.{playerSpeach});
     }
 
     pub const Player = struct {
@@ -52,7 +52,7 @@ const player_file = struct {
         sprite: game_file.Sprite,
     };
 
-    fn player_speach(q: ztg.Query(.{ Player, ztg.base.Transform }, .{})) anyerror!void {
+    fn playerSpeach(q: ztg.Query(.{ Player, ztg.base.Transform }, .{})) anyerror!void {
         for (q.items(.a), q.items(.b)) |player, trn| {
             try std.testing.expectFmt("My name is Player, and I'm located at 10 10.", "My name is {s}, and I'm located at {} {}.", .{
                 player.name,

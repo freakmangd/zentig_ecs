@@ -7,7 +7,7 @@ const player = struct {
         // All components used in the world must be added before .Build() is called on the WorldBuilder
         world.addComponents(.{Player});
         // Adds a system to the UPDATE stage of the world, systems can only be added during comptime
-        world.addUpdateSystems(.{player_speak});
+        world.addUpdateSystems(.{playerSpeak});
     }
 
     pub const Player = struct {
@@ -19,7 +19,7 @@ const player = struct {
         tran: ztg.base.Transform,
     };
 
-    pub fn player_speak(query: ztg.Query(.{ Player, ztg.base.Transform }, .{})) !void {
+    pub fn playerSpeak(query: ztg.Query(.{ Player, ztg.base.Transform }, .{})) !void {
         // Query is a wrapper for MultiArrayList, where all the types you passed into the
         // original tuple get indexed as "a" through "z".
         for (query.items(.a), query.items(.b)) |plr, trn| {

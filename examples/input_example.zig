@@ -47,8 +47,8 @@ const World = blk: {
     var wb = ztg.WorldBuilder.new(.{
         Input,
     });
-    wb.addSystemsToStage("INIT", .{setup_input});
-    wb.addUpdateSystems(.{read_input});
+    wb.addSystemsToStage(ztg.stages.init, .{ini_setupInput});
+    wb.addUpdateSystems(.{up_readInput});
     break :blk wb.Build();
 };
 
@@ -67,11 +67,11 @@ pub fn main() !void {
 
 const PLAYER_ONE = 0;
 
-fn setup_input(input: *Input) !void {
+fn ini_setupInput(input: *Input) !void {
     try input.newController();
     input.bindButton(PLAYER_ONE, "Jump", Buttons.space);
 }
 
-fn read_input(input: Input) !void {
+fn up_readInput(input: Input) !void {
     std.debug.print("Is jump down? {}\n", .{input.getButtonDown(PLAYER_ONE, "Jump")});
 }

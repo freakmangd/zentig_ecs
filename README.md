@@ -32,7 +32,7 @@ A basic system:
 ```zig
 // If the first argument is of type std.mem.Allocator, the allocator passed into
 // the world when creating it is passed into the system.
-pub fn player_speak(q: Query(.{Player}, .{})) !void {
+pub fn playerSpeak(q: Query(.{Player}, .{})) !void {
   for (q.items(.a)) |plr| {
     std.debug.print("My name is {s}\n", .{self.name});
   }
@@ -49,7 +49,7 @@ Registering systems/components into a world:
 const MyWorld = blk: {
   var wb = ztg.WorldBuilder.new();
   wb.addComponents(.{Player});
-  wb.addUpdateSystems(.{player_speak});
+  wb.addUpdateSystems(.{playerSpeak});
   break :blk wb.Build();
 };
 ```
@@ -103,7 +103,7 @@ const player = struct {
     // All components used in the world must be added before .Build() is called on the WorldBuilder
     wb.addComponents(.{Player});
     // Adds a system to the UPDATE stage of the world, systems can only be added during comptime
-    wb.addUpdateSystems(.{player_speak});
+    wb.addUpdateSystems(.{playerSpeak});
   }
   
   // A basic component
@@ -119,7 +119,7 @@ const player = struct {
   };
   
   // A basic system
-  pub fn player_speak(query: ztg.Query(.{Player, ztg.base.Transform}, .{})) !void {
+  pub fn playerSpeak(query: ztg.Query(.{Player, ztg.base.Transform}, .{})) !void {
     // Query is a wrapper for MultiArrayList, where all the types you passed into the
     // original tuple get indexed as "a" through "z".
     for (query.items(.a), query.items(.b)) |plr, trn| {

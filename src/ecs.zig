@@ -8,6 +8,35 @@ const Allocator = std.mem.Allocator;
 
 pub const Entity = usize;
 
+pub const TypeIds = struct {
+    var types = [100]type;
+    var types_next: usize = 0;
+
+    pub fn idOf(comptime T: type) usize {
+        for (types, 0..) |_T, i| {
+            if (_T == T) return i;
+        }
+    }
+
+    pub fn register(comptime T: type) usize {
+        types[types_next] = T;
+        types_next += 1;
+        return types_next - 1;
+    }
+};
+
+pub const stages = .{
+    .pre_init = "PRE_INIT",
+    .init = "INIT",
+    .post_init = "POST_INIT",
+    .pre_update = "PRE_UPDATE",
+    .update = "UPDATE",
+    .post_update = "POST_UPDATE",
+    .pre_draw = "PRE_DRAW",
+    .draw = "DRAW",
+    .post_draw = "POST_DRAW",
+};
+
 const STAGES_LIST = struct {
     PRE_INIT: usize = 0,
     INIT: usize = 1,
@@ -19,7 +48,6 @@ const STAGES_LIST = struct {
     DRAW: usize = 7,
     POST_DRAW: usize = 8,
 };
-pub const stages = STAGES_LIST{};
 
 const TypeMap = struct {
     types: []const type = &.{},
@@ -114,7 +142,7 @@ pub const WorldBuilder = struct {
         // if stage is part of DEFAULT_STAGES, we already know the index
         if (comptime @hasDecl(DEFAULT_STAGES, stage_name)) {
             const stage_index = @field(DEFAULT_STAGES, stage_name);
-            addSystemsToStage_final(self, self.stage_defs[stage_index], stage_index, systems);
+            addSystemsToStage_final(self, stage_index, systems);
             return;
         }
 
@@ -123,7 +151,7 @@ pub const WorldBuilder = struct {
             const sdef = self.stage_defs[i];
 
             if (std.mem.eql(u8, sdef.name, stage_name)) {
-                addSystemsToStage_final(self, sdef, i, systems);
+                addSystemsToStage_final(self, i, systems);
                 return;
             }
         }
@@ -131,19 +159,19 @@ pub const WorldBuilder = struct {
         @compileError("Cannot find stage " ++ stage_name ++ " in world.");
     }
 
-    fn addSystemsToStage_final(comptime self: *Self, comptime sdef: StageDef, stage_index: usize, systems: anytype) void {
+    fn addSystemsToStage_final(comptime self: *Self, stage_index: usize, systems: anytype) void {
         var _stage_defs: [self.stage_defs.len]StageDef = undefined;
         std.mem.copy(StageDef, &_stage_defs, self.stage_defs);
 
         for (systems) |sys| {
-            _stage_defs[stage_index].def = _stage_defs[stage_index].def.addTupleField(sdef.def.type_def.fields.len, comptime @TypeOf(sys), &sys);
+            _stage_defs[stage_index].def = _stage_defs[stage_index].def.addTupleField(_stage_defs[stage_index].def.type_def.fields.len, comptime @TypeOf(sys), &sys);
         }
 
         self.stage_defs = &_stage_defs;
     }
 
     pub fn addUpdateSystems(comptime self: *Self, systems: anytype) void {
-        addSystemsToStage(self, "UPDATE", systems);
+        addSystemsToStage(self, stages.update, systems);
     }
 
     pub fn Stages(comptime Inner: type) type {
@@ -167,11 +195,11 @@ pub const WorldBuilder = struct {
                     var args = try getArgsForSystem(world, stage_field.type);
                     defer deinitArgsForSystem(&args, world.alloc);
 
-                    if (@TypeOf(args[0]) == Allocator) {
-                        args[0] = world.alloc;
+                    if (comptime std.meta.trait.is(.ErrorUnion)(@typeInfo(stage_field.type).Fn.return_type.?)) {
+                        try @call(.auto, @field(stage, stage_field.name), args);
+                    } else {
+                        @call(.auto, @field(stage, stage_field.name), args);
                     }
-
-                    try @call(.auto, @field(stage, stage_field.name), args);
                 }
             }
         };
@@ -183,17 +211,19 @@ pub const WorldBuilder = struct {
     }
 
     fn getArgsForSystem(world: anytype, comptime SysFn: type) anyerror!std.meta.ArgsTuple(SysFn) {
+        if (comptime @typeInfo(SysFn).Fn.params.len == 0) return .{};
+
         var out: std.meta.ArgsTuple(SysFn) = undefined;
 
         inline for (out, 0..) |param, i| {
+            if (@typeInfo(SysFn).Fn.params[0].is_generic == true) out[i] = world;
+
             const Param = @TypeOf(param);
 
             if (Param == Allocator) {
-                if (i == 0) continue;
-                @compileError("A system argument of Allocator must be the first argument.");
-            }
-
-            if (comptime std.meta.trait.isContainer(Param) and @hasDecl(Param, "Field")) {
+                out[i] = world.alloc;
+                continue;
+            } else if (comptime std.meta.trait.isContainer(Param) and @hasDecl(Param, "Field")) {
                 const query_ti = std.meta.fieldInfo(MultiArrayListElem(Param), .QueryType);
                 const opts_ti = std.meta.fieldInfo(MultiArrayListElem(Param), .OptionsType);
 
@@ -207,11 +237,16 @@ pub const WorldBuilder = struct {
                         opts_ti.default_value.?,
                     ).*,
                 );
+                continue;
             } else if (comptime std.meta.trait.isSingleItemPtr(Param)) {
                 out[i] = world.getResPtr(std.meta.Child(Param));
+                continue;
             } else {
                 out[i] = world.getRes(Param);
+                continue;
             }
+
+            @compileError("Argument " ++ @typeName(Param) ++ " not allowed in system. If it is a resource remember to add it to the WorldBuilder.");
         }
 
         return out;
@@ -222,7 +257,13 @@ pub const WorldBuilder = struct {
             if (args_field.type == Allocator) continue;
 
             if (comptime std.meta.trait.isContainer(args_field.type) and @hasDecl(args_field.type, "deinit")) {
-                @field(args, args_field.name).deinit(alloc);
+                const fn_params = @typeInfo(@TypeOf(@TypeOf(@field(args, args_field.name)).deinit)).Fn.params;
+
+                if (fn_params.len > 1 and fn_params[1].type.? == Allocator) {
+                    @field(args, args_field.name).deinit(alloc);
+                } else if (fn_params.len == 0) {
+                    @field(args, args_field.name).deinit();
+                }
             }
         }
     }
@@ -257,7 +298,6 @@ fn World(comptime CompHolder: type, comptime Resources: type, comptime StagesLis
 
         alloc: Allocator,
 
-        entities: std.ArrayList(Entity),
         next_ent: Entity = 0,
 
         components: CompHolder,
@@ -268,8 +308,6 @@ fn World(comptime CompHolder: type, comptime Resources: type, comptime StagesLis
                 .alloc = alloc,
                 .components = undefined,
                 .resources = .{},
-                .entities = std.ArrayList(Entity).init(alloc),
-                .next_ent = 0,
             };
 
             inline for (std.meta.fields(CompHolder)) |field| {
@@ -316,7 +354,6 @@ fn World(comptime CompHolder: type, comptime Resources: type, comptime StagesLis
         }
 
         pub fn newEnt(self: *Self) !Entity {
-            try self.entities.append(self.next_ent);
             self.next_ent += 1;
             return self.next_ent - 1;
         }

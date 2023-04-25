@@ -6,33 +6,59 @@ pub fn Init(comptime rl: type) type {
         pub const Sprite = struct {
             tex: rl.Texture2D,
             color: rl.Color,
+            layer: usize,
+
+            pub fn init(file_name: []const u8, color: rl.Color) Sprite {
+                return .{
+                    .tex = rl.LoadTexture(file_name),
+                    .color = color,
+                };
+            }
+        };
+
+        const Cameras = struct {
+            std.ArrayList(rl.Camera2D),
         };
 
         pub fn include(comptime world: *ztg.WorldBuilder) !void {
             world.include(.{
                 ztg.base,
             });
+            world.addResource(Cameras, .{undefined});
             world.addComponents(.{
                 Sprite,
             });
-            world.addSystemsToStage("PRE_UPDATE", .{
-                pre_update_time,
+            world.addSystemsToStage(ztg.stages.pre_init, .{
+                pri_cameras,
             });
-            world.addSystemsToStage("DRAW", .{
-                draw_sprites,
+            world.addSystemsToStage(ztg.stages.pre_update, .{
+                pru_time,
+            });
+            world.addSystemsToStage(ztg.stages.draw, .{
+                dr_sprites,
             });
         }
 
-        fn pre_update_time(time: *ztg.base.Time) void {
+        fn pri_cameras(alloc: std.mem.Allocator, cameras: *Cameras) !void {
+            cameras.*[0] = std.ArrayList(rl.Camera2D).init(alloc);
+        }
+
+        fn pru_time(time: *ztg.base.Time) void {
             time.dt = rl.GetFrameTime();
         }
 
-        pub fn draw_sprites(alloc: std.mem.Allocator, query: ztg.Query(.{ Sprite, ztg.base.Transform }, .{})) anyerror!void {
+        pub fn dr_sprites(alloc: std.mem.Allocator, cameras: Cameras, query: ztg.Query(.{ Sprite, ztg.base.Transform }, .{})) anyerror!void {
             var slice = query.slice();
             defer slice.deinit(alloc);
 
-            for (slice.items(.a), slice.items(.b)) |spr, trn| {
-                rl.DrawTexture(spr.tex, @floatToInt(c_int, trn.pos.x), @floatToInt(c_int, trn.pos.y), spr.color);
+            for (cameras[0].items) |cam| {
+                rl.BeginMode2D(cam);
+
+                for (slice.items(.a), slice.items(.b)) |spr, trn| {
+                    rl.DrawTexture(spr.tex, @floatToInt(c_int, trn.pos.x), @floatToInt(c_int, trn.pos.y), spr.color);
+                }
+
+                rl.EndMode2D();
             }
         }
 
