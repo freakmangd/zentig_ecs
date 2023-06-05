@@ -11,7 +11,7 @@ const MyWorld = ztg.WorldBuilder.new(.{
 }).Build();
 
 // entities with both a Sprite and Transform component will
-// be drawn during the DRAW stage
+// be drawn during the .draw stage
 const RlObject = struct {
     zrl.Sprite,
     ztg.base.Transform,
@@ -26,6 +26,7 @@ pub fn main() !void {
     rl.SetTargetFPS(60);
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
     var world = try MyWorld.init(alloc);
@@ -34,7 +35,7 @@ pub fn main() !void {
     for (0..10) |_| {
         const obj_ent = try world.newEnt();
 
-        try world.giveEntBundle(obj_ent, RlObject, .{
+        try world.giveEntMany(obj_ent, RlObject{
             zrl.Sprite.init("examples/smile.png", rl.WHITE),
             .{ .pos = ztg.Vec3.new(rl.GetRandomValue(0, screenWidth), rl.GetRandomValue(0, screenHeight), 0.0) }, // the z component of a position will not be taken into account
         });
@@ -48,10 +49,12 @@ pub fn main() !void {
         rl.BeginDrawing();
         rl.ClearBackground(rl.BLACK);
 
-        // X_DRAW stages must be called between rl.BeginDrawing() and rl.EndDrawing()
+        // .X_draw stages must be called between rl.BeginDrawing() and rl.EndDrawing()
         try world.runDrawStages();
 
         rl.EndDrawing();
+
+        world.cleanForNextFrame();
     }
 
     rl.CloseWindow();

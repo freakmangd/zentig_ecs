@@ -11,7 +11,7 @@ const MyWorld = ztg.WorldBuilder.new(.{
 // This would most likely be a player.zig file instead
 const player = struct {
     // This is called when passed into a .include() call on a WorldBuilder
-    pub fn include(comptime wb: *ztg.WorldBuilder) !void {
+    pub fn include(comptime wb: *ztg.WorldBuilder) void {
         // All components used in the world must be added before .Build() is called on the WorldBuilder
         wb.addComponents(.{Player});
         // Adds a system to the UPDATE stage of the world, systems can only be added during comptime
@@ -52,7 +52,7 @@ pub fn main() !void {
     const player_ent = try world.newEnt();
 
     // Use the PlayerBundle struct as a blueprint
-    try world.giveEntBundle(player_ent, player.PlayerBundle, .{
+    try world.giveEntMany(player_ent, player.PlayerBundle{
         .{ .name = "Player" },
         .{ .pos = ztg.Vec3.new(10, 10, 10) },
     });

@@ -1,10 +1,11 @@
 const std = @import("std");
+const math = @import("../math.zig");
 const ztg = @import("../init.zig");
 
 pub const Transform = struct {
-    pos: ztg.Vec3 = ztg.Vec3.new(0, 0, 0),
-    rot: ztg.Quaternion = ztg.Quaternion.identity(),
-    scale: ztg.Vec3 = ztg.Vec3.one(),
+    pos: math.Vec3 = math.Vec3.new(0, 0, 0),
+    rot: math.Quaternion = math.Quaternion.identity(),
+    scale: math.Vec3 = math.Vec3.one(),
 };
 
 pub const Time = struct {

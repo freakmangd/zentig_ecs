@@ -20,13 +20,13 @@ pub fn from(comptime T: type) Self {
 }
 
 pub fn addFieldExtra(
-    comptime self: Self,
+    comptime self: *Self,
     comptime name: []const u8,
     comptime T: type,
     comptime default_value: ?*const anyopaque,
     comptime is_comptime: ?bool,
     comptime alignment: ?comptime_int,
-) Self {
+) void {
     const new_fields = self.type_def.fields ++ &[_]Type.StructField{.{
         .type = T,
         .name = name,
@@ -34,7 +34,7 @@ pub fn addFieldExtra(
         .alignment = alignment orelse 0,
         .is_comptime = is_comptime orelse false,
     }};
-    return .{ .type_def = .{
+    self.* = .{ .type_def = .{
         .fields = new_fields,
         .decls = &.{},
         .layout = self.type_def.layout,
@@ -42,12 +42,23 @@ pub fn addFieldExtra(
     } };
 }
 
-pub fn addField(comptime self: Self, comptime name: []const u8, comptime T: type, comptime default_value: ?*const anyopaque) Self {
+pub fn addField(comptime self: *Self, comptime name: []const u8, comptime T: type, comptime default_value: ?*const anyopaque) void {
     return addFieldExtra(self, name, T, default_value, null, null);
 }
 
-pub fn addTupleField(comptime self: Self, comptime index: usize, comptime T: type, comptime default_value: ?*const anyopaque) Self {
+pub fn addTupleField(comptime self: *Self, comptime index: usize, comptime T: type, comptime default_value: ?*const anyopaque) void {
     return addField(self, std.fmt.comptimePrint("{}", .{index}), T, default_value);
+}
+
+pub fn addTupleFieldExtra(
+    comptime self: *Self,
+    comptime index: usize,
+    comptime T: type,
+    comptime default_value: ?*const anyopaque,
+    comptime is_comptime: ?bool,
+    comptime alignment: ?comptime_int,
+) void {
+    return addFieldExtra(self, std.fmt.comptimePrint("{}", .{index}), T, default_value, is_comptime, alignment);
 }
 
 pub fn Build(comptime self: Self) type {
