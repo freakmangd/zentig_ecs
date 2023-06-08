@@ -1,6 +1,5 @@
 const std = @import("std");
 const zentig = @import("lib.zig");
-const deps = @import("deps.zig");
 
 pub fn addAsModule(
     name: []const u8,

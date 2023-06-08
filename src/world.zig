@@ -337,6 +337,7 @@ pub fn World(
             components_out: [][]*anyopaque,
             entities_out: ?[]ecs.Entity,
         ) !void {
+            @setRuntimeSafety(false);
             _ = options;
 
             comp0_ents_loop: for (comp0s.id_lookup.written_indexes.constSlice(), 0..) |ent, ent_idx| {
