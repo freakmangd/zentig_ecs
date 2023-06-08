@@ -8,6 +8,8 @@ const Allocator = std.mem.Allocator;
 
 pub const Error = ps.Error || Allocator.Error;
 
+const null_bit = 1 << (@typeInfo(usize).Int.bits - 1);
+
 pub fn ComponentArray(comptime max_ents: usize) type {
     return struct {
         const Self = @This();
@@ -39,7 +41,7 @@ pub fn ComponentArray(comptime max_ents: usize) type {
             };
 
             for (&self.id_lookup.sparse_list) |*sa| {
-                sa.* = std.math.maxInt(usize);
+                sa.* = null_bit;
             }
 
             return self;
@@ -97,7 +99,7 @@ pub fn ComponentArray(comptime max_ents: usize) type {
 
             const comp_index = self.id_lookup.lookup(ent); // looks into sparse array, gives 0 in example, so we remove 0 in comp array
 
-            if (comp_index == std.math.maxInt(usize)) return;
+            if (comp_index & null_bit != 0) return;
 
             self.id_lookup.remove(ent); // (1) removes index 0 of packed array in example, filled by last entry in packed array
 
@@ -111,8 +113,8 @@ pub fn ComponentArray(comptime max_ents: usize) type {
                 self.id_lookup.set(last_valid_index, comp_index) catch unreachable; // (3) update sparse array so that packed array's entry points to the right component
             }
 
-            // (4) "null" elements are set to the max integer
-            self.id_lookup.sparse_list[ent] = std.math.maxInt(usize);
+            // (4) "null" elements have their most significant bit set
+            self.id_lookup.sparse_list[ent] |= null_bit;
 
             self.len -= 1;
         }
@@ -130,7 +132,7 @@ pub fn ComponentArray(comptime max_ents: usize) type {
         }
 
         pub fn contains(self: *const Self, ent: ecs.Entity) bool {
-            return self.id_lookup.sparse_list[ent] != std.math.maxInt(usize);
+            return self.id_lookup.sparse_list[ent] & null_bit == 0;
         }
 
         inline fn cast(comptime T: type, data: *anyopaque) *T {

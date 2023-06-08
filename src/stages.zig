@@ -27,7 +27,7 @@ pub fn Init(comptime stage_defs: []const StageDef) type {
 
             inline for (std.meta.fields(@TypeOf(stage))) |stage_field_info| {
                 var args = try world.initArgsForSystem(stage_field_info.type, .static_fn);
-                defer world.deinitArgsForSystem(&args, world.alloc);
+                defer world.deinitArgsForSystem(&args);
 
                 if (comptime util.canReturnError(stage_field_info.type)) {
                     try @call(.auto, @field(stage, stage_field_info.name), args);

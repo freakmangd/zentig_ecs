@@ -9,6 +9,9 @@ const TypeBuilder = @import("type_builder.zig");
 const Commands = @import("commands.zig");
 const Allocator = std.mem.Allocator;
 const ecs = @import("ecs.zig");
+const profiler = @import("profiler.zig");
+
+const tracy = @import("../nogit/zig-tracy/src/lib.zig");
 
 const ComponentChange = struct {
     ent: ecs.Entity,
@@ -36,21 +39,19 @@ pub fn World(
     comptime StagesList: type,
     comptime warnings: []const u8,
 ) type {
+    if (max_ents > 100_000) @compileError("Max entities cannot exceed 100,000.");
+
     return struct {
         const Self = @This();
         const stages_list = StagesList{ .inner = .{} };
 
-        gpa: ?std.heap.GeneralPurposeAllocator(.{}),
         alloc: Allocator,
+        rng: ?std.rand.DefaultPrng,
 
         frame_arena: std.heap.ArenaAllocator,
         frame_alloc: Allocator,
 
-        rng: ?std.rand.DefaultPrng,
-
         next_ent: ecs.Entity = 0,
-
-        entities: *std.BoundedArray(ecs.Entity, max_ents),
 
         comp_arrays: [component_tm.types.len]ca.ComponentArray(max_ents),
         resources: Resources = .{},
@@ -61,26 +62,20 @@ pub fn World(
         remove_queue: RemoveQueue,
 
         /// User must call `.deinit()` once the world is to be descoped. (in a defer block preferrably)
-        /// All systems that request a `WorldGpa` will get the one passed here, or if null get a GeneralPurposeAllocator.
-        pub inline fn init() !Self {
-            return initWith(null, null);
+        /// All systems that request an `Allocator` will get the one passed here.
+        pub inline fn init(alloc: Allocator) !*Self {
+            return initWith(alloc, null);
         }
 
-        pub fn initWith(alloc_opt: ?Allocator, rand_opt: ?std.rand.Random) !Self {
+        pub fn initWith(alloc: Allocator, rand_opt: ?std.rand.Random) !*Self {
             if (warnings.len > 0) {
                 std.log.warn("World was constructed with warnings: " ++ warnings, .{});
             }
 
-            var gpa: ?std.heap.GeneralPurposeAllocator(.{}) = null;
-
-            const alloc: Allocator = blk: {
-                if (alloc_opt) |alloc| {
-                    break :blk alloc;
-                } else {
-                    gpa = std.heap.GeneralPurposeAllocator(.{}){};
-                    break :blk gpa.?.allocator();
-                }
-            };
+            std.debug.print("Entity has utp {s}\n", .{TypeMap.uniqueTypePtr(ecs.Entity)});
+            inline for (component_tm.types) |T| {
+                std.debug.print("{s} has utp {}\n", .{ @typeName(T), TypeMap.uniqueTypePtr(T) });
+            }
 
             var rng: ?std.rand.DefaultPrng = null;
 
@@ -94,21 +89,14 @@ pub fn World(
                 }
             };
 
-            var entities = try alloc.create(std.BoundedArray(ecs.Entity, max_ents));
-            entities.* = try std.BoundedArray(ecs.Entity, max_ents).init(0);
-
-            var frame_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-
-            var self = Self{
+            var self = try alloc.create(Self);
+            self.* = Self{
                 .alloc = alloc,
-                .gpa = gpa,
-
-                .frame_arena = frame_arena,
-                .frame_alloc = frame_arena.allocator(),
-
                 .rng = rng,
 
-                .entities = entities,
+                .frame_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
+                .frame_alloc = undefined,
+
                 .comp_arrays = undefined,
                 .commands_vtable = .{
                     .add_component_fn = Self.commands_addComponent,
@@ -116,11 +104,13 @@ pub fn World(
                     .run_stage_fn = Self.commands_runStageFn,
                 },
 
-                .event_pools = EventPools(events_tm).init(),
+                .event_pools = EventPools(events_tm){},
 
                 .changes_list = ChangesList{},
                 .remove_queue = RemoveQueue{},
             };
+
+            self.frame_alloc = self.frame_arena.allocator();
 
             inline for (component_tm.types) |CT| {
                 var buf = try alloc.alloc(u8, @sizeOf(CT) * max_ents);
@@ -134,13 +124,10 @@ pub fn World(
         }
 
         pub fn deinit(self: *Self) void {
-            if (comptime component_tm.types.len > 0) {
-                self.alloc.destroy(self.entities);
-            }
-
-            self.remove_queue.deinit(self.frame_alloc);
-            self.changes_list.deinit(self.frame_alloc);
-            self.event_pools.deinit();
+            self.event_pools.deinit(self.alloc);
+            self.remove_queue.deinit(self.alloc);
+            self.changes_list.deinit(self.alloc);
+            self.frame_arena.deinit();
 
             inline for (component_tm.types, &self.comp_arrays) |CT, *c| {
                 var buf = c.deinit(self, CT);
@@ -153,6 +140,8 @@ pub fn World(
                     res.deinit();
                 }
             }
+
+            self.alloc.destroy(self);
         }
 
         /// If you are going to run multiple stages in a row, consider `.runStageList()`
@@ -232,19 +221,21 @@ pub fn World(
         }
 
         pub fn cleanForNextFrame(self: *Self) void {
-            self.remove_queue.clearAndFree(self.frame_alloc);
-            self.changes_list.clearAndFree(self.frame_alloc);
+            self.remove_queue.clearAndFree(self.alloc);
+            self.changes_list.clearAndFree(self.alloc);
             self.event_pools.clear();
+            if (!self.frame_arena.reset(.free_all)) std.log.err("Failed to reset frame arena.", .{});
         }
 
         /// Returns the next free index for components
-        pub fn newEnt(self: *Self) error{Overflow}!ecs.Entity {
+        pub fn newEnt(self: *Self) error{ Overflow, HitMaxEntities }!ecs.Entity {
+            if (self.next_ent + 1 >= max_ents) return error.HitMaxEntities;
             self.next_ent = try std.math.add(ecs.Entity, self.next_ent, 1);
             return self.next_ent - 1;
         }
 
-        fn commands_newEnt(ptr: *anyopaque) error{Overflow}!ecs.Entity {
-            return try commandsCast(ptr).newEnt();
+        fn commands_newEnt(ptr: *anyopaque) error{ Overflow, HitMaxEntities }!ecs.Entity {
+            return commandsCast(ptr).newEnt();
         }
 
         /// Queues the removal of all components in lists correlated with `ent`
@@ -252,7 +243,7 @@ pub fn World(
             try self.remove_queue.append(.{ ent, std.math.maxInt(usize) });
         }
 
-        /// Adds a component at the Entity index
+        /// Adds a component at the Entity indexworld
         pub fn giveEnt(self: *Self, ent: ecs.Entity, comptime Component: type, comp: Component) ca.Error!void {
             const idx = comptime component_tm.indexOf(Component) orelse @compileError("Tried to add Component " ++ @typeName(Component) ++ ", which was not registred.");
             try self.comp_arrays[idx].assign(ent, comp);
@@ -285,88 +276,84 @@ pub fn World(
             return &@field(self.resources, std.fmt.comptimePrint("{}", .{resources_tm.indexOf(T).?}));
         }
 
-        pub fn query(self: *Self, comptime query_types: anytype, comptime options: anytype) !ecs.Query(query_types, options) {
-            var result = ecs.Query(query_types, options){};
+        pub fn getSmallestListFrom(self: *Self, utps: []const TypeMap.UniqueTypePtr) struct { *ca.ComponentArray(max_ents), usize } {
             var smallest_idx: usize = 0;
-
-            var comp0s = blk: {
-                const start_list = if (comptime query_types[0] == ecs.Entity) 1 else 0;
-                var smallest = self.getListOf(query_types[start_list]);
-                inline for (query_types, 0..) |Q, i| {
-                    if (comptime Q == ecs.Entity or i == start_list) continue;
-
-                    var check = self.getListOf(Q);
-                    if (check.len < smallest.len) {
-                        smallest = check;
-                        smallest_idx = i;
-                    }
+            var smallest = self.getListFromUtp(utps[0]);
+            for (utps[1..], 1..) |qutp, i| {
+                var check = self.getListFromUtp(qutp);
+                if (check.len < smallest.len) {
+                    smallest = check;
+                    smallest_idx = i;
                 }
-                break :blk smallest;
-            };
-
-            comp0_ents_loop: for (comp0s.id_lookup.written_indexes.constSlice()) |ent| {
-                var res_item: util.MultiArrayListElem(ecs.Query(query_types, options)) = undefined;
-
-                inline for (query_types, 0..) |Q, i| {
-                    const res_item_field = std.fmt.comptimePrint("{c}", .{@intCast(u8, 'a' + i)});
-
-                    // no need to check if the smallest of the Query lists has the same entity as itself...
-                    if (i == smallest_idx) {
-                        @field(res_item, res_item_field) = comp0s.getAs(Q, ent).?;
-                    } else {
-                        var other_q = self.getListOf(Q);
-                        if (!other_q.contains(ent)) continue :comp0_ents_loop; // skip to checking next entity in component 0's entities, skips result.append
-
-                        @field(res_item, res_item_field) = other_q.getAs(Q, ent).?;
-                    }
-                }
-
-                try result.append(self.frame_alloc, res_item);
             }
-
-            return result;
+            return .{ smallest, smallest_idx };
         }
 
-        pub fn query2(self: *Self, query_tids: []const usize, comptime options: anytype) !ecs.QueryFromTids(query_types, options) {
-            var result = ecs.Query(query_types, options){};
-            var smallest_idx: usize = 0;
+        fn query(self: *Self, comptime QT: type) !QT {
+            _ = self;
+            @compileError("unimplemented");
+        }
 
-            var comp0s = blk: {
-                const start_list = if (comptime query_types[0] == ecs.Entity) 1 else 0;
-                var smallest = self.getListOf(query_types[start_list]);
-                inline for (query_types, 0..) |Q, i| {
-                    if (comptime Q == ecs.Entity or i == start_list) continue;
+        fn queryWithOptionsComptime(
+            self: *Self,
+            comptime query_types: []const type,
+            comptime options: []const type,
+            comp0s: *ca.ComponentArray(max_ents),
+            comp0_idx: usize,
+            components_out: [][]*anyopaque,
+            comptime has_entities: bool,
+            entities_out: []ecs.Entity,
+        ) !void {
+            @setRuntimeSafety(false);
+            _ = options;
 
-                    var check = self.getListOf(Q);
-                    if (check.len < smallest.len) {
-                        smallest = check;
-                        smallest_idx = i;
+            var other_lists: [query_types.len]*ca.ComponentArray(max_ents) = undefined;
+            inline for (query_types, &other_lists) |QT, *ol| ol.* = self.getListOf(QT);
+
+            comp0_ents_loop: for (comp0s.id_lookup.written_indexes.constSlice(), 0..) |ent, ent_idx| {
+                components_out[comp0_idx][ent_idx] = comp0s.get(ent).?;
+
+                inline for (query_types, 0..) |QT, i| {
+                    _ = QT;
+                    // no need to check if the smallest of the Query lists has the same entity as itself
+                    if (i != comp0_idx) {
+                        const other_q = other_lists[i];
+                        if (!other_q.contains(ent)) continue :comp0_ents_loop; // skip to checking next entity in component 0's entities, skips adding the entity
+
+                        components_out[i][ent_idx] = other_q.get(ent).?;
                     }
                 }
-                break :blk smallest;
-            };
 
-            comp0_ents_loop: for (comp0s.id_lookup.written_indexes.constSlice()) |ent| {
-                var res_item: util.MultiArrayListElem(ecs.Query(query_types, options)) = undefined;
-
-                inline for (query_types, 0..) |Q, i| {
-                    const res_item_field = std.fmt.comptimePrint("{c}", .{@intCast(u8, 'a' + i)});
-
-                    // no need to check if the smallest of the Query lists has the same entity as itself...
-                    if (i == smallest_idx) {
-                        @field(res_item, res_item_field) = comp0s.getAs(Q, ent).?;
-                    } else {
-                        var other_q = self.getListOf(Q);
-                        if (!other_q.contains(ent)) continue :comp0_ents_loop; // skip to checking next entity in component 0's entities, skips result.append
-
-                        @field(res_item, res_item_field) = other_q.getAs(Q, ent).?;
-                    }
-                }
-
-                try result.append(self.frame_alloc, res_item);
+                if (comptime has_entities) entities_out[ent_idx] = ent;
             }
+        }
 
-            return result;
+        fn queryWithOptions(
+            self: *Self,
+            query_utps: []const TypeMap.UniqueTypePtr,
+            comptime options: []const type,
+            comp0s: *ca.ComponentArray(max_ents),
+            comp0_idx: usize,
+            components_out: [][]*anyopaque,
+            entities_out: ?[]ecs.Entity,
+        ) !void {
+            _ = options;
+
+            comp0_ents_loop: for (comp0s.id_lookup.written_indexes.constSlice(), 0..) |ent, ent_idx| {
+                components_out[comp0_idx][ent_idx] = comp0s.get(ent).?;
+
+                for (query_utps, 0..) |qutp, i| {
+                    // no need to check if the smallest of the Query lists has the same entity as itself...
+                    if (i == comp0_idx) continue;
+
+                    var other_q = self.getListFromUtp(qutp);
+                    if (!other_q.contains(ent)) continue :comp0_ents_loop; // skip to checking next entity in component 0's entities, skips adding the entity
+
+                    components_out[i][ent_idx] = other_q.get(ent).?;
+                }
+
+                if (entities_out) |eout| eout[ent_idx] = ent;
+            }
         }
 
         const ArgsFnType = enum {
@@ -395,24 +382,24 @@ pub fn World(
                         .vtable = &self.commands_vtable,
                     };
                     continue;
-                } else if (comptime @typeInfo(Param) == .Struct and @hasDecl(Param, "Field")) {
-                    const query_ti = std.meta.fieldInfo(util.MultiArrayListElem(Param), .QueryType);
-                    const opts_ti = std.meta.fieldInfo(util.MultiArrayListElem(Param), .OptionsType);
+                } else if (comptime @typeInfo(Param) == .Struct and @hasDecl(Param, "query_types")) {
+                    var smallest = getSmallestListFrom(self, &Param.type_utps);
 
-                    out[i] = try self.query(
-                        @ptrCast(
-                            *const query_ti.type,
-                            query_ti.default_value.?,
-                        ).*,
-                        @ptrCast(
-                            *const opts_ti.type,
-                            opts_ti.default_value.?,
-                        ).*,
+                    out[i] = try Param.init(self.frame_alloc, smallest[0].len);
+
+                    try self.queryWithOptions(
+                        &Param.type_utps,
+                        Param.OptionsType,
+                        smallest[0],
+                        smallest[1],
+                        &out[i].comp_ptrs,
+                        if (comptime Param.has_entities) &out[i].entities else null,
                     );
+
                     continue;
                 } else if (comptime @typeInfo(Param) == .Struct and @hasDecl(Param, "EventSendType")) {
                     out[i] = .{
-                        .alloc = self.event_pools.alloc,
+                        .alloc = self.alloc,
                         .event_pool = self.event_pools.getPtr(Param.EventSendType),
                     };
                     continue;
@@ -441,30 +428,22 @@ pub fn World(
             return types;
         }
 
-        pub fn deinitArgsForSystem(self: *Self, args: anytype, alloc: Allocator) void {
+        pub fn deinitArgsForSystem(self: *Self, args: anytype) void {
             _ = self;
-
             inline for (std.meta.fields(@TypeOf(args.*))) |args_field| {
-                if (args_field.type == Allocator) continue;
-
-                if (comptime @typeInfo(args_field.type) == .Struct and @hasDecl(args_field.type, "pop") and @hasField(util.MultiArrayListElem(args_field.type), "QueryType")) {
-                    @field(args, args_field.name).deinit(alloc);
+                if (comptime @typeInfo(args_field.type) == .Struct and @hasDecl(args_field.type, "query_types")) {
+                    //@field(args, args_field.name).deinit(self.alloc);
                 }
-
-                // if (comptime std.meta.trait.isContainer(args_field.type) and @hasDecl(args_field.type, "deinit")) {
-                //     const fn_params = @typeInfo(@TypeOf(@TypeOf(@field(args, args_field.name)).deinit)).Fn.params;
-
-                //     if (comptime fn_params.len > 1 and fn_params[1].type.? == Allocator) {
-                //         @field(args, args_field.name).deinit(alloc);
-                //     } else if (comptime fn_params.len == 1) {
-                //         @field(args, args_field.name).deinit();
-                //     }
-                // }
             }
         }
 
-        fn getListOf(self: *Self, comptime T: type) *ca.ComponentArray(max_ents) {
+        pub fn getListOf(self: *Self, comptime T: type) *ca.ComponentArray(max_ents) {
             const idx = comptime component_tm.indexOf(T) orelse @compileError("Tried to query Component " ++ @typeName(T) ++ ", which was not registred.");
+            return &self.comp_arrays[idx];
+        }
+
+        fn getListFromUtp(self: *Self, utp: TypeMap.UniqueTypePtr) *ca.ComponentArray(max_ents) {
+            const idx = component_tm.fromUtp(utp) orelse std.debug.panic("Tried to query Component with utp {}, which was not registred.", .{utp});
             return &self.comp_arrays[idx];
         }
 
@@ -486,22 +465,12 @@ fn EventPools(comptime event_tm: TypeMap) type {
     return struct {
         const Self = @This();
 
-        arena: std.heap.ArenaAllocator,
-        alloc: Allocator,
         inner: Inner = .{},
 
-        pub fn init() Self {
-            var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-
-            return .{
-                .arena = arena,
-                .alloc = arena.allocator(),
-            };
-        }
-
-        pub fn append(self: *Self, comptime EventType: type, data: EventType) Allocator.Error!void {
-            if (comptime !event_tm.has(EventType)) @compileError("Event `" ++ @typeName(EventType) ++ "` was not registered.");
-            try @field(self.inner, Inner_fieldNameOf(EventType)).append(self.alloc, data);
+        pub fn deinit(self: *Self, alloc: Allocator) void {
+            inline for (std.meta.fields(Inner)) |field| {
+                @field(self.inner, field.name).deinit(alloc);
+            }
         }
 
         pub fn getPtr(self: *Self, comptime EventType: type) *std.ArrayListUnmanaged(EventType) {
@@ -513,10 +482,6 @@ fn EventPools(comptime event_tm: TypeMap) type {
             inline for (std.meta.fields(Inner)) |field| {
                 @field(self.inner, field.name).clearRetainingCapacity();
             }
-        }
-
-        pub fn deinit(self: *Self) void {
-            self.arena.deinit();
         }
 
         inline fn Inner_fieldNameOf(comptime T: type) []const u8 {

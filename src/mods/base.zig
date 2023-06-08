@@ -21,6 +21,6 @@ pub const Time = struct {
 };
 
 pub fn include(comptime world: *ztg.WorldBuilder) !void {
-    world.addComponents(.{Transform});
+    world.addComponents(&.{Transform});
     world.addResource(Time, .{});
 }

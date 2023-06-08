@@ -42,20 +42,15 @@ pub const Camera2dBundle = struct {
 };
 
 pub fn include(comptime world: *ztg.WorldBuilder) void {
-    world.include(.{
-        ztg.base,
-    });
-    world.addComponents(.{
-        rl.Camera2D,
-        Sprite,
-    });
+    world.include(&.{ztg.base});
+    world.addComponents(&.{ rl.Camera2D, Sprite });
     world.addSystemsToStage(.post_init, .{poi_checkCams});
     world.addSystemsToStage(.pre_update, .{pru_time});
     world.addSystemsToStage(.draw, .{dr_sprites});
 }
 
-fn poi_checkCams(cameras: ztg.Query(.{rl.Camera2D}, .{})) void {
-    if (cameras.len == 0) {
+fn poi_checkCams(cameras: ztg.Query(&.{rl.Camera2D})) void {
+    if (cameras.len() == 0) {
         std.log.warn("No cameras detected after init stage. Try adding one with `commands.giveEntMany(ent, zrl.Camera2dBundle.init())`", .{});
     }
 }
@@ -64,13 +59,11 @@ fn pru_time(time: *ztg.base.Time) void {
     time.dt = rl.GetFrameTime();
 }
 
-fn dr_sprites(cameras: ztg.Query(.{rl.Camera2D}, .{}), query: ztg.Query(.{ Sprite, ztg.base.Transform }, .{})) anyerror!void {
-    var slice = query.slice();
-
-    for (cameras.items(.a)) |cam| {
+fn dr_sprites(cameras: ztg.Query(&.{rl.Camera2D}), query: ztg.Query(&.{ Sprite, ztg.base.Transform })) anyerror!void {
+    for (cameras.items(0)) |cam| {
         rl.BeginMode2D(cam.*);
 
-        for (slice.items(.a), slice.items(.b)) |spr, trn| {
+        for (query.items(0), query.items(1)) |spr, trn| {
             rl.DrawTexture(spr.tex, @floatToInt(c_int, trn.pos.x), @floatToInt(c_int, trn.pos.y), spr.color);
         }
 

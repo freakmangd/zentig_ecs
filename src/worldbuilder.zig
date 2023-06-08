@@ -32,7 +32,7 @@ const default_stages = struct {
 
 warnings: []const u8 = "",
 
-max_entities: usize = 1000,
+max_entities: usize = 20_000,
 stage_defs: []const StageDef = &.{},
 
 comp_types: TypeMap = .{},
@@ -42,7 +42,7 @@ included: TypeMap = .{},
 resources: TypeBuilder,
 added_resources: TypeMap = .{},
 
-pub fn new(comptime includes: anytype) Self {
+pub fn new(comptime includes: []const type) Self {
     var self = Self{
         .resources = TypeBuilder.new(false, .Auto),
     };
@@ -68,19 +68,26 @@ pub fn new(comptime includes: anytype) Self {
 ///
 /// Example:
 /// ```zig
-/// wb.include(.{ @import("player.zig") });
+/// wb.include(&.{ @import("player.zig") });
 /// ```
 ///
 /// `player.zig:`
 /// ```zig
 /// pub fn include(comptime wb: *WorldBuilder) !void {
-///     wb.addComponents(.{ Player });
+///     wb.addComponents(&.{ Player });
 /// }
 /// ```
-pub fn include(comptime self: *Self, comptime includes: anytype) void {
+pub fn include(comptime self: *Self, comptime includes: []const type) void {
     inline for (includes) |inc| {
         if (comptime std.meta.trait.hasFn("include")(inc)) {
             if (comptime self.included.has(inc)) return; // silent fail
+
+            const ti = @typeInfo(@TypeOf(inc.include));
+            if (comptime ti != .Fn) @compileError("A type's include decl must be a function.");
+
+            if (comptime !(ti.Fn.params.len == 1 and ti.Fn.params[0].type.? == *Self)) {
+                @compileError(@typeName(inc) ++ "'s include function's signature must be fn(*WorldBuilder) (!)void");
+            }
 
             if (comptime util.canReturnError(@TypeOf(inc.include))) {
                 inc.include(self) catch |err| @compileError("Cound not build world, error in include. Error: " ++ err);
@@ -115,18 +122,18 @@ pub fn addStage(comptime self: *Self, comptime stage_name: @TypeOf(.enum_literal
 ///
 /// // ...
 ///
-/// wb.addComponents(.{ Player });
+/// wb.addComponents(&.{ Player });
 ///
 /// // ...
 ///
-/// pub fn mySystem(q: Query(.{ Player }, .{})) void {
+/// pub fn mySystem(q: Query(.{ Player })) void {
 ///     for (q.items(.a)) |pl| {
 ///         std.debug.print("My score is {}\n", .{ pl.score });
 ///     }
 /// }
 /// ```
-pub fn addComponents(comptime self: *Self, comps: anytype) void {
-    inline for (comps) |C| {
+pub fn addComponents(comptime self: *Self, comptime comps: []const type) void {
+    for (comps) |C| {
         if (comptime self.comp_types.has(C)) {
             warn("Tried to add component type `" ++ @typeName(C) ++ "` to world more than once.");
             continue;

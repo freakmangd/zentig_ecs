@@ -1,5 +1,6 @@
 const std = @import("std");
 const zentig = @import("lib.zig");
+const deps = @import("deps.zig");
 
 pub fn addAsModule(
     name: []const u8,
@@ -43,9 +44,9 @@ pub fn build(b: *std.Build) void {
     });
 
     const examples = [_]struct { []const u8, []const u8 }{
-        .{ "example", "examples/example.zig" },
-        .{ "example-input", "examples/input_example.zig" },
-        .{ "example-raylib", "examples/raylib_example.zig" },
+        //.{ "example", "examples/example.zig" },
+        //.{ "example-input", "examples/input_example.zig" },
+        //.{ "example-raylib", "examples/raylib_example.zig" },
     };
 
     for (examples) |ex_info| {

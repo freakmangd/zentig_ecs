@@ -11,7 +11,7 @@ ctx: *anyopaque,
 vtable: *const Vtable,
 
 pub const Vtable = struct {
-    new_ent_fn: *const fn (*anyopaque) error{Overflow}!ecs.Entity,
+    new_ent_fn: *const fn (*anyopaque) error{ Overflow, HitMaxEntities }!ecs.Entity,
     add_component_fn: *const fn (*anyopaque, ecs.Entity, TypeMap.UniqueTypePtr, *const anyopaque) ca.Error!void,
     run_stage_fn: *const fn (*anyopaque, []const u8) anyerror!void,
 };
@@ -57,16 +57,16 @@ pub fn runDrawStages(self: Self) anyerror!void {
     }
 }
 
-pub fn newEnt(self: Self) error{Overflow}!Entity {
-    return try self.vtable.new_ent_fn(self.ctx);
+pub fn newEnt(self: Self) error{ Overflow, HitMaxEntities }!Entity {
+    return self.vtable.new_ent_fn(self.ctx);
 }
 
-pub fn giveEnt(self: Self, ent: Entity, comptime Component: type, comp: Component) ca.Error!void {
-    try self.vtable.add_component_fn(self.ctx, ent, TypeMap.uniqueTypePtr(Component), &comp);
+pub fn giveEnt(self: Self, ent: Entity, component: anytype) ca.Error!void {
+    try self.vtable.add_component_fn(self.ctx, ent, TypeMap.uniqueTypePtr(@TypeOf(component)), &component);
 }
 
 pub fn giveEntMany(self: Self, ent: Entity, components: anytype) ca.Error!void {
     inline for (std.meta.fields(@TypeOf(components))) |field| {
-        try giveEnt(self, ent, field.type, @field(components, field.name));
+        try giveEnt(self, ent, @field(components, field.name));
     }
 }

@@ -20,12 +20,24 @@ pub const Vec2 = struct {
         return .{};
     }
 
-    pub inline fn as(self: Vec2, comptime T: type) @Vector(2, T) {
+    pub inline fn as(self: Vec2, comptime T: type) T {
+        return .{ .x = self.x, .y = self.y };
+    }
+
+    pub inline fn asVectorOf(self: Vec2, comptime T: type) @Vector(2, T) {
         if (comptime std.meta.trait.isFloat(T)) {
             return .{ @floatCast(T, self.x), @floatCast(T, self.y) };
         } else if (comptime std.meta.trait.isIntegral(T)) {
             return .{ @floatToInt(T, self.x), @floatToInt(T, self.y) };
         }
+    }
+
+    pub inline fn from(other: anytype) Vec2 {
+        return .{ .x = other.x, .y = .other.y };
+    }
+
+    pub inline fn extend(self: Vec2) Vec3 {
+        return .{ .x = self.x, .y = self.y, .z = 0.0 };
     }
 
     pub inline fn copy(self: Vec2) Vec2 {
@@ -40,9 +52,9 @@ pub const Vec2 = struct {
         return (self.x * self.x) + (self.y * self.y);
     }
 
-    pub fn getNormalized(self: Vec2) error{DivideByZero}!Vec2 {
+    pub fn getNormalized(self: Vec2) Vec2 {
         const m = length(self);
-        if (m == 0) return error.DivideByZero;
+        if (m == 0) return self;
         return divide(self, m);
     }
 
@@ -70,9 +82,9 @@ pub const Vec2 = struct {
         return .{ .x = v0.x * v1.x, .y = v0.y * v1.y };
     }
 
-    pub fn setNormalized(self: *Vec2) error{DivideByZero}!void {
+    pub fn setNormalized(self: *Vec2) void {
         const m = length(self);
-        if (m == 0) return error.DivideByZero;
+        if (m == 0) return;
         self.x /= m;
         self.y /= m;
     }
@@ -106,6 +118,10 @@ pub const Vec2 = struct {
         self.x = self.x * other.x;
         self.y = self.y * other.y;
     }
+
+    pub fn dir(orig: Vec2, to: Vec2) Vec2 {
+        return subtract(to, orig).getNormalized();
+    }
 };
 
 pub const Vec3 = struct {
@@ -129,12 +145,28 @@ pub const Vec3 = struct {
         return .{ .x = s, .y = s, .z = s };
     }
 
-    pub inline fn as(self: Vec3, comptime T: type) @Vector(2, T) {
+    pub inline fn as(self: Vec3, comptime T: type) T {
+        return .{ .x = self.x, .y = self.y, .z = self.z };
+    }
+
+    pub inline fn as2(self: Vec3, comptime T: type) T {
+        return .{ .x = self.x, .y = self.y };
+    }
+
+    pub inline fn asVectorOf(self: Vec3, comptime T: type) @Vector(3, T) {
         if (comptime std.meta.trait.isFloat(T)) {
-            return .{ @floatCast(T, self.x), @floatCast(T, self.y) };
+            return .{ @floatCast(T, self.x), @floatCast(T, self.y), @floatCast(T, self.z) };
         } else if (comptime std.meta.trait.isIntegral(T)) {
-            return .{ @floatToInt(T, self.x), @floatToInt(T, self.y) };
+            return .{ @floatToInt(T, self.x), @floatToInt(T, self.y), @floatToInt(T, self.z) };
         }
+    }
+
+    pub inline fn from(other: anytype) Vec3 {
+        return .{ .x = other.x, .y = other.y, .z = other.z };
+    }
+
+    pub inline fn from2(vec2: anytype) Vec3 {
+        return .{ .x = vec2.x, .y = vec2.y, .z = 0.0 };
     }
 
     pub inline fn copy(self: Vec3) Vec3 {
@@ -149,9 +181,9 @@ pub const Vec3 = struct {
         return (self.x * self.x) + (self.y * self.y) + (self.z * self.z);
     }
 
-    pub fn getNormalized(self: Vec3) error{DivideByZero}!Vec3 {
+    pub fn getNormalized(self: Vec3) Vec3 {
         const m = length(self);
-        if (m == 0) return error.DivideByZero;
+        if (m == 0) return self;
         return divide(self, m);
     }
 
@@ -179,9 +211,9 @@ pub const Vec3 = struct {
         return .{ .x = v0.x * v1.x, .y = v0.y * v1.y, .z = v0.z * v1.z };
     }
 
-    pub fn setNormalized(self: *Vec3) error{DivideByZero}!void {
+    pub fn setNormalized(self: *Vec3) void {
         const m = length(self);
-        if (m == 0) return error.DivideByZero;
+        if (m == 0) return;
         self.x /= m;
         self.y /= m;
         self.z /= m;
@@ -221,6 +253,10 @@ pub const Vec3 = struct {
         self.x = self.x * other.x;
         self.y = self.y * other.y;
         self.z = self.z * other.z;
+    }
+
+    pub fn dir(orig: Vec3, to: Vec3) Vec3 {
+        return subtract(to, orig).getNormalized();
     }
 };
 

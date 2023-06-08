@@ -28,20 +28,39 @@ pub fn fromUtp(comptime self: Self, utp: UniqueTypePtr) ?usize {
     return null;
 }
 
-pub const UniqueTypePtr = u64;
-var id_counter: u64 = 0;
-pub fn uniqueTypePtr(comptime T: type) UniqueTypePtr {
-    _ = T;
-    const static = struct {
-        var id: ?u64 = null;
-    };
-    const result = static.id orelse blk: {
-        static.id = id_counter;
-        id_counter += 1;
-        break :blk static.id.?;
-    };
-    return result;
-}
+//pub const UniqueTypePtr = *const anyopaque;
+//pub fn uniqueTypePtr(comptime T: type) UniqueTypePtr {
+//    return @typeName(T);
+//}
+
+//pub const UniqueTypePtr = u64;
+//var id_counter: u64 = 0;
+//pub fn uniqueTypePtr(comptime T: type) UniqueTypePtr {
+//    _ = T;
+//    const static = struct {
+//        var id: ?u64 = null;
+//    };
+//    const result = static.id orelse blk: {
+//        static.id = id_counter;
+//        id_counter += 1;
+//        break :blk static.id.?;
+//    };
+//    return result;
+//}
+
+pub const UniqueTypePtr = *const opaque {};
+pub const uniqueTypePtr = struct {
+    inline fn typeId(comptime T: type) UniqueTypePtr {
+        comptime return typeIdImpl(T);
+    }
+    inline fn typeIdImpl(comptime T: type) UniqueTypePtr {
+        _ = T;
+        const gen = struct {
+            var id: u1 = undefined;
+        };
+        return @ptrCast(UniqueTypePtr, &gen.id);
+    }
+}.typeId;
 
 test "ok" {
     const typemap = comptime blk: {

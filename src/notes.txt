@@ -1,1 +1,2 @@
-switch from one allocator doing everything to using specific allocators and having the user add an allocator as a resource, maybe have a GPA built in
+benchmark using comptime query / runtime query
+make one of the examples the actual game thingy please... its super annoying to benchmark as is

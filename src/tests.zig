@@ -54,7 +54,7 @@ const player_file = struct {
         });
     }
 
-    fn playerSpeach(com: ztg.Commands, q: ztg.Query(.{ Player, ztg.base.Transform }, .{})) !void {
+    fn playerSpeach(com: ztg.Commands, q: ztg.Query(&.{ Player, ztg.base.Transform })) !void {
         for (q.items(.a), q.items(.b)) |player, trn| {
             try std.testing.expectFmt("My name is Player, and I'm located at 10 10.", "My name is {s}, and I'm located at {} {}.", .{
                 player.name,
@@ -66,7 +66,7 @@ const player_file = struct {
         try com.runStage(.player_update);
     }
 
-    fn playerSpecial(q: ztg.Query(.{ Player, game_file.Sprite }, .{})) !void {
+    fn playerSpecial(q: ztg.Query(&.{ Player, game_file.Sprite })) !void {
         for (q.items(.b)) |spr| {
             try std.testing.expectEqual(@as(usize, 0), spr.img);
         }
