@@ -77,8 +77,12 @@ fn getFmt(comptime T: type) []const u8 {
     return fmt ++ "],";
 }
 
-fn getArgs(comptime T: type) std.meta.Tuple(&[_]type{[]const u8} ** (std.meta.fields(T).len * 2)) {
-    var out: std.meta.Tuple(&[_]type{[]const u8} ** (std.meta.fields(T).len * 2)) = undefined;
+fn GetArgsOut(comptime T: type) type {
+    return std.meta.Tuple(&[_]type{[]const u8} ** (std.meta.fields(T).len * 2));
+}
+
+fn getArgs(comptime T: type) GetArgsOut(T) {
+    var out: GetArgsOut(T) = undefined;
 
     const MAX_DEPTH = 10;
     comptime var depth: usize = 0;

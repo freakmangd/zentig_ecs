@@ -1,128 +1,105 @@
 const std = @import("std");
 const ecs = @import("ecs.zig");
-const ps = @import("packed_sparse.zig");
+const ByteArray = @import("byte_array.zig").ByteArray;
 const util = @import("util.zig");
 const TypeMap = @import("type_map.zig");
 const print = std.debug.print;
 const Allocator = std.mem.Allocator;
 
-pub const Error = ps.Error || Allocator.Error;
+pub const Error = Allocator.Error || error{Overflow};
 
-const null_bit = 1 << (@typeInfo(usize).Int.bits - 1);
+pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
+    const null_bit = 1 << (@typeInfo(Index).Int.bits - 1);
 
-pub fn ComponentArray(comptime max_ents: usize) type {
     return struct {
         const Self = @This();
 
-        fba: std.heap.FixedBufferAllocator,
-        fba_buf: []u8,
         alloc: std.mem.Allocator,
 
         component_utp: TypeMap.UniqueTypePtr,
 
-        len: usize = 0,
-        components_data: std.ArrayListUnmanaged(u8),
-        id_lookup: ps.PackedSparse(usize, max_ents),
-        entry_size: usize,
+        components_data: ByteArray,
+        entities: std.ArrayListUnmanaged(ecs.Entity),
+        ent_to_comp_idx: []Index,
 
-        pub fn init(fba_buf: []u8, comptime T: type) !Self {
-            const T_size = @sizeOf(T);
-
-            var fba = std.heap.FixedBufferAllocator.init(fba_buf);
-
+        pub fn init(alloc: Allocator, comptime T: type, max_cap: usize) !Self {
             var self = Self{
-                .fba = fba,
-                .fba_buf = fba_buf,
-                .alloc = fba.allocator(),
+                .alloc = alloc,
                 .component_utp = TypeMap.uniqueTypePtr(T),
-                .components_data = try std.ArrayListUnmanaged(u8).initCapacity(fba.allocator(), fba_buf.len),
-                .id_lookup = ps.PackedSparse(ecs.Entity, max_ents).init(),
-                .entry_size = @intCast(usize, T_size),
+                .components_data = try ByteArray.initCapacity(T, alloc, max_cap),
+                .entities = try std.ArrayListUnmanaged(ecs.Entity).initCapacity(alloc, max_cap),
+                .ent_to_comp_idx = try alloc.alloc(Index, max_ents),
             };
 
-            for (&self.id_lookup.sparse_list) |*sa| {
-                sa.* = null_bit;
+            for (self.ent_to_comp_idx) |*etc| {
+                etc.* = null_bit;
             }
 
             return self;
         }
 
-        pub fn deinit(self: *Self, world: anytype, comptime T: type) []u8 {
-            if (comptime @hasDecl(T, "onDestroy")) deinit_items(self, world, T);
-            return self.fba_buf;
+        pub fn deinit(self: *Self) void {
+            self.components_data.deinit(self.alloc);
+            self.entities.deinit(self.alloc);
+            self.alloc.free(self.ent_to_comp_idx);
         }
 
-        fn deinit_items(self: *Self, world: anytype, comptime T: type) void {
-            const member_fn_type = comptime util.isMemberFn(T, T.onDestroy);
-            const args = world.initArgsForSystem(@TypeOf(T.onDestroy), if (member_fn_type != .non_member) .member_fn else .static_fn) catch {
-                @panic("Failed to get args for deinit system for type `" ++ @typeName(T) ++ "`.");
-            };
-
-            if (comptime @sizeOf(T) > 0) {
-                var comp_iter = self.iterator();
-                while (comp_iter.nextAs(T)) |comp| @call(.auto, T.onDestroy, blk: {
-                    break :blk if (comptime member_fn_type != .non_member) .{if (member_fn_type == .by_value) comp.* else comp} ++ args else args;
-                });
-            } else {
-                for (0..self.len) |_| @call(.auto, T.onDestroy, blk: {
-                    break :blk if (comptime member_fn_type != .non_member) .{T{}} ++ args else args;
-                });
-            }
-        }
-
-        pub fn assign(self: *Self, ent: ecs.Entity, entry: anytype) Error!void {
+        pub fn assign(self: *Self, ent: ecs.Entity, entry: anytype) void {
             if (TypeMap.uniqueTypePtr(@TypeOf(entry)) != self.component_utp) std.debug.panic("Incorrect type.", .{});
-            try self.appendBytes(ent, &std.mem.toBytes(entry));
+            self.appendBytes(ent, std.mem.asBytes(&entry));
         }
 
-        pub fn assignData(self: *Self, ent: ecs.Entity, data: *const anyopaque) Error!void {
-            try self.appendBytes(ent, @ptrCast([*]const u8, data)[0..self.entry_size]);
+        pub fn assignData(self: *Self, ent: ecs.Entity, data: *const anyopaque) void {
+            self.appendBytes(ent, data);
         }
 
-        inline fn appendBytes(self: *Self, ent: ecs.Entity, bytes: []const u8) Error!void {
-            try self.id_lookup.set(ent, self.len);
-            try self.components_data.appendSlice(self.alloc, bytes);
-            self.len += 1;
+        inline fn appendBytes(self: *Self, ent: ecs.Entity, bytes_start: *const anyopaque) void {
+            if (self.entities.items.len == self.entities.capacity) std.debug.panic("Hit max capacity for component {*}!", .{self.component_utp});
+            self.entities.appendAssumeCapacity(ent);
+            self.ent_to_comp_idx[ent] = @intCast(Index, self.components_data.len());
+            self.components_data.appendPtrAssumeCapacity(bytes_start);
+        }
+
+        pub fn reassign(self: *Self, old: ecs.Entity, new: ecs.Entity) void {
+            const old_ent_idx = self.indexOfEntityInEnts(old);
+            _ = self.entities.swapRemove(old_ent_idx);
+            self.entities.appendAssumeCapacity(new); // we just removed something from the array, no error
+
+            self.ent_to_comp_idx[new] = self.ent_to_comp_idx[old];
+            self.ent_to_comp_idx[old] |= null_bit;
         }
 
         pub fn swapRemove(self: *Self, ent: ecs.Entity) void {
-            // triple swap remove time!
-            // need to replace last index in packed array's result in sparse array to reflect changes in component array.
-            //
-            // -(X)> arrows have a number correlating with the line of code that preforms that action.
-            // key: (p)acked | (s)parce | (c)omponents
+            const last_ent = self.entities.items[self.entities.items.len - 1];
 
-            //                              packed:   sparce:    components:
-            //  this will be replaced by -> [0-(1)>2] [0-(4)>?]  [X-(2)>X] <- this will be replaced by
-            //                     this. -> [2-(1)> ] [ ]        [X-(2)> ] <- this.
-            //                                        [1-(3)>0] <- so we need to update sparse array to reflect that
+            // here because the entities array mirrors the components array,
+            // (whenever an entity is added at an index, a component is added at the same index in the component array)
+            // wherever the entity is removed at is where the component data will be swapRemove'ed into...
+            const index_of_rem = self.indexOfEntityInEnts(ent);
+            _ = self.entities.swapRemove(index_of_rem);
 
-            const comp_index = self.id_lookup.lookup(ent); // looks into sparse array, gives 0 in example, so we remove 0 in comp array
+            self.components_data.swapRemove(self.ent_to_comp_idx[ent]);
+            self.ent_to_comp_idx[ent] |= null_bit;
 
-            if (comp_index & null_bit != 0) return;
+            // were removing the end of the array, so no need to reassign the last_ent's value
+            if (index_of_rem == self.entities.items.len) return;
 
-            self.id_lookup.remove(ent); // (1) removes index 0 of packed array in example, filled by last entry in packed array
+            // ... so we can assign that here
+            self.ent_to_comp_idx[last_ent] = @intCast(Index, index_of_rem);
+        }
 
-            for (0..self.entry_size) |i| {
-                _ = self.components_data.swapRemove(comp_index + (self.entry_size - i - 1)); // (2) removes 0 in comp array in example
-            }
-
-            if (self.id_lookup.written_indexes.len != 0) {
-                const last_valid_index = self.id_lookup.written_indexes.get(self.id_lookup.written_indexes.len - 1); // get last entry in packed array
-                self.id_lookup.remove(last_valid_index); // (1) remove to prepare for change in (3)
-                self.id_lookup.set(last_valid_index, comp_index) catch unreachable; // (3) update sparse array so that packed array's entry points to the right component
-            }
-
-            // (4) "null" elements have their most significant bit set
-            self.id_lookup.sparse_list[ent] |= null_bit;
-
-            self.len -= 1;
+        fn indexOfEntityInEnts(self: *const Self, ent: ecs.Entity) usize {
+            // since entities and components are always added in pairs,
+            // ent_to_comp_idx also functions as an ent_to_ent_idx
+            const index = self.ent_to_comp_idx[ent];
+            if (index & null_bit != 0) return std.debug.panic("Could not find entity {} in entities.", .{ent});
+            return index;
         }
 
         pub fn get(self: *const Self, ent: ecs.Entity) ?*anyopaque {
-            const index = self.id_lookup.lookup(ent);
-            if (index == std.math.maxInt(usize)) return null;
-            return self.components_data.items.ptr + (index * self.entry_size);
+            const index = self.ent_to_comp_idx[ent];
+            if (index & null_bit != 0) return null;
+            return self.components_data.get(index);
         }
 
         pub fn getAs(self: *const Self, comptime T: type, ent: ecs.Entity) ?*T {
@@ -131,8 +108,12 @@ pub fn ComponentArray(comptime max_ents: usize) type {
             return cast(T, g);
         }
 
-        pub fn contains(self: *const Self, ent: ecs.Entity) bool {
-            return self.id_lookup.sparse_list[ent] & null_bit == 0;
+        pub inline fn contains(self: *const Self, ent: ecs.Entity) bool {
+            return self.ent_to_comp_idx[ent] & null_bit == 0;
+        }
+
+        pub inline fn len(self: *const Self) usize {
+            return self.entities.items.len;
         }
 
         inline fn cast(comptime T: type, data: *anyopaque) *T {
@@ -140,28 +121,8 @@ pub fn ComponentArray(comptime max_ents: usize) type {
             return @ptrCast(*T, @alignCast(@alignOf(T), data));
         }
 
-        const CompIter = struct {
-            buffer: []u8,
-            entry_size: usize,
-            index: usize = 0,
-
-            pub fn next(self: *CompIter) ?*anyopaque {
-                if (self.index >= self.buffer.len / self.entry_size) return null;
-                self.index += 1;
-                return self.buffer.ptr + (self.index - 1) * self.entry_size;
-            }
-
-            pub fn nextAs(self: *CompIter, comptime T: type) ?*T {
-                var n = self.next() orelse return null;
-                return cast(T, n);
-            }
-        };
-
-        pub fn iterator(self: *Self) CompIter {
-            return .{
-                .buffer = self.components_data.items,
-                .entry_size = self.entry_size,
-            };
+        pub inline fn iterator(self: *Self) ByteArray.ByteIterator {
+            return self.components_data.iterator();
         }
     };
 }
@@ -169,25 +130,23 @@ pub fn ComponentArray(comptime max_ents: usize) type {
 const Data = struct {
     lmao: u32,
     uhh: bool = false,
+    xd: f32 = 100.0,
+    ugh: enum { ok, bad } = .ok,
 };
 
 test "simple test" {
-    var arr = try ComponentArray(10).init(std.testing.allocator, u16);
+    var arr = try ComponentArray(10).init(std.testing.allocator, u32);
     defer arr.deinit();
 
-    try arr.assign(0, @as(u16, 10));
-    try arr.assign(1, @as(u16, 10));
-    try arr.assign(2, @as(u16, 10));
-    try arr.assignData(3, &@as(u16, 10));
+    try arr.assign(0, @as(u32, 1));
+    try arr.assign(1, @as(u32, 1));
+    try arr.assign(2, @as(u32, 1));
 
-    arr.swapRemove(0);
+    _ = arr.swapRemove(2);
 
-    var arr_iter = arr.iterator();
-    while (arr_iter.nextAs(u16)) |val| {
-        try std.testing.expectEqual(@as(u16, 10), val.*);
+    for (arr.components_data.slicedAs(u32)) |val| {
+        try std.testing.expectEqual(@as(u32, 1), val);
     }
-
-    try std.testing.expectEqual(@as(u16, 10), arr.getAs(u16, 2).?.*);
 }
 
 test "data" {
@@ -201,12 +160,54 @@ test "data" {
     try std.testing.expectEqual(@as(u32, 20_000), arr.getAs(Data, 5).?.lmao);
 
     try std.testing.expect(arr.contains(2));
-    arr.swapRemove(2);
+    _ = arr.swapRemove(2);
     try std.testing.expect(!arr.contains(2));
 
-    try std.testing.expectEqual(@as(u32, 20_000), arr.getAs(Data, 5).?.lmao);
+    try std.testing.expectEqual(@as(f32, 100.0), arr.getAs(Data, 5).?.xd);
 
-    arr.swapRemove(5);
+    _ = arr.swapRemove(5);
 
-    try std.testing.expectEqual(@as(usize, 0), arr.len);
+    try std.testing.expectEqual(@as(usize, 0), arr.len());
+}
+
+test "remove" {
+    var arr = try ComponentArray(10).init(std.testing.allocator, usize);
+    defer arr.deinit();
+
+    try arr.assign(1, @as(usize, 100));
+    try arr.assign(2, @as(usize, 200));
+
+    _ = arr.swapRemove(2);
+
+    try std.testing.expectEqual(@as(usize, 100), arr.getAs(usize, 1).?.*);
+    try std.testing.expectEqual(@as(usize, 1), arr.len());
+}
+
+test "reassign" {
+    var arr = try ComponentArray(10).init(std.testing.allocator, usize);
+    defer arr.deinit();
+
+    try arr.assign(0, @as(usize, 10));
+    try arr.assign(1, @as(usize, 20));
+
+    try std.testing.expectEqual(@as(usize, 10), arr.getAs(usize, 0).?.*);
+    try std.testing.expectEqual(@as(usize, 20), arr.getAs(usize, 1).?.*);
+
+    arr.reassign(0, 2);
+
+    try std.testing.expect(!arr.contains(0));
+    try std.testing.expectEqual(@as(usize, 10), arr.getAs(usize, 2).?.*);
+    try std.testing.expectEqual(@as(usize, 20), arr.getAs(usize, 1).?.*);
+}
+
+test "capacity" {
+    var arr = try ComponentArray(2).init(std.testing.allocator, usize);
+    defer arr.deinit();
+
+    try arr.assign(0, @as(usize, 10));
+    try arr.assign(1, @as(usize, 20));
+    try std.testing.expectError(error.Overflow, arr.assign(1, @as(usize, 20)));
+
+    _ = arr.swapRemove(0);
+    try arr.assign(0, @as(usize, 20));
 }

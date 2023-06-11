@@ -1,8 +1,22 @@
 const std = @import("std");
+const ztg = @import("init.zig");
 const TypeBuilder = @import("type_builder.zig");
 const TypeMap = @import("type_map.zig");
 
 pub const Entity = usize;
+
+pub const EntityHandle = struct {
+    com: ztg.Commands,
+    ent: Entity,
+
+    pub fn giveEnt(self: EntityHandle, comp: anytype) !void {
+        try self.com.giveEnt(comp);
+    }
+
+    pub fn giveEntMany(self: EntityHandle, comps: anytype) !void {
+        try self.com.giveEntMany(self.ent, comps);
+    }
+};
 
 /// Takes list of types: `&.{ Player, Position, Sprite }` and returns
 /// an object that can be used to iterate through entities that have all of those components
@@ -46,6 +60,13 @@ pub fn QueryOpts(comptime query_types_raw: []const type, comptime options: []con
             break :blk out;
         };
 
+        const entity_type_idx = blk: {
+            for (query_types_raw, 0..) |QT, i| {
+                if (QT == Entity) break :blk i;
+            }
+            break :blk -1;
+        };
+
         pub const has_entities = blk: {
             for (query_types_raw) |QT| {
                 if (QT == Entity) break :blk true;
@@ -64,7 +85,7 @@ pub fn QueryOpts(comptime query_types_raw: []const type, comptime options: []con
                         i += 1;
                     }
                 }
-                break :blk qt_tb.Build();
+                break :blk qt_tb.Build(){};
             }
             break :blk query_types_raw;
         };
@@ -89,7 +110,8 @@ pub fn QueryOpts(comptime query_types_raw: []const type, comptime options: []con
 
         pub fn items(self: *const Self, comptime idx: usize) Items(idx) {
             if (comptime query_types_raw[idx] == Entity) return self.entities;
-            return @ptrCast(Items(idx), self.comp_ptrs[idx]);
+            const idx_adjusted = if (comptime has_entities and idx >= entity_type_idx) idx - 1 else idx;
+            return @ptrCast(Items(idx), self.comp_ptrs[idx_adjusted]);
         }
 
         pub inline fn len(self: *const Self) usize {
@@ -98,8 +120,9 @@ pub fn QueryOpts(comptime query_types_raw: []const type, comptime options: []con
         }
 
         fn Items(comptime idx: usize) type {
-            if (comptime query_types[idx] == Entity) return []const Entity;
-            return []const *query_types[idx];
+            if (comptime query_types_raw[idx] == Entity) return []const Entity;
+            const idx_adjusted = if (has_entities and idx >= entity_type_idx) idx - 1 else idx;
+            return []const *query_types[idx_adjusted];
         }
     };
 }
@@ -170,3 +193,18 @@ pub fn Without(comptime T: type) type {
         pub const QueryWithout = T;
     };
 }
+
+pub fn MinEntInt(comptime max: usize) type {
+    return std.meta.Int(.unsigned, @typeInfo(std.math.IntFittingRange(0, max)).Int.bits + 1);
+}
+
+pub const OnCrashFn = fn (ztg.Commands, CrashReason) anyerror!Status;
+
+pub const CrashReason = enum {
+    hit_ent_limit,
+};
+
+pub const Status = enum {
+    failure,
+    success,
+};

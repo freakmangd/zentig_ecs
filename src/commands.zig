@@ -11,9 +11,11 @@ ctx: *anyopaque,
 vtable: *const Vtable,
 
 pub const Vtable = struct {
-    new_ent_fn: *const fn (*anyopaque) error{ Overflow, HitMaxEntities }!ecs.Entity,
-    add_component_fn: *const fn (*anyopaque, ecs.Entity, TypeMap.UniqueTypePtr, *const anyopaque) ca.Error!void,
+    new_ent_fn: *const fn (*anyopaque) Allocator.Error!Entity,
+    remove_ent_fn: *const fn (*anyopaque, Entity) Allocator.Error!void,
+    add_component_fn: *const fn (*anyopaque, Entity, TypeMap.UniqueTypePtr, *const anyopaque) ca.Error!void,
     run_stage_fn: *const fn (*anyopaque, []const u8) anyerror!void,
+    get_entities_fn: *const fn (*anyopaque) []const Entity,
 };
 
 pub fn runStage(self: Self, comptime stage_id: @TypeOf(.enum_literal)) anyerror!void {
@@ -57,16 +59,35 @@ pub fn runDrawStages(self: Self) anyerror!void {
     }
 }
 
-pub fn newEnt(self: Self) error{ Overflow, HitMaxEntities }!Entity {
-    return self.vtable.new_ent_fn(self.ctx);
+pub fn newEnt(self: Self) Allocator.Error!ecs.EntityHandle {
+    const ent = try self.vtable.new_ent_fn(self.ctx);
+    return .{ .ent = ent, .com = self };
 }
 
-pub fn giveEnt(self: Self, ent: Entity, component: anytype) ca.Error!void {
+pub fn newEntWith(self: Self, component: anytype) !void {
+    const ent = try newEnt(self);
+    try ent.giveEnt(component);
+}
+
+pub fn newEntWithMany(self: Self, components: anytype) !void {
+    const ent = try newEnt(self);
+    try ent.giveEntMany(components);
+}
+
+pub fn giveEnt(self: Self, ent: Entity, component: anytype) !void {
     try self.vtable.add_component_fn(self.ctx, ent, TypeMap.uniqueTypePtr(@TypeOf(component)), &component);
 }
 
-pub fn giveEntMany(self: Self, ent: Entity, components: anytype) ca.Error!void {
+pub fn giveEntMany(self: Self, ent: Entity, components: anytype) !void {
     inline for (std.meta.fields(@TypeOf(components))) |field| {
         try giveEnt(self, ent, @field(components, field.name));
     }
+}
+
+pub fn removeEnt(self: Self, ent: Entity) !void {
+    try self.vtable.remove_ent_fn(self.ctx, ent);
+}
+
+pub fn getEntities(self: Self) []const Entity {
+    return self.vtable.get_entities_fn(self.ctx);
 }

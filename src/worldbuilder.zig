@@ -1,6 +1,7 @@
 const std = @import("std");
 const TypeBuilder = @import("type_builder.zig");
 const TypeMap = @import("type_map.zig");
+const ztg = @import("init.zig");
 const util = @import("util.zig");
 const base = @import("mods/base.zig");
 const physics = @import("mods/physics.zig");
@@ -32,7 +33,7 @@ const default_stages = struct {
 
 warnings: []const u8 = "",
 
-max_entities: usize = 20_000,
+max_entities: usize = 5_000,
 stage_defs: []const StageDef = &.{},
 
 comp_types: TypeMap = .{},
@@ -41,6 +42,27 @@ included: TypeMap = .{},
 
 resources: TypeBuilder,
 added_resources: TypeMap = .{},
+
+// TODO: implement
+optimize: OptimizeMode = .low_alloc,
+
+on_crash_fn: ztg.OnCrashFn = defaultCrash,
+on_ent_overflow: OnEntOverflow = .crash,
+
+const OptimizeMode = enum {
+    /// (DEFAULT) Pre-allocates everything with a known max. Reduces the number of allocations per frame greatly, but can use a lot of memory with large components
+    low_alloc,
+    /// Pre-allocates everything except component data
+    low_component_mem,
+    /// Only allocates when necessary
+    low_mem,
+};
+
+const OnEntOverflow = enum {
+    crash,
+    overwrite_last,
+    overwrite_first,
+};
 
 pub fn new(comptime includes: []const type) Self {
     var self = Self{
@@ -104,7 +126,7 @@ pub fn include(comptime self: *Self, comptime includes: []const type) void {
 pub fn addStage(comptime self: *Self, comptime stage_name: @TypeOf(.enum_literal)) void {
     for (self.stage_defs) |sdef| {
         if (std.mem.eql(u8, sdef.name, @tagName(stage_name))) {
-            warn("Tried to add stage `" ++ sdef.name ++ "` to world more than once.");
+            self.warn("Tried to add stage `" ++ sdef.name ++ "` to world more than once.");
             return;
         }
     }
@@ -134,11 +156,6 @@ pub fn addStage(comptime self: *Self, comptime stage_name: @TypeOf(.enum_literal
 /// ```
 pub fn addComponents(comptime self: *Self, comptime comps: []const type) void {
     for (comps) |C| {
-        if (comptime self.comp_types.has(C)) {
-            warn("Tried to add component type `" ++ @typeName(C) ++ "` to world more than once.");
-            continue;
-        }
-
         self.comp_types.append(C);
     }
 }
@@ -160,7 +177,7 @@ pub fn addComponents(comptime self: *Self, comptime comps: []const type) void {
 /// ```
 pub fn addResource(comptime self: *Self, comptime T: type, default_value: T) void {
     if (self.added_resources.has(T)) {
-        warn("Tried to add resource type `" ++ @typeName(T) ++ "` to world more than once.");
+        self.warn("Tried to add resource type `" ++ @typeName(T) ++ "` to world more than once.");
         return;
     }
 
@@ -171,7 +188,7 @@ pub fn addResource(comptime self: *Self, comptime T: type, default_value: T) voi
 
 pub fn addEvent(comptime self: *Self, comptime T: type) void {
     if (self.event_types.has(T)) {
-        warn("Tried to add event type `" ++ @typeName(T) ++ "` to world more than once.");
+        self.warn("Tried to add event type `" ++ @typeName(T) ++ "` to world more than once.");
         return;
     }
 
@@ -231,21 +248,25 @@ pub fn addDrawSystems(comptime self: *Self, systems: anytype) void {
     addSystemsToStage(self, .draw, systems);
 }
 
+/// Set the crash handler function, returning .success from the function prevents the crash.
+/// Only return .success if you are sure you have fixed the CrashReason.
+pub fn setCrashFn(comptime self: *Self, comptime f: ztg.OnCrashFn) void {
+    self.on_crash_fn = f;
+}
+
+fn defaultCrash(com: ztg.Commands, r: ztg.CrashReason) anyerror!ztg.Status {
+    _ = com;
+    std.log.err("Crashed due to: {}\n", .{r});
+    return .failure;
+}
+
 /// Returns the final World type
 pub fn Build(comptime self: Self) type {
-    return World(
-        self.max_entities,
-        self.comp_types,
-        self.resources.Build(),
-        self.added_resources,
-        self.event_types,
-        @import("stages.zig").Init(self.stage_defs),
-        self.warnings,
-    );
+    return World(self);
 }
 
 fn warn(comptime self: *Self, comptime message: []const u8) void {
-    self.warnings = self.warnings ++ message;
+    self.warnings = self.warnings ++ message ++ "\n";
 }
 
 test Self {

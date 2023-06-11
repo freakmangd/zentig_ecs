@@ -35,15 +35,23 @@ pub fn PackedSparse(comptime Sparse: type, comptime len: usize) type {
             return self.sparse_list[self.written_indexes.get(self.written_indexes.len - 1)];
         }
 
-        pub fn remove(self: *Self, entry: usize) void {
-            if (self.written_indexes.len == 0) return;
+        pub fn remove(self: *Self, entry: usize) bool {
+            if (self.written_indexes.len == 0) return false;
 
             for (self.written_indexes.constSlice(), 0..) |v, i| {
                 if (v == entry) {
-                    self.written_indexes.set(i, self.written_indexes.get(self.written_indexes.len - 1));
-                    return;
+                    _ = self.written_indexes.swapRemove(i);
+                    return true;
                 }
             }
+
+            return false;
+        }
+
+        pub fn pop(self: *Self) struct { usize, *Sparse } {
+            const o1 = self.written_indexes.pop();
+            const o2 = &self.sparse_list[o1];
+            return .{ o1, o2 };
         }
 
         pub fn iterator(self: *Self) PsIterator {
