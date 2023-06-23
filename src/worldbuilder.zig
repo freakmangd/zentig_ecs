@@ -88,7 +88,7 @@ pub fn init(comptime includes: []const type) Self {
     return self;
 }
 
-/// Calls `include(comptime wb: *WorldBuilder) !void` on all structs passed into the `includes` tuple.
+/// Calls `include(comptime wb: *WorldBuilder) (!)void` on all structs passed into the `includes` slice.
 /// `.init(...)` passes it's arguments to this function.
 ///
 /// You can include a struct more than once without errors/warnings, it's effects will only be applied once.
@@ -100,30 +100,29 @@ pub fn init(comptime includes: []const type) Self {
 ///
 /// `player.zig:`
 /// ```zig
-/// pub fn include(comptime wb: *WorldBuilder) !void {
+/// pub fn include(comptime wb: *WorldBuilder) void {
 ///     wb.addComponents(&.{ Player });
 /// }
 /// ```
 pub fn include(comptime self: *Self, comptime includes: []const type) void {
-    inline for (includes) |inc| {
-        if (comptime std.meta.trait.hasFn("include")(inc)) {
-            if (comptime self.included.has(inc)) return; // silent fail
+    for (includes) |TI| {
+        if (comptime std.meta.trait.hasFn("include")(TI)) {
+            if (comptime self.included.has(TI)) continue; // silent fail
 
-            const ti = @typeInfo(@TypeOf(inc.include));
-            if (comptime ti != .Fn) @compileError("A type's include decl must be a function.");
+            const ti = @typeInfo(@TypeOf(TI.include));
 
             if (comptime !(ti.Fn.params.len == 1 and ti.Fn.params[0].type.? == *Self)) {
-                @compileError(@typeName(inc) ++ "'s include function's signature must be fn(*WorldBuilder) (!)void");
+                @compileError(@typeName(TI) ++ "'s include function's signature must be fn(*WorldBuilder) (!)void");
             }
 
-            if (comptime util.canReturnError(@TypeOf(inc.include))) {
-                inc.include(self) catch |err| @compileError("Cound not build world, error in include. Error: " ++ err);
+            if (comptime util.canReturnError(@TypeOf(TI.include))) {
+                TI.include(self) catch |err| @compileError("Cound not build world, error in include. Error: " ++ err);
             } else {
-                inc.include(self);
+                TI.include(self);
             }
-            self.included.append(inc);
+            self.included.append(TI);
         } else {
-            @compileError("Struct " ++ @typeName(inc) ++ " does not have an fn include, it should not be passed to include.");
+            @compileError("Struct " ++ @typeName(TI) ++ " does not have an fn include, it should not be passed to include.");
         }
     }
 }

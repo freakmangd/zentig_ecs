@@ -103,10 +103,11 @@ pub fn World(comptime wb: WorldBuilder) type {
                 .entities = EntityArray.init(),
 
                 .commands_vtable = .{
-                    .add_component_fn = Self.commands_addComponent,
+                    .add_component_fn = Self.commands_giveEnt,
                     .remove_ent_fn = Self.commands_removeEnt,
                     .new_ent_fn = Self.commands_newEnt,
                     .run_stage_fn = Self.commands_runStageFn,
+                    .get_res_fn = Self.commands_getResPtr,
                 },
 
                 .event_pools = EventPools(wb.event_types){},
@@ -343,7 +344,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             return commandsCast(ptr).newEnt();
         }
 
-        fn cleanEntList(comp_arrays: []ComponentArray, entities: *EntityArray) ?usize {
+        fn cleanEntList(comp_arrays: []ComponentArray, entities: *EntityArray, changes_list: *ChangesList) ?usize {
             if (entities.len + 1 > wb.max_entities) {
                 return null;
             }
@@ -353,7 +354,6 @@ pub fn World(comptime wb: WorldBuilder) type {
 
             var next_ent: ecs.Entity = 0;
             for (old_ents.constSlice(), 0..) |ent, i| {
-                _ = i;
                 if (ent == next_ent) {
                     entities.append(next_ent);
                     next_ent += 1;
@@ -362,15 +362,15 @@ pub fn World(comptime wb: WorldBuilder) type {
 
                 // TODO: make sure this works.
                 // if next entity was added this frame
-                //if (entities.len - i == self.changes_list.items.len) {
-                //    // update changes list to reflect new entity ids
-                //    for (self.changes_list.items, 0..) |*cl, j| {
-                //        switch (cl.*) {
-                //            .added_ent => |*ae| ae.* = self.next_ent + j,
-                //            else => {},
-                //        }
-                //    }
-                //}
+                if (entities.len - i == changes_list.items.len) {
+                    // update changes list to reflect new entity ids
+                    for (changes_list.items, 0..) |*cl, j| {
+                        switch (cl.*) {
+                            .added_ent => |*ae| ae.* = next_ent + j,
+                            else => {},
+                        }
+                    }
+                }
 
                 for (comp_arrays) |*arr| {
                     if (arr.contains(ent)) arr.reassign(ent, next_ent);
@@ -414,21 +414,21 @@ pub fn World(comptime wb: WorldBuilder) type {
             }
         }
 
-        pub fn removeComponent(self: *Self, ent: ecs.Entity, comptime Component: type) ca.Error!void {
-            if (comptime wb.comp_types.types.len == 0) return;
-            try self.remove_queue.append(.{ .removed_component = .{ .ent = ent, .component_id = wb.comp_types.indexOf(Component) } });
-        }
-
-        fn commands_addComponent(ptr: *anyopaque, ent: ecs.Entity, component_utp: TypeMap.UniqueTypePtr, data: *const anyopaque) ca.Error!void {
+        fn commands_giveEnt(ptr: *anyopaque, ent: ecs.Entity, component_utp: TypeMap.UniqueTypePtr, data: *const anyopaque) ca.Error!void {
             if (comptime wb.comp_types.types.len == 0) return;
             const idx = wb.comp_types.fromUtp(component_utp) orelse std.debug.panic("Tried to add unregistered Component of utp {*}, to ent {}.", .{ component_utp, ent });
 
             var self = commandsCast(ptr);
-            try commandsCast(ptr).comp_arrays[idx].assignData(ent, data);
+            try self.comp_arrays[idx].assignData(ent, data);
             try self.changes_list.append(.{ .added_component = .{
                 .ent = ent,
                 .component_utp = component_utp,
             } });
+        }
+
+        pub fn removeComponent(self: *Self, ent: ecs.Entity, comptime Component: type) ca.Error!void {
+            if (comptime wb.comp_types.types.len == 0) return;
+            try self.remove_queue.append(.{ .removed_component = .{ .ent = ent, .component_id = wb.comp_types.indexOf(Component) } });
         }
 
         pub fn getRes(self: Self, comptime T: type) T {
@@ -440,6 +440,31 @@ pub fn World(comptime wb: WorldBuilder) type {
             if (comptime !wb.added_resources.has(T)) @compileError("World does not have resource of type " ++ @typeName(T));
             return &@field(self.resources, std.fmt.comptimePrint("{}", .{wb.added_resources.indexOf(T).?}));
         }
+
+        fn commands_getResPtr(ptr: *anyopaque, utp: TypeMap.UniqueTypePtr) *anyopaque {
+            inline for (wb.added_resources.types, 0..) |T, i| {
+                if (TypeMap.uniqueTypePtr(T) == utp) return &@field(commandsCast(ptr).resources, std.fmt.comptimePrint("{}", .{i}));
+            }
+            std.debug.panic("Resource with utp {} is not in world.", .{utp});
+        }
+
+        const QueryList = struct {
+            array: *ComponentArray,
+            out: union {
+                req: []*anyopaque,
+                opt: []?*anyopaque,
+            },
+
+            pub fn init(array: *ComponentArray, out: anytype) QueryList {
+                return .{ .array = array, .out = blk: {
+                    if (@TypeOf(out) == []*anyopaque) {
+                        break :blk .{ .req = out };
+                    } else {
+                        break :blk .{ .opt = out };
+                    }
+                } };
+            }
+        };
 
         pub fn query(self: *Self, comptime QT: type) !QT {
             if (QT.has_entities and QT.query_types.len == 0) return queryJustEntities(self);
@@ -456,6 +481,13 @@ pub fn World(comptime wb: WorldBuilder) type {
                 QT.OptionsType,
             );
 
+            return out;
+        }
+
+        fn queryJustEntities(self: *Self) !ecs.Query(.{ecs.Entity}) {
+            var out = try ecs.Query(.{ecs.Entity}).init(self.frame_alloc, self.entities.len);
+            for (out.entities, self.entities.constSlice()) |*o, ent| o.* = ent;
+            out.len = self.entities.len;
             return out;
         }
 
@@ -484,13 +516,6 @@ pub fn World(comptime wb: WorldBuilder) type {
             }
 
             return .{ others.swapRemove(smallest_idx), smallest_idx, others };
-        }
-
-        fn queryJustEntities(self: *Self) !ecs.Query(.{ecs.Entity}) {
-            var out = try ecs.Query(.{ecs.Entity}).init(self.frame_alloc, self.entities.len);
-            for (out.entities, self.entities.constSlice()) |*o, ent| o.* = ent;
-            out.len = self.entities.len;
-            return out;
         }
 
         fn fillQuery(

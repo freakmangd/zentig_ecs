@@ -15,6 +15,7 @@ pub const Vtable = struct {
     remove_ent_fn: *const fn (*anyopaque, Entity) Allocator.Error!void,
     add_component_fn: *const fn (*anyopaque, Entity, TypeMap.UniqueTypePtr, *const anyopaque) ca.Error!void,
     run_stage_fn: *const fn (*anyopaque, []const u8) anyerror!void,
+    get_res_fn: *const fn (*anyopaque, TypeMap.UniqueTypePtr) *anyopaque,
 };
 
 pub fn runStage(self: Self, comptime stage_id: @TypeOf(.enum_literal)) anyerror!void {
@@ -85,4 +86,8 @@ pub fn giveEntMany(self: Self, ent: Entity, components: anytype) !void {
 
 pub fn removeEnt(self: Self, ent: Entity) !void {
     try self.vtable.remove_ent_fn(self.ctx, ent);
+}
+
+pub fn getResPtr(self: Self, comptime T: type) *T {
+    return @ptrCast(*T, @alignCast(@alignOf(T), self.vtable.get_res_fn(self.ctx, TypeMap.uniqueTypePtr(T))));
 }
