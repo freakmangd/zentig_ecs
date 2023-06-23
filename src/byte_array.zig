@@ -13,10 +13,10 @@ pub const ByteArray = struct {
         };
     }
 
-    pub fn initCapacity(comptime T: type, alloc: std.mem.Allocator, n: usize) !Self {
+    pub fn initCapacity(comptime T: type, alloc: std.mem.Allocator, num: usize) !Self {
         return .{
             .entry_size = @sizeOf(T),
-            .bytes = try std.ArrayListUnmanaged(u8).initCapacity(alloc, @sizeOf(T) * n),
+            .bytes = try std.ArrayListUnmanaged(u8).initCapacity(alloc, @sizeOf(T) * num),
         };
     }
 
@@ -76,6 +76,8 @@ pub const ByteArray = struct {
     }
 
     pub fn swapRemove(self: *Self, index: usize) void {
+        if (self.entry_size == 0) return;
+
         if ((self.bytes.items.len / self.entry_size) - 1 == index) {
             _ = self.pop();
             return;
@@ -95,7 +97,7 @@ pub const ByteArray = struct {
         return @ptrCast(*T, @alignCast(@alignOf(T), data));
     }
 
-    const ByteIterator = struct {
+    pub const ByteIterator = struct {
         buffer: []u8,
         entry_size: usize,
         index: usize = 0,

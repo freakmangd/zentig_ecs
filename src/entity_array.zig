@@ -5,21 +5,24 @@ pub fn EntityArray(comptime size: usize) type {
     return struct {
         const Self = @This();
 
-        ents: [size]ecs.Entity = undefined,
-        idx_lookup: [size]u32,
-        len: u32 = 0,
+        pub const Index = ecs.util.MinEntInt(size);
+        const NULL = std.math.maxInt(Index);
+
+        ents: [size]Index = undefined,
+        idx_lookup: [size]Index,
+        len: Index = 0,
 
         pub fn init() Self {
             var self = Self{ .idx_lookup = undefined };
 
             for (&self.idx_lookup) |*d| {
-                d.* = std.math.maxInt(u32);
+                d.* = NULL;
             }
 
             return self;
         }
 
-        pub fn getIndexOf(self: *const Self, ent: ecs.Entity) u32 {
+        pub fn getIndexOf(self: *const Self, ent: ecs.Entity) Index {
             return self.idx_lookup[ent];
         }
 
@@ -27,14 +30,18 @@ pub fn EntityArray(comptime size: usize) type {
             return self.ents[idx];
         }
 
-        pub fn set(self: *Self, idx: u32, ent: ecs.Entity) void {
-            self.ents[idx] = ent;
+        pub fn set(self: *Self, idx: Index, ent: ecs.Entity) void {
+            self.ents[idx] = @intCast(Index, ent);
             self.idx_lookup[ent] = idx;
         }
 
         pub fn append(self: *Self, ent: ecs.Entity) void {
             self.set(self.len, ent);
             self.len += 1;
+        }
+
+        pub fn appendSlice(self: *Self, ents: []const ecs.Entity) void {
+            for (ents) |ent| self.append(ent);
         }
 
         pub fn swapRemoveEnt(self: *Self, ent: ecs.Entity) bool {
@@ -45,16 +52,16 @@ pub fn EntityArray(comptime size: usize) type {
             if (idx != self.len - 1) {
                 self.set(idx, self.getEntityAt(self.len - 1));
             } else {
-                self.ents[idx] = std.math.maxInt(u32);
+                self.ents[idx] = NULL;
             }
 
             self.len -= 1;
-            self.idx_lookup[ent] = std.math.maxInt(u32);
+            self.idx_lookup[ent] = NULL;
             return true;
         }
 
         pub fn hasEntity(self: *Self, ent: ecs.Entity) bool {
-            return self.getIndexOf(ent) != std.math.maxInt(u32);
+            return self.getIndexOf(ent) != NULL;
         }
 
         pub fn hasIndex(self: *Self, idx: usize) bool {
@@ -65,7 +72,11 @@ pub fn EntityArray(comptime size: usize) type {
             self.len = 0;
         }
 
-        pub fn constSlice(self: *const Self) []const ecs.Entity {
+        pub fn slice(self: *Self) []Index {
+            return self.ents[0..self.len];
+        }
+
+        pub fn constSlice(self: *const Self) []const Index {
             return self.ents[0..self.len];
         }
     };
@@ -82,13 +93,13 @@ test EntityArray {
     try std.testing.expect(arr.hasIndex(arr.getIndexOf(0)));
     try std.testing.expectEqual(@as(usize, 3), arr.constSlice().len);
 
-    arr.swapRemoveEnt(1);
+    _ = arr.swapRemoveEnt(1);
 
     try std.testing.expect(!arr.hasEntity(1));
     try std.testing.expectEqual(@as(usize, 2), arr.constSlice().len);
-    try std.testing.expectEqualSlices(ecs.Entity, &.{ 0, 2 }, arr.constSlice());
+    try std.testing.expectEqualSlices(EntityArray(10).Index, &.{ 0, 2 }, arr.constSlice());
 
-    arr.swapRemoveEnt(2);
+    _ = arr.swapRemoveEnt(2);
 
     try std.testing.expect(!arr.hasEntity(2));
 }

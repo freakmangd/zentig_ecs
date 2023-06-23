@@ -4,8 +4,8 @@ const rl = @import("raylib");
 const zrl = ztg.Raylib(rl);
 
 // Constructing the world must be done at comptime
-// `.new(anytype)` passes `anytype` to `.include(anytype)`
-const MyWorld = ztg.WorldBuilder.new(.{
+// `.init(anytype)` passes `anytype` to `.include(anytype)`
+const MyWorld = ztg.WorldBuilder.init(.{
     ztg.base,
     zrl,
 }).Build();
@@ -37,7 +37,7 @@ pub fn main() !void {
 
         try world.giveEntMany(obj_ent, RlObject{
             zrl.Sprite.init("examples/smile.png", rl.WHITE),
-            .{ .pos = ztg.Vec3.new(rl.GetRandomValue(0, screenWidth), rl.GetRandomValue(0, screenHeight), 0.0) }, // the z component of a position will not be taken into account
+            .{ .pos = ztg.Vec3.init(rl.GetRandomValue(0, screenWidth), rl.GetRandomValue(0, screenHeight), 0.0) }, // the z component of a position will not be taken into account
         });
     }
 

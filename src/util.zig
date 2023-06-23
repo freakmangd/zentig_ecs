@@ -1,5 +1,8 @@
 const std = @import("std");
 
+pub const TypeBuilder = @import("type_builder.zig");
+pub const TypeMap = @import("type_map.zig");
+
 pub fn canReturnError(comptime Fn: type) bool {
     return comptime std.meta.trait.is(.ErrorUnion)(@typeInfo(Fn).Fn.return_type.?);
 }
@@ -17,6 +20,10 @@ pub fn MultiArrayListElem(comptime T: type) type {
 /// Get the element type of an ArrayHashMap, used internally
 pub fn ArrayHashMapElem(comptime T: type) type {
     return @typeInfo(T.KV).Struct.fields[1].type;
+}
+
+pub fn MinEntInt(comptime max: usize) type {
+    return std.meta.Int(.unsigned, @typeInfo(std.math.IntFittingRange(0, max)).Int.bits + 1);
 }
 
 const MemberFnType = enum {

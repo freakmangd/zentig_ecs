@@ -38,13 +38,13 @@ const InputWrapper = struct {
 };
 
 const Input = blk: {
-    var cb = ztg.input.ControllerBuilder(InputWrapper).new();
+    var cb = ztg.input.ControllerBuilder(InputWrapper).init();
     cb.addButtons(&.{"Jump"});
     break :blk cb.BuildInput();
 };
 
 const World = blk: {
-    var wb = ztg.WorldBuilder.new(.{
+    var wb = ztg.WorldBuilder.init(.{
         Input,
     });
     wb.addSystemsToStage(.init, .{ini_setupInput});

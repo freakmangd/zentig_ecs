@@ -6,7 +6,7 @@ const Self = @This();
 // TODO: eventually turn this into a []Type.StructField?
 type_def: Type.Struct,
 
-pub fn new(comptime is_tuple: bool, comptime layout: Type.ContainerLayout) Self {
+pub fn init(comptime is_tuple: bool, comptime layout: Type.ContainerLayout) Self {
     return .{ .type_def = .{
         .fields = &.{},
         .is_tuple = is_tuple,
@@ -15,7 +15,7 @@ pub fn new(comptime is_tuple: bool, comptime layout: Type.ContainerLayout) Self 
     } };
 }
 
-pub fn from(comptime T: type) Self {
+pub fn initFrom(comptime T: type) Self {
     return .{ .type_def = @typeInfo(T).Struct };
 }
 
@@ -48,6 +48,10 @@ pub fn addField(comptime self: *Self, comptime name: []const u8, comptime T: typ
 
 pub fn addTupleField(comptime self: *Self, comptime index: usize, comptime T: type, comptime default_value: ?*const anyopaque) void {
     return addField(self, std.fmt.comptimePrint("{}", .{index}), T, default_value);
+}
+
+pub fn appendTupleField(comptime self: *Self, comptime T: type, comptime default_value: ?*const anyopaque) void {
+    return addField(self, std.fmt.comptimePrint("{}", .{self.type_def.fields.len}), T, default_value);
 }
 
 pub fn addTupleFieldExtra(

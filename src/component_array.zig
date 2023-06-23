@@ -17,19 +17,32 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
         alloc: std.mem.Allocator,
 
         component_utp: TypeMap.UniqueTypePtr,
+        component_name: []const u8,
 
-        components_data: ByteArray,
-        entities: std.ArrayListUnmanaged(ecs.Entity),
-        ent_to_comp_idx: []Index,
+        components_data: ByteArray = undefined,
+        entities: std.ArrayListUnmanaged(ecs.Entity) = undefined,
+        ent_to_comp_idx: []Index = undefined,
 
-        pub fn init(alloc: Allocator, comptime T: type, max_cap: usize) !Self {
+        pub fn init(alloc: Allocator, comptime T: type) !Self {
+            //const max_cap = comptime blk: {
+            //    if (std.meta.trait.isContainer(T) and @hasDecl(T, "max_entities")) break :blk T.max_entities;
+            //    break :blk max_ents;
+            //};
+            //_ = max_cap;
+
             var self = Self{
                 .alloc = alloc,
                 .component_utp = TypeMap.uniqueTypePtr(T),
-                .components_data = try ByteArray.initCapacity(T, alloc, max_cap),
-                .entities = try std.ArrayListUnmanaged(ecs.Entity).initCapacity(alloc, max_cap),
-                .ent_to_comp_idx = try alloc.alloc(Index, max_ents),
+                .component_name = @typeName(T),
             };
+
+            self.components_data = ByteArray.init(T);
+            errdefer self.components_data.deinit(alloc);
+
+            self.entities = std.ArrayListUnmanaged(ecs.Entity){};
+            errdefer self.entities.deinit(alloc);
+
+            self.ent_to_comp_idx = try alloc.alloc(Index, max_ents);
 
             for (self.ent_to_comp_idx) |*etc| {
                 etc.* = null_bit;
@@ -38,33 +51,38 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
             return self;
         }
 
+        fn initForTests(comptime T: type) !Self {
+            return init(std.testing.allocator, T);
+        }
+
         pub fn deinit(self: *Self) void {
             self.components_data.deinit(self.alloc);
             self.entities.deinit(self.alloc);
             self.alloc.free(self.ent_to_comp_idx);
         }
 
-        pub fn assign(self: *Self, ent: ecs.Entity, entry: anytype) void {
-            if (TypeMap.uniqueTypePtr(@TypeOf(entry)) != self.component_utp) std.debug.panic("Incorrect type.", .{});
-            self.appendBytes(ent, std.mem.asBytes(&entry));
+        pub fn assign(self: *Self, ent: ecs.Entity, entry: anytype) !void {
+            if (TypeMap.uniqueTypePtr(@TypeOf(entry)) != self.component_utp) std.debug.panic("Incorrect type. Expected UTP {}, found UTP {} (Type: {s}).", .{
+                self.component_utp,
+                TypeMap.uniqueTypePtr(@TypeOf(entry)),
+                @typeName(@TypeOf(entry)),
+            });
+            try self.appendBytes(ent, std.mem.asBytes(&entry));
         }
 
-        pub fn assignData(self: *Self, ent: ecs.Entity, data: *const anyopaque) void {
-            self.appendBytes(ent, data);
+        pub fn assignData(self: *Self, ent: ecs.Entity, data: *const anyopaque) !void {
+            try self.appendBytes(ent, data);
         }
 
-        inline fn appendBytes(self: *Self, ent: ecs.Entity, bytes_start: *const anyopaque) void {
-            if (self.entities.items.len == self.entities.capacity) std.debug.panic("Hit max capacity for component {*}!", .{self.component_utp});
-            self.entities.appendAssumeCapacity(ent);
+        fn appendBytes(self: *Self, ent: ecs.Entity, bytes_start: *const anyopaque) !void {
+            try self.entities.append(self.alloc, ent);
             self.ent_to_comp_idx[ent] = @intCast(Index, self.components_data.len());
-            self.components_data.appendPtrAssumeCapacity(bytes_start);
+            try self.components_data.appendPtr(self.alloc, bytes_start);
         }
 
         pub fn reassign(self: *Self, old: ecs.Entity, new: ecs.Entity) void {
             const old_ent_idx = self.indexOfEntityInEnts(old);
-            _ = self.entities.swapRemove(old_ent_idx);
-            self.entities.appendAssumeCapacity(new); // we just removed something from the array, no error
-
+            self.entities.items[old_ent_idx] = new;
             self.ent_to_comp_idx[new] = self.ent_to_comp_idx[old];
             self.ent_to_comp_idx[old] |= null_bit;
         }
@@ -127,6 +145,8 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
     };
 }
 
+const CAT = ComponentArray(usize, 10);
+
 const Data = struct {
     lmao: u32,
     uhh: bool = false,
@@ -135,7 +155,7 @@ const Data = struct {
 };
 
 test "simple test" {
-    var arr = try ComponentArray(10).init(std.testing.allocator, u32);
+    var arr = try CAT.initForTests(u32);
     defer arr.deinit();
 
     try arr.assign(0, @as(u32, 1));
@@ -150,7 +170,7 @@ test "simple test" {
 }
 
 test "data" {
-    var arr = try ComponentArray(10).init(std.testing.allocator, Data);
+    var arr = try CAT.initForTests(Data);
     defer arr.deinit();
 
     try arr.assign(2, Data{ .lmao = 100_000 });
@@ -160,31 +180,31 @@ test "data" {
     try std.testing.expectEqual(@as(u32, 20_000), arr.getAs(Data, 5).?.lmao);
 
     try std.testing.expect(arr.contains(2));
-    _ = arr.swapRemove(2);
+    arr.swapRemove(2);
     try std.testing.expect(!arr.contains(2));
 
     try std.testing.expectEqual(@as(f32, 100.0), arr.getAs(Data, 5).?.xd);
 
-    _ = arr.swapRemove(5);
+    arr.swapRemove(5);
 
     try std.testing.expectEqual(@as(usize, 0), arr.len());
 }
 
 test "remove" {
-    var arr = try ComponentArray(10).init(std.testing.allocator, usize);
+    var arr = try CAT.initForTests(usize);
     defer arr.deinit();
 
     try arr.assign(1, @as(usize, 100));
     try arr.assign(2, @as(usize, 200));
 
-    _ = arr.swapRemove(2);
+    arr.swapRemove(2);
 
     try std.testing.expectEqual(@as(usize, 100), arr.getAs(usize, 1).?.*);
     try std.testing.expectEqual(@as(usize, 1), arr.len());
 }
 
 test "reassign" {
-    var arr = try ComponentArray(10).init(std.testing.allocator, usize);
+    var arr = try CAT.initForTests(usize);
     defer arr.deinit();
 
     try arr.assign(0, @as(usize, 10));
@@ -201,13 +221,9 @@ test "reassign" {
 }
 
 test "capacity" {
-    var arr = try ComponentArray(2).init(std.testing.allocator, usize);
+    var arr = try ComponentArray(usize, 2).initForTests(usize);
     defer arr.deinit();
 
     try arr.assign(0, @as(usize, 10));
     try arr.assign(1, @as(usize, 20));
-    try std.testing.expectError(error.Overflow, arr.assign(1, @as(usize, 20)));
-
-    _ = arr.swapRemove(0);
-    try arr.assign(0, @as(usize, 20));
 }

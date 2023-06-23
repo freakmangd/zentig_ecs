@@ -3,28 +3,21 @@ const zentig = @import("lib.zig");
 
 pub fn addAsModule(
     name: []const u8,
+    b: *std.Build,
     exe: *std.build.Step.Compile,
-    dep: *std.build.Dependency,
 ) *std.build.Module {
-    const mod = dep.module("zentig");
+    const mod = b.createModule(.{
+        .source_file = .{ .path = srcdir ++ "/src/init.zig" },
+    });
     exe.addModule(name, mod);
     return mod;
 }
 
-pub const raylib = struct {
-    pub fn addAsModule(
-        name: []const u8,
-        exe: *std.build.Step.Compile,
-        dep: *std.build.Dependency,
-        raylib_mod: *std.build.Module,
-    ) *std.build.Module {
-        var mod = dep.module("zentig-rl");
-        // HACK: this kinda sucks :)
-        mod.dependencies.put("raylib", raylib_mod) catch @panic("OOM");
-        exe.addModule(name, mod);
-        return mod;
+const srcdir = struct {
+    fn getSrcDir() []const u8 {
+        return std.fs.path.dirname(@src().file).?;
     }
-};
+}.getSrcDir();
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -35,17 +28,9 @@ pub fn build(b: *std.Build) void {
         .dependencies = &[_]std.Build.ModuleDependency{},
     });
 
-    const zentig_rl_mod = b.addModule("zentig-rl", .{
-        .source_file = std.Build.FileSource.relative("src/mods/raylib/raylib.zig"),
-        .dependencies = &[_]std.Build.ModuleDependency{
-            .{ .name = "zentig", .module = zentig_mod },
-        },
-    });
-
     const examples = [_]struct { []const u8, []const u8 }{
         //.{ "example", "examples/example.zig" },
         //.{ "example-input", "examples/input_example.zig" },
-        //.{ "example-raylib", "examples/raylib_example.zig" },
     };
 
     for (examples) |ex_info| {
@@ -57,7 +42,6 @@ pub fn build(b: *std.Build) void {
         });
 
         example.addModule("zentig", zentig_mod);
-        example.addModule("zentig-rl", zentig_rl_mod);
 
         const run_example_cmd = b.addRunArtifact(example);
 

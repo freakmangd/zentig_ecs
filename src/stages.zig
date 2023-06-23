@@ -26,8 +26,8 @@ pub fn Init(comptime stage_defs: []const StageDef) type {
             const stage = @field(this.inner, std.meta.fieldInfo(Inner, stage_field).name);
 
             inline for (std.meta.fields(@TypeOf(stage))) |stage_field_info| {
-                var args = try world.initArgsForSystem(stage_field_info.type, .static_fn);
-                defer world.deinitArgsForSystem(&args);
+                var args = try world.initParamsForSystem(@typeInfo(stage_field_info.type).Fn.params);
+                defer world.deinitParamsForSystem(&args);
 
                 if (comptime util.canReturnError(stage_field_info.type)) {
                     try @call(.auto, @field(stage, stage_field_info.name), args);
@@ -40,7 +40,7 @@ pub fn Init(comptime stage_defs: []const StageDef) type {
         pub fn runStageRuntime(comptime this: @This(), world: anytype, stage_name: []const u8) anyerror!void {
             inline for (std.meta.fields(Inner)) |field| {
                 if (std.mem.eql(u8, field.name, stage_name)) {
-                    try runStage(this, world, @intToEnum(StageField, std.meta.fieldIndex(Inner, field.name).?));
+                    try runStage(this, world, @enumFromInt(StageField, std.meta.fieldIndex(Inner, field.name).?));
                     break;
                 }
             }
@@ -49,7 +49,7 @@ pub fn Init(comptime stage_defs: []const StageDef) type {
 }
 
 fn CompileStagesList(comptime stage_defs: []const StageDef) type {
-    var final = TypeBuilder.new(false, .Auto);
+    var final = TypeBuilder.init(false, .Auto);
     for (stage_defs) |sdef| {
         const Stage = sdef.def.Build();
         final.addField(sdef.name, Stage, &Stage{});

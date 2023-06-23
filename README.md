@@ -45,7 +45,7 @@ pub fn playerSpeak(q: ztg.Query(.{Player}, .{})) !void {
 Registering systems/components into a world:
 ```zig
 const MyWorld = blk: {
-  var wb = ztg.WorldBuilder.new();
+  var wb = ztg.WorldBuilder.init(.{});
   wb.addComponents(.{Player});
   wb.addUpdateSystems(.{playerSpeak});
   break :blk wb.Build();
@@ -127,10 +127,10 @@ const player = struct {
   }
 };
 
-// Constructing the world type must be done at comptime
-// `.new(anytype)` passes `anytype` to `.include(anytype)`
-const MyWorld = ztg.WorldBuilder.new(.{
-  ztg.base.Init(.{}),
+// Constructing the world type must be done at comptime.
+// `.init(anytype)` passes `anytype` to `.include(anytype)`
+const MyWorld = ztg.WorldBuilder.init(.{
+  ztg.base,
   player,
 }).Build();
 
@@ -147,7 +147,7 @@ pub fn main() !void {
   // Use the PlayerBundle struct as a blueprint
   try world.giveEntMany(player_ent, player.PlayerBundle{
     .{ .name = "Player" },
-    .{ .pos = ztg.Vec3.new(10, 10, 10) },
+    .{ .pos = ztg.Vec3.init(10, 10, 10) },
   });
 
   // runs all the functions added to the UPDATE stage

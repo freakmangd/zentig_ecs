@@ -2,8 +2,8 @@ const std = @import("std");
 const ztg = @import("zentig");
 
 // Constructing the world must be done at comptime
-// `.new(anytype)` passes `anytype` to `.include(anytype)`
-const MyWorld = ztg.WorldBuilder.new(.{
+// `.init(anytype)` passes `anytype` to `.include(anytype)`
+const MyWorld = ztg.WorldBuilder.init(.{
     ztg.base,
     player,
 }).Build();
@@ -54,7 +54,7 @@ pub fn main() !void {
     // Use the PlayerBundle struct as a blueprint
     try world.giveEntMany(player_ent, player.PlayerBundle{
         .{ .name = "Player" },
-        .{ .pos = ztg.Vec3.new(10, 10, 10) },
+        .{ .pos = ztg.Vec3.init(10, 10, 10) },
     });
 
     // runs the PRE_UPDATE, UPDATE, and POST_UPDATE stages.

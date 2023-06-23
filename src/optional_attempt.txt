@@ -1,3 +1,99 @@
+// A record of the hour i wasted trying to get optional types to work in a query
+
+// Query Part:
+
+/// Takes list of types: `.{ Player, Position, Sprite }` and returns
+/// an object that can be used to iterate through entities that have all of those components
+/// if one of the types is `Entity` (`usize`) then it will also have
+/// the entity those components are attatched to.
+///
+/// Also allows options which restrict the query without actually collecting the entities
+/// that fit the restriction, such as `.{ Transform }, .{ With(Player) }`
+pub fn QueryOpts(comptime base_query_types: anytype, comptime base_options: anytype) type {
+    if (base_query_types.len > 30) @compileError("Querying for types is limited to 30 types at a time.");
+
+    comptime assertNoRepeatsInTypeTuple(base_query_types);
+    comptime assertNoRepeatsInTypeTuple(base_options);
+
+    return struct {
+        const Self = @This();
+
+        pub const options = base_options;
+
+        pub const query_types = blk: {
+            var qts: QueryTypes = .{};
+
+            for (base_query_types) |QT| {
+                if (QT == Entity) continue;
+
+                const QT_is_optional = @typeInfo(QT) == .Optional;
+                const QT_unwrapped = if (QT_is_optional) std.meta.Child(QT) else QT;
+                qts.utps = qts.utps ++ &[_]TypeMap.UniqueTypePtr{TypeMap.uniqueTypePtr(QT_unwrapped)};
+                qts.is_optional = qts.is_optional ++ &[_]bool{QT_is_optional};
+            }
+
+            break :blk qts;
+        };
+
+        const entity_type_idx: ?comptime_int = blk: {
+            for (base_query_types, 0..) |QT, i| {
+                if (QT == Entity) break :blk i;
+            }
+            break :blk null;
+        };
+        pub const has_entities = entity_type_idx != null;
+
+        const base_types_and_opt_types = blk: {
+            var tm = TypeMap{};
+            var opt_tm = TypeMap{};
+            for (base_query_types) |QT| {
+                if (@typeInfo(QT) == .Optional) opt_tm.append(QT) else tm.append(QT);
+            }
+            if (tm.types.len == 0 and opt_tm.types.len > 0) @compileError("Cannot have a query consisting of only optional types.");
+            break :blk .{ tm, opt_tm };
+        };
+        const base_types: TypeMap = base_types_and_opt_types[0];
+        const opt_types: TypeMap = base_types_and_opt_types[1];
+
+        comp_ptrs: [base_types.types.len][]*anyopaque = undefined,
+        opt_comp_ptrs: [opt_types.types.len][]?*anyopaque = undefined,
+        entities: if (has_entities) []Entity else void = if (has_entities) &.{} else void{},
+        len: usize = 0,
+
+        pub fn init(alloc: std.mem.Allocator, len: usize) !Self {
+            var self = Self{};
+            if (comptime has_entities) self.entities = try alloc.alloc(Entity, len);
+            for (&self.comp_ptrs) |*o| o.* = try alloc.alloc(*anyopaque, len);
+            for (&self.opt_comp_ptrs) |*o| o.* = try alloc.alloc(?*anyopaque, len);
+            return self;
+        }
+
+        pub fn deinit(self: *Self, alloc: std.mem.Allocator) void {
+            for (self.comp_ptrs) |comp| alloc.free(comp);
+            for (self.opt_comp_ptrs) |opt_comp| alloc.free(opt_comp);
+            if (has_entities) alloc.free(self.entities);
+        }
+
+        pub fn items(self: *const Self, comptime idx: usize) Items(idx) {
+            if (comptime base_query_types[idx] == Entity) return self.entities;
+
+            if (comptime base_types.indexOf(base_query_types[idx])) |comp_idx| {
+                return @ptrCast(Items(idx), self.comp_ptrs[comp_idx][0..self.len]);
+            } else if (comptime opt_types.indexOf(base_query_types[idx])) |comp_idx| {
+                return @ptrCast(Items(idx), self.opt_comp_ptrs[comp_idx][0..self.len]);
+            }
+
+            @compileError(std.fmt.comptimePrint("Query does not have an item at index {}.", .{idx}));
+        }
+
+        fn Items(comptime idx: usize) type {
+            if (comptime base_query_types[idx] == Entity) return []const Entity;
+            return if (comptime @typeInfo(base_query_types[idx]) == .Optional) []const ?*std.meta.Child(base_query_types[idx]) else []const *base_query_types[idx];
+        }
+    };
+}
+
+// world part
 const std = @import("std");
 const builtin = @import("builtin");
 const util = @import("util.zig");
@@ -442,62 +538,45 @@ pub fn World(comptime wb: WorldBuilder) type {
         }
 
         pub fn query(self: *Self, comptime QT: type) !QT {
-            if (QT.has_entities and QT.query_types.len == 0) return queryJustEntities(self);
+            if (QT.has_entities and QT.query_types.utps.len == 0) return queryJustEntities(self);
 
-            var smallest = getSmallestListFrom(self, &QT.type_utps);
-            var out = try QT.init(self.frame_alloc, smallest[0].len());
+            const sm_tuple = self.smallestNonOptList(QT.query_types.utps, QT.query_types.is_optional);
+            const smallest = sm_tuple[0];
+            const smallest_idx = sm_tuple[1];
+
+            var out = try QT.init(self.frame_alloc, smallest.len());
+
+            var ini_tuple = try self.initQueryLists(
+                QT.query_types.utps,
+                smallest,
+                smallest_idx,
+                &out.comp_ptrs,
+                &out.opt_comp_ptrs,
+                QT.query_types.is_optional,
+            );
+            defer self.deinitQueryLists(ini_tuple[1], ini_tuple[2]);
 
             out.len = try fillQuery(
-                smallest[2].constSlice(),
-                smallest[0],
-                smallest[1],
-                &out.comp_ptrs,
+                ini_tuple[0],
+                ini_tuple[1],
+                ini_tuple[2],
                 if (comptime QT.has_entities) out.entities else null,
-                QT.OptionsType,
+                QT.options,
             );
 
             return out;
         }
 
-        fn getSmallestListFrom(
-            self: *Self,
-            utps: []const TypeMap.UniqueTypePtr,
-        ) struct {
-            *ComponentArray,
-            usize,
-            std.BoundedArray(*ComponentArray, 30),
-        } {
-            var smallest_idx: usize = 0;
-            var smallest = self.getListFromUtp(utps[0]);
-
-            // HACK: Limits query size to 30
-            var others = std.BoundedArray(*ComponentArray, 30).init(0) catch unreachable;
-            others.append(smallest) catch unreachable;
-
-            for (utps[1..], 1..) |qutp, i| {
-                var check = self.getListFromUtp(qutp);
-                others.append(check) catch unreachable;
-                if (check.len() < smallest.len()) {
-                    smallest = check;
-                    smallest_idx = i;
-                }
-            }
-
-            return .{ others.swapRemove(smallest_idx), smallest_idx, others };
-        }
-
         fn queryJustEntities(self: *Self) !ecs.Query(.{ecs.Entity}) {
             var out = try ecs.Query(.{ecs.Entity}).init(self.frame_alloc, self.entities.len);
             for (out.entities, self.entities.constSlice()) |*o, ent| o.* = ent;
-            out.len = self.entities.len;
             return out;
         }
 
         fn fillQuery(
-            query_lists: []const *const ComponentArray,
-            smallest_list: *const ComponentArray,
-            smallest_list_idx: usize,
-            components_out: []const []*const anyopaque,
+            smallest_list: QueryList,
+            other_lists: []QueryList,
+            other_opt_lists: []OptQueryList,
             entities_out: ?[]ecs.Entity,
             comptime options: anytype,
         ) !usize {
@@ -505,26 +584,118 @@ pub fn World(comptime wb: WorldBuilder) type {
             _ = options;
 
             var len: usize = 0;
-            smallest_list_ents_loop: for (smallest_list.entities.items) |ent| {
-                components_out[smallest_list_idx][len] = smallest_list.get(ent) orelse {
-                    std.debug.panic("List of type {s} says it has an entity it doesnt: {}.", .{ wb.comp_types.nameFromUtp(smallest_list.component_utp), ent });
+            smallest_list_ents_loop: for (smallest_list.comp_arr.entities.items) |ent| {
+                std.debug.print("comp ptr: {*}\n", .{smallest_list.comp_arr.get(ent).?});
+                smallest_list.out[len] = smallest_list.comp_arr.get(ent) orelse {
+                    std.debug.panic("List of type {s} says it has an entity it doesnt: {}.", .{ wb.comp_types.nameFromUtp(smallest_list.comp_arr.component_utp), ent });
                 };
 
-                for (query_lists, 0..) |list, i| {
-                    if (list.get(ent)) |comp| {
-                        const comp_list_idx = if (i < smallest_list_idx) i else i + 1;
-                        components_out[comp_list_idx][len] = comp;
+                for (other_lists) |list| {
+                    if (list.comp_arr.get(ent)) |comp| {
+                        list.out[len] = comp;
                     } else {
-                        continue :smallest_list_ents_loop; // skip to checking next entity in smallest_list's entities, skips advancing the len
+                        continue :smallest_list_ents_loop; // skip to checking next entity in smallest_list's entities, skips adding the entity
                     }
                 }
 
+                for (other_opt_lists) |list| {
+                    list.out[len] = list.comp_arr.get(ent);
+                }
+
                 if (entities_out) |eout| eout[len] = ent;
+
                 len += 1;
             }
 
             return len;
         }
+
+        const QueryList = struct {
+            comp_arr: *const ComponentArray,
+            out: []*anyopaque,
+        };
+
+        const OptQueryList = struct {
+            comp_arr: *const ComponentArray,
+            out: []?*anyopaque,
+        };
+
+        fn smallestNonOptList(
+            self: *Self,
+            utps: []const TypeMap.UniqueTypePtr,
+            is_optional: []const bool,
+        ) struct { *ComponentArray, usize } {
+            var smallest_idx: usize = 0;
+            while (is_optional[smallest_idx]) smallest_idx += 1;
+
+            var smallest = self.getListFromUtp(utps[smallest_idx]);
+
+            for (utps[0..], 0..) |qutp, i| {
+                var check = self.getListFromUtp(qutp);
+
+                if (!is_optional[i] and check.len() < smallest.len()) {
+                    smallest = check;
+                    smallest_idx = i;
+                }
+            }
+
+            std.debug.print("smallest list is of type {s}\n", .{wb.comp_types.nameFromUtp(utps[smallest_idx])});
+            return .{ smallest, smallest_idx };
+        }
+
+        fn initQueryLists(
+            self: *Self,
+            utps: []const TypeMap.UniqueTypePtr,
+            smallest: *ComponentArray,
+            smallest_idx: usize,
+            components_outs: [][]*anyopaque,
+            components_outs_opt: [][]?*anyopaque,
+            is_optional: []const bool,
+        ) !struct {
+            QueryList,
+            []QueryList,
+            []OptQueryList,
+        } {
+            if (utps.len == 1) return .{ .{ .comp_arr = smallest, .out = components_outs[smallest_idx] }, &.{}, &.{} };
+
+            var others = try std.ArrayListUnmanaged(QueryList).initCapacity(self.frame_alloc, utps.len - is_optional.len);
+            errdefer others.deinit(self.frame_alloc);
+
+            var others_opt = try std.ArrayListUnmanaged(OptQueryList).initCapacity(self.frame_alloc, utps.len - others.items.len - 1);
+
+            for (utps[0..], 0..) |qutp, i| {
+                var arr = self.getListFromUtp(qutp);
+                if (arr == smallest) continue;
+
+                if (is_optional[i]) {
+                    others_opt.append(self.frame_alloc, .{
+                        .comp_arr = arr,
+                        .out = components_outs_opt[others_opt.items.len],
+                    }) catch unreachable;
+                } else {
+                    others.append(self.frame_alloc, .{
+                        .comp_arr = arr,
+                        .out = components_outs[others.items.len],
+                    }) catch unreachable;
+                }
+            }
+
+            return .{ .{ .comp_arr = smallest, .out = components_outs[smallest_idx] }, try others.toOwnedSlice(self.frame_alloc), try others_opt.toOwnedSlice(self.frame_alloc) };
+        }
+
+        fn deinitQueryLists(
+            self: *Self,
+            others: []QueryList,
+            others_opt: []OptQueryList,
+        ) void {
+            self.frame_alloc.free(others);
+            self.frame_alloc.free(others_opt);
+        }
+
+        const ArgsFnType = enum {
+            static_fn,
+            member_fn,
+        };
 
         fn InitArgsOut(comptime params: []const std.builtin.Type.Fn.Param) type {
             var types: []const type = &.{};
@@ -830,3 +1001,4 @@ test "cleanEntList" {
     try testing.expect(comp_arrs[0].contains(4));
     try testing.expectEqual(@as(u8, 4), comp_arrs[0].getAs(u8, 4).?.*);
 }
+

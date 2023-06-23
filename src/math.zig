@@ -4,7 +4,7 @@ pub const Vec2 = struct {
     x: f32 = 0.0,
     y: f32 = 0.0,
 
-    pub inline fn new(x: f32, y: f32) Vec2 {
+    pub inline fn init(x: f32, y: f32) Vec2 {
         return .{ .x = x, .y = y };
     }
 
@@ -28,7 +28,7 @@ pub const Vec2 = struct {
         if (comptime std.meta.trait.isFloat(T)) {
             return .{ @floatCast(T, self.x), @floatCast(T, self.y) };
         } else if (comptime std.meta.trait.isIntegral(T)) {
-            return .{ @floatToInt(T, self.x), @floatToInt(T, self.y) };
+            return .{ @intFromFloat(T, self.x), @intFromFloat(T, self.y) };
         }
     }
 
@@ -129,7 +129,7 @@ pub const Vec3 = struct {
     y: f32 = 0.0,
     z: f32 = 0.0,
 
-    pub inline fn new(x: f32, y: f32, z: f32) Vec3 {
+    pub inline fn init(x: f32, y: f32, z: f32) Vec3 {
         return .{ .x = x, .y = y, .z = z };
     }
 
@@ -157,7 +157,7 @@ pub const Vec3 = struct {
         if (comptime std.meta.trait.isFloat(T)) {
             return .{ @floatCast(T, self.x), @floatCast(T, self.y), @floatCast(T, self.z) };
         } else if (comptime std.meta.trait.isIntegral(T)) {
-            return .{ @floatToInt(T, self.x), @floatToInt(T, self.y), @floatToInt(T, self.z) };
+            return .{ @intFromFloat(T, self.x), @intFromFloat(T, self.y), @intFromFloat(T, self.z) };
         }
     }
 

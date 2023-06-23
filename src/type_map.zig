@@ -7,8 +7,13 @@ pub fn append(comptime self: *Self, comptime T: type) void {
     self.types = self.types ++ &[_]type{T};
 }
 
+pub fn appendSlice(comptime self: *Self, comptime types: []const type) void {
+    self.types = self.types ++ types;
+}
+
 pub fn has(comptime self: Self, comptime T: type) bool {
     for (self.types) |t| {
+        @setEvalBranchQuota(20_000);
         if (t == T) return true;
     }
     return false;
@@ -16,6 +21,7 @@ pub fn has(comptime self: Self, comptime T: type) bool {
 
 pub fn indexOf(comptime self: Self, comptime T: type) ?usize {
     for (self.types, 0..) |t, i| {
+        @setEvalBranchQuota(20_000);
         if (t == T) return i;
     }
     return null;
@@ -23,9 +29,18 @@ pub fn indexOf(comptime self: Self, comptime T: type) ?usize {
 
 pub fn fromUtp(comptime self: Self, utp: UniqueTypePtr) ?usize {
     inline for (self.types, 0..) |t, i| {
+        @setEvalBranchQuota(20_000);
         if (uniqueTypePtr(t) == utp) return i;
     }
     return null;
+}
+
+pub fn nameFromUtp(comptime self: Self, utp: UniqueTypePtr) []const u8 {
+    inline for (self.types) |t| {
+        @setEvalBranchQuota(20_000);
+        if (uniqueTypePtr(t) == utp) return @typeName(t);
+    }
+    return "Error::NonRegisteredType";
 }
 
 //pub const UniqueTypePtr = *const anyopaque;

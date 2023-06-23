@@ -19,21 +19,23 @@ pub const StageDef = struct {
 
 const default_stages = struct {
     // zig fmt: off
-    const pre_init    = 0;
-    const init        = 1;
-    const post_init   = 2;
-    const pre_update  = 3;
-    const update      = 4;
-    const post_update = 5;
-    const pre_draw    = 6;
-    const draw        = 7;
-    const post_draw   = 8;
+    const setup       = 0;
+    const pre_init    = 1;
+    const init        = 2;
+    const post_init   = 3;
+    const pre_update  = 4;
+    const update      = 5;
+    const post_update = 6;
+    const pre_draw    = 7;
+    const draw        = 8;
+    const post_draw   = 9;
+    const cleanup     = 10;
     // zig fmt: on
 };
 
 warnings: []const u8 = "",
 
-max_entities: usize = 5_000,
+max_entities: usize = 20_000,
 stage_defs: []const StageDef = &.{},
 
 comp_types: TypeMap = .{},
@@ -59,20 +61,23 @@ const OptimizeMode = enum {
 };
 
 const OnEntOverflow = enum {
+    /// Invokes OnCrashFn with the CrashReason of .hit_ent_limit
     crash,
+    /// Takes the last entity spawned, strips it of its components, and returns it
     overwrite_last,
+    /// Takes the first entity spawned, strips it of its components, and returns it
     overwrite_first,
 };
 
-pub fn new(comptime includes: []const type) Self {
+pub fn init(comptime includes: []const type) Self {
     var self = Self{
-        .resources = TypeBuilder.new(false, .Auto),
+        .resources = TypeBuilder.init(false, .Auto),
     };
 
     for (@typeInfo(default_stages).Struct.decls) |decl| {
         self.stage_defs = self.stage_defs ++ .{.{
             .name = decl.name,
-            .def = TypeBuilder.new(true, .Auto),
+            .def = TypeBuilder.init(true, .Auto),
         }};
     }
 
@@ -84,7 +89,7 @@ pub fn new(comptime includes: []const type) Self {
 }
 
 /// Calls `include(comptime wb: *WorldBuilder) !void` on all structs passed into the `includes` tuple.
-/// `.new()` passes it's arguments to this function.
+/// `.init(...)` passes it's arguments to this function.
 ///
 /// You can include a struct more than once without errors/warnings, it's effects will only be applied once.
 ///
@@ -133,7 +138,7 @@ pub fn addStage(comptime self: *Self, comptime stage_name: @TypeOf(.enum_literal
 
     self.stage_defs = self.stage_defs ++ .{.{
         .name = @tagName(stage_name),
-        .def = TypeBuilder.new(true, .Auto),
+        .def = TypeBuilder.init(true, .Auto),
     }};
 }
 
@@ -155,9 +160,10 @@ pub fn addStage(comptime self: *Self, comptime stage_name: @TypeOf(.enum_literal
 /// }
 /// ```
 pub fn addComponents(comptime self: *Self, comptime comps: []const type) void {
-    for (comps) |C| {
-        self.comp_types.append(C);
+    inline for (comps) |T| {
+        if (comptime self.comp_types.has(T)) @compileError("Attempted to add type `" ++ @typeName(T) ++ "` to worldbuilder more than once.");
     }
+    self.comp_types.appendSlice(comps);
 }
 
 /// Resources are unique struct instances that you can get within your systems:
@@ -175,7 +181,10 @@ pub fn addComponents(comptime self: *Self, comptime comps: []const type) void {
 ///     timer.current += 1;
 /// }
 /// ```
-pub fn addResource(comptime self: *Self, comptime T: type, default_value: T) void {
+pub fn addResource(comptime self: *Self, comptime T: type, comptime default_value: T) void {
+    if (comptime T == ztg.Commands) @compileError("`Commands` cannot be a resource type.");
+    if (comptime std.meta.trait.isContainer(T) and (@hasDecl(T, "query_types") or @hasDecl(T, "EventSendType") or @hasDecl(T, "EventRecvType"))) @compileError("Queries and Events cannot be resources.");
+
     if (self.added_resources.has(T)) {
         self.warn("Tried to add resource type `" ++ @typeName(T) ++ "` to world more than once.");
         return;
@@ -262,6 +271,7 @@ fn defaultCrash(com: ztg.Commands, r: ztg.CrashReason) anyerror!ztg.Status {
 
 /// Returns the final World type
 pub fn Build(comptime self: Self) type {
+    if (self.max_entities > 500_000) self.warn("It isn't recommended to have a max_entities count over 500,000 as it could cause unstable performance.");
     return World(self);
 }
 
@@ -270,7 +280,7 @@ fn warn(comptime self: *Self, comptime message: []const u8) void {
 }
 
 test Self {
-    const MyWorld = Self.new(.{
+    const MyWorld = Self.init(&.{
         base,
         physics,
     }).Build();

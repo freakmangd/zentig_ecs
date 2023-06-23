@@ -31,7 +31,7 @@ const player = struct {
 };
 
 pub fn main() !void {
-    const MyWorld = ztg.WorldBuilder.new(.{
+    const MyWorld = ztg.WorldBuilder.init(.{
         ztg.base,
         player,
     }).Build();
@@ -45,7 +45,7 @@ pub fn main() !void {
     const player_ent = try world.newEnt();
     try world.giveEntMany(player_ent, player.PlayerBundle{
         .p = .{ .name = "Player" },
-        .tran = .{ .pos = ztg.Vec3.new(10, 10, 10) }, // rot defaults to 0 and scale defaults to ztg.Vec3.new(1, 1, 1)
+        .tran = .{ .pos = ztg.Vec3.init(10, 10, 10) }, // rot defaults to 0 and scale defaults to ztg.Vec3.init(1, 1, 1)
     });
 
     try world.runStage(.update);

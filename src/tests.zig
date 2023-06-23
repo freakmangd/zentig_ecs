@@ -11,7 +11,7 @@ test "ztg.World" {
 }
 
 const game_file = struct {
-    const MyWorld = WorldBuilder.new(.{
+    const MyWorld = WorldBuilder.init(.{
         ztg.base,
         game_file,
     }).Build();
@@ -49,7 +49,7 @@ const player_file = struct {
         const player_ent = try com.newEnt();
         try com.giveEntMany(player_ent, player_file.PlayerBundle{
             .p = .{ .name = "Player" },
-            .tran = .{ .pos = ztg.Vec3.new(10, 10, 0) },
+            .tran = .{ .pos = ztg.Vec3.init(10, 10, 0) },
             .sprite = .{ .img = 0 },
         });
     }
@@ -58,8 +58,8 @@ const player_file = struct {
         for (q.items(.a), q.items(.b)) |player, trn| {
             try std.testing.expectFmt("My name is Player, and I'm located at 10 10.", "My name is {s}, and I'm located at {} {}.", .{
                 player.name,
-                @floatToInt(i32, trn.pos.x),
-                @floatToInt(i32, trn.pos.y),
+                @intFromFloat(i32, trn.pos.x),
+                @intFromFloat(i32, trn.pos.y),
             });
         }
 
