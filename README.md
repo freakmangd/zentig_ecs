@@ -21,6 +21,11 @@ git clone https://github.com/freakmangd/zentig_ecs.git lib/zentig_ecs
 
 ## Simple
 
+An entity is just a `usize`:
+```zig
+pub const Entity = usize;
+```
+
 A basic component:
 ```zig
 pub const Player = struct {
@@ -30,26 +35,19 @@ pub const Player = struct {
 
 A basic system:
 ```zig
-// If the first argument is of type std.mem.Allocator, the allocator passed into
-// the world when creating it is passed into the system.
-pub fn player_speak(q: Query(.{Player}, .{})) !void {
+pub fn playerSpeak(q: ztg.Query(.{Player}, .{})) !void {
   for (q.items(.a)) |plr| {
     std.debug.print("My name is {s}\n", .{self.name});
   }
 }
 ```
 
-An entity is just a usize:
-```zig
-pub const Entity = usize;
-```
-
 Registering systems/components into a world:
 ```zig
 const MyWorld = blk: {
-  var wb = ztg.WorldBuilder.new();
+  var wb = ztg.WorldBuilder.init(.{});
   wb.addComponents(.{Player});
-  wb.addUpdateSystems(.{player_speak});
+  wb.addUpdateSystems(.{playerSpeak});
   break :blk wb.Build();
 };
 ```
@@ -64,7 +62,7 @@ test "running systems" {
   world.runDrawStages();
   
   // Support for user defined stages
-  world.runStageList(&.{ "UPDATE", "POST_PROCESS", "PRE_RESET", "POST_MORTEM" });
+  world.runStageList(&.{ .post_process, .pre_reset, .post_mortem });
 }
 ```
 
@@ -74,9 +72,10 @@ The `.include()` function in `WorldBuilder` makes it easy to compartmentalize yo
 `main.zig`:
 ```zig
 // --snip--
-// .include() looks for a `pub fn include(comptime *WorldBuilder) !void` def in each struct
+// .include() looks for a `pub fn include(comptime *WorldBuilder) (!)void` def in each struct
+// if the function errors, it's a compile error. But the signature can return either `!void` or `void`
   wb.include(.{
-    ztg.base.Init(.{}),
+    ztg.base,
     @include("player.zig"),
   });
 // --snip
@@ -86,7 +85,7 @@ The `.include()` function in `WorldBuilder` makes it easy to compartmentalize yo
 ```zig
 pub fn include(comptime wb: *WorldBuilder) anyerror!void {
   wb.addComponents(.{ Player, PlayerGun, PlayerHUD });
-  wb.addSystems(.{ update_player, update_gun, update_hud });
+  wb.addSystemsToStage(.update, .{ update_player, update_gun, update_hud });
   wb.include(...);
 }
 ```
@@ -99,11 +98,11 @@ const ztg = @import("zentig");
 // This would most likely be a player.zig file instead
 const player = struct {
   // This is called when passed into a .include() call on a WorldBuilder
-  pub fn include(comptime wb: *ztg.WorldBuilder) !void {
+  pub fn include(comptime wb: *ztg.WorldBuilder) void {
     // All components used in the world must be added before .Build() is called on the WorldBuilder
     wb.addComponents(.{Player});
     // Adds a system to the UPDATE stage of the world, systems can only be added during comptime
-    wb.addUpdateSystems(.{player_speak});
+    wb.addUpdateSystems(.{playerSpeak});
   }
   
   // A basic component
@@ -119,7 +118,7 @@ const player = struct {
   };
   
   // A basic system
-  pub fn player_speak(query: ztg.Query(.{Player, ztg.base.Transform}, .{})) !void {
+  pub fn playerSpeak(query: ztg.Query(.{Player, ztg.base.Transform}, .{})) !void {
     // Query is a wrapper for MultiArrayList, where all the types you passed into the
     // original tuple get indexed as "a" through "z".
     for (query.items(.a), query.items(.b)) |plr, trn| {
@@ -128,10 +127,10 @@ const player = struct {
   }
 };
 
-// Constructing the world type must be done at comptime
-// `.new(anytype)` passes `anytype` to `.include(anytype)`
-const MyWorld = ztg.WorldBuilder.new(.{
-  ztg.base.Init(.{}),
+// Constructing the world type must be done at comptime.
+// `.init(anytype)` passes `anytype` to `.include(anytype)`
+const MyWorld = ztg.WorldBuilder.init(.{
+  ztg.base,
   player,
 }).Build();
 
@@ -146,13 +145,13 @@ pub fn main() !void {
   const player_ent = try world.newEnt();
   
   // Use the PlayerBundle struct as a blueprint
-  try world.giveEntBundle(player_ent, player.PlayerBundle, .{
+  try world.giveEntMany(player_ent, player.PlayerBundle{
     .{ .name = "Player" },
-    .{ .pos = ztg.Vec3.new(10, 10, 10) },
+    .{ .pos = ztg.Vec3.init(10, 10, 10) },
   });
 
   // runs all the functions added to the UPDATE stage
-  try world.runStage("UPDATE");
+  try world.runStage(.update);
 }
 ```
 

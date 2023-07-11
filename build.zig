@@ -1,13 +1,36 @@
 const std = @import("std");
 const zentig = @import("lib.zig");
 
+pub fn addAsModule(
+    name: []const u8,
+    b: *std.Build,
+    exe: *std.build.Step.Compile,
+) *std.build.Module {
+    const mod = b.createModule(.{
+        .source_file = .{ .path = srcdir ++ "/src/init.zig" },
+    });
+    exe.addModule(name, mod);
+    return mod;
+}
+
+const srcdir = struct {
+    fn getSrcDir() []const u8 {
+        return std.fs.path.dirname(@src().file).?;
+    }
+}.getSrcDir();
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const zentig_mod = b.addModule("zentig", .{
+        .source_file = std.Build.FileSource.relative("src/init.zig"),
+        .dependencies = &[_]std.Build.ModuleDependency{},
+    });
+
     const examples = [_]struct { []const u8, []const u8 }{
         .{ "example", "examples/example.zig" },
-        .{ "example-input", "examples/input_example.zig" },
+        .{ "input", "examples/input_example.zig" },
     };
 
     for (examples) |ex_info| {
@@ -18,7 +41,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
 
-        zentig.addAsModule("zentig", example);
+        example.addModule("zentig", zentig_mod);
 
         const run_example_cmd = b.addRunArtifact(example);
 
@@ -27,9 +50,10 @@ pub fn build(b: *std.Build) void {
     }
 
     const main_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/tests.zig" },
+        .root_source_file = .{ .path = "src/init.zig" },
         .optimize = optimize,
     });
+    main_tests.addModule("zentig", zentig_mod);
 
     const run_tests = b.addRunArtifact(main_tests);
 

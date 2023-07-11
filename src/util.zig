@@ -1,148 +1,64 @@
 const std = @import("std");
 
-pub const Vec2 = struct {
-    x: f32,
-    y: f32,
+pub const TypeBuilder = @import("type_builder.zig");
+pub const TypeMap = @import("type_map.zig");
 
-    pub inline fn new(x: f32, y: f32) Vec2 {
-        return .{ .x = x, .y = y };
-    }
+pub fn canReturnError(comptime Fn: type) bool {
+    return comptime std.meta.trait.is(.ErrorUnion)(@typeInfo(Fn).Fn.return_type.?);
+}
 
-    pub inline fn splat(s: f32) Vec2 {
-        return .{ .x = s, .y = s };
-    }
+pub fn DerefType(comptime T: type) type {
+    if (comptime std.meta.trait.isSingleItemPtr(T)) return std.meta.Child(T);
+    return T;
+}
 
-    pub inline fn one() Vec2 {
-        return .{ .x = 1, .y = 1 };
-    }
+/// Get the element type of a MultiArrayList
+pub fn MultiArrayListElem(comptime T: type) type {
+    return @typeInfo(@TypeOf(T.pop)).Fn.return_type.?;
+}
 
-    pub inline fn as(self: Vec2, comptime T: type) @Vector(2, T) {
-        if (comptime std.meta.trait.isFloat(T)) {
-            return .{ @floatCast(T, self.x), @floatCast(T, self.y) };
-        } else if (comptime std.meta.trait.isIntegral(T)) {
-            return .{ @floatToInt(T, self.x), @floatToInt(T, self.y) };
+/// Get the element type of an ArrayHashMap
+pub fn ArrayHashMapElem(comptime T: type) type {
+    return @typeInfo(T.KV).Struct.fields[1].type;
+}
+
+pub fn MinEntInt(comptime max: usize) type {
+    return std.meta.Int(.unsigned, @typeInfo(std.math.IntFittingRange(0, max)).Int.bits + 1);
+}
+
+const MemberFnType = enum {
+    by_value,
+    by_ptr,
+    by_const_ptr,
+    non_member,
+};
+
+pub fn isMemberFn(comptime Container: type, comptime Fn: anytype) MemberFnType {
+    const params = @typeInfo(@TypeOf(Fn)).Fn.params;
+    if (comptime params.len == 0) return false;
+
+    const Param0 = params[0].type orelse return false;
+
+    if (DerefType(Param0) == Container) {
+        if (std.meta.trait.isConstPtr(Param0)) {
+            return .by_const_ptr;
+        } else if (std.meta.trait.isSingleItemPtr(Param0)) {
+            return .by_ptr;
+        } else {
+            return .by_value;
         }
     }
+    return .non_member;
+}
 
-    pub inline fn copy(self: Vec2) Vec2 {
-        return .{ .x = self.x, .y = self.y };
+pub fn convertFieldToF32(obj: anytype, comptime field_name: []const u8, default: f32) f32 {
+    const O = @TypeOf(obj);
+    const fi = std.meta.fieldIndex(O, field_name) orelse return default;
+
+    const FieldType = std.meta.fields(O)[fi].type;
+    switch (@typeInfo(FieldType)) {
+        .Int => return @floatFromInt(@field(obj, field_name)),
+        .Float => return @floatCast(@field(obj, field_name)),
+        else => @compileError("Cannot convert type " ++ @typeName(FieldType) ++ " to f32."),
     }
-
-    pub fn length(self: Vec2) f32 {
-        return @sqrt((self.x * self.x) + (self.y * self.y));
-    }
-
-    pub fn sqrLength(self: Vec2) f32 {
-        return (self.x * self.x) + (self.y * self.y);
-    }
-
-    pub fn getNormalized(self: Vec2) error{DivideByZero}!Vec2 {
-        const m = length(self);
-        if (m == 0) return error.DivideByZero;
-        return divide(self, m);
-    }
-
-    pub inline fn getNegated(self: Vec2) Vec2 {
-        return .{ .x = -self.x, .y = -self.y };
-    }
-
-    pub inline fn divide(v: Vec2, s: f32) Vec2 {
-        return .{ .x = v.x / s, .y = v.y / s };
-    }
-
-    pub inline fn multiply(v: Vec2, s: f32) Vec2 {
-        return .{ .x = v.x * s, .y = v.y * s };
-    }
-
-    pub inline fn add(v0: Vec2, v1: Vec2) Vec2 {
-        return .{ .x = v0.x + v1.x, .y = v0.y + v1.y };
-    }
-
-    pub inline fn subtract(v0: Vec2, v1: Vec2) Vec2 {
-        return .{ .x = v0.x - v1.x, .y = v0.y - v1.y };
-    }
-
-    pub inline fn scale(v0: Vec2, v1: Vec2) Vec2 {
-        return .{ .x = v0.x * v1.x, .y = v0.y * v1.y };
-    }
-};
-
-pub const Vec3 = struct {
-    x: f32,
-    y: f32,
-    z: f32,
-
-    pub inline fn new(x: f32, y: f32, z: f32) Vec3 {
-        return .{ .x = x, .y = y, .z = z };
-    }
-
-    pub inline fn one() Vec3 {
-        return .{ .x = 1, .y = 1, .z = 1 };
-    }
-
-    pub inline fn splat(s: f32) Vec3 {
-        return .{ .x = s, .y = s, .z = s };
-    }
-
-    pub inline fn as(self: Vec3, comptime T: type) @Vector(2, T) {
-        if (comptime std.meta.trait.isFloat(T)) {
-            return .{ @floatCast(T, self.x), @floatCast(T, self.y) };
-        } else if (comptime std.meta.trait.isIntegral(T)) {
-            return .{ @floatToInt(T, self.x), @floatToInt(T, self.y) };
-        }
-    }
-
-    pub inline fn copy(self: Vec3) Vec3 {
-        return .{ .x = self.x, .y = self.y, .z = self.z };
-    }
-
-    pub fn length(self: Vec3) f32 {
-        return @sqrt((self.x * self.x) + (self.y * self.y) + (self.z * self.z));
-    }
-
-    pub fn sqrLength(self: Vec3) f32 {
-        return (self.x * self.x) + (self.y * self.y) + (self.z * self.z);
-    }
-
-    pub fn getNormalized(self: Vec3) error{DivideByZero}!Vec3 {
-        const m = length(self);
-        if (m == 0) return error.DivideByZero;
-        return divide(self, m);
-    }
-
-    pub inline fn getNegated(self: Vec3) Vec3 {
-        return .{ .x = -self.x, .y = -self.y, .z = -self.z };
-    }
-
-    pub inline fn divide(v: Vec3, s: f32) Vec3 {
-        return .{ .x = v.x / s, .y = v.y / s, .z = v.z / s };
-    }
-
-    pub inline fn multiply(v: Vec3, s: f32) Vec3 {
-        return .{ .x = v.x * s, .y = v.y * s, .z = v.z * s };
-    }
-
-    pub inline fn add(v0: Vec3, v1: Vec3) Vec3 {
-        return .{ .x = v0.x + v1.x, .y = v0.y + v1.y, .z = v0.z + v1.z };
-    }
-
-    pub inline fn subtract(v0: Vec3, v1: Vec3) Vec3 {
-        return .{ .x = v0.x - v1.x, .y = v0.y - v1.y, .z = v0.z - v1.z };
-    }
-
-    pub inline fn scale(v0: Vec3, v1: Vec3) Vec3 {
-        return .{ .x = v0.x * v1.x, .y = v0.y * v1.y, .z = v0.z * v1.z };
-    }
-};
-
-pub const Quaternion = struct {
-    x: f32,
-    y: f32,
-    z: f32,
-    w: f32,
-
-    // TODO: actually make quaternions work lmao
-    pub fn identity() Quaternion {
-        return .{ .x = 0, .y = 0, .z = 0, .w = 0 };
-    }
-};
+}
