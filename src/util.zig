@@ -12,12 +12,12 @@ pub fn DerefType(comptime T: type) type {
     return T;
 }
 
-/// Get the element type of a MultiArrayList, used internally
+/// Get the element type of a MultiArrayList
 pub fn MultiArrayListElem(comptime T: type) type {
     return @typeInfo(@TypeOf(T.pop)).Fn.return_type.?;
 }
 
-/// Get the element type of an ArrayHashMap, used internally
+/// Get the element type of an ArrayHashMap
 pub fn ArrayHashMapElem(comptime T: type) type {
     return @typeInfo(T.KV).Struct.fields[1].type;
 }
@@ -49,4 +49,16 @@ pub fn isMemberFn(comptime Container: type, comptime Fn: anytype) MemberFnType {
         }
     }
     return .non_member;
+}
+
+pub fn convertFieldToF32(obj: anytype, comptime field_name: []const u8, default: f32) f32 {
+    const O = @TypeOf(obj);
+    const fi = std.meta.fieldIndex(O, field_name) orelse return default;
+
+    const FieldType = std.meta.fields(O)[fi].type;
+    switch (@typeInfo(FieldType)) {
+        .Int => return @floatFromInt(@field(obj, field_name)),
+        .Float => return @floatCast(@field(obj, field_name)),
+        else => @compileError("Cannot convert type " ++ @typeName(FieldType) ++ " to f32."),
+    }
 }

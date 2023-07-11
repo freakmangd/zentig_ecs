@@ -48,17 +48,15 @@ pub fn EventReceiver(comptime T: type) type {
     };
 }
 
-pub fn Added(comptime T: type, comptime Opts: type) type {
+pub fn Added(comptime T: type) type {
     return struct {
         pub const QueryAdded: type = T;
-        pub const Options: type = Opts;
     };
 }
 
-pub fn Removed(comptime T: type, comptime Opts: type) type {
+pub fn Removed(comptime T: type) type {
     return struct {
         pub const QueryRemoved: type = T;
-        pub const Options: type = Opts;
     };
 }
 

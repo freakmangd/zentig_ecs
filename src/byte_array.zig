@@ -35,17 +35,22 @@ pub const ByteArray = struct {
     }
 
     pub fn appendPtr(self: *Self, alloc: std.mem.Allocator, bytes_start: *const anyopaque) !void {
-        try self.bytes.appendSlice(alloc, @ptrCast([*]const u8, bytes_start)[0..self.entry_size]);
+        try self.bytes.appendSlice(alloc, @as([*]const u8, @ptrCast(bytes_start))[0..self.entry_size]);
     }
 
     pub fn appendPtrAssumeCapacity(self: *Self, bytes_start: *const anyopaque) void {
-        self.bytes.appendSliceAssumeCapacity(@ptrCast([*]const u8, bytes_start)[0..self.entry_size]);
+        self.bytes.appendSliceAssumeCapacity(@as([*]const u8, @ptrCast(bytes_start))[0..self.entry_size]);
+    }
+
+    pub fn getCapacity(self: Self) usize {
+        if (self.entry_size == 0) return std.math.maxInt(usize);
+        return self.bytes.capacity / self.entry_size;
     }
 
     pub fn set(self: *Self, index: usize, bytes_start: *const anyopaque) void {
         @memcpy(
             self.bytes.items[index * self.entry_size ..][0..self.entry_size],
-            @ptrCast([*]const u8, bytes_start)[0..self.entry_size],
+            @as([*]const u8, @ptrCast(bytes_start))[0..self.entry_size],
         );
     }
 
@@ -59,12 +64,12 @@ pub const ByteArray = struct {
     }
 
     pub fn getAsBytes(self: Self, index: usize) []const u8 {
-        return @ptrCast([*]const u8, &self.bytes.items[index * self.entry_size])[0..self.entry_size];
+        return @as([*]const u8, @ptrCast(&self.bytes.items[index * self.entry_size]))[0..self.entry_size];
     }
 
     pub fn slicedAs(self: *Self, comptime T: type) []T {
         if (@sizeOf(T) != self.entry_size) @panic("Wrong type.");
-        return @ptrCast([*]T, @alignCast(@alignOf([*]T), self.bytes.items.ptr))[0 .. self.bytes.items.len / self.entry_size];
+        return @as([*]T, @ptrCast(@alignCast(self.bytes.items.ptr)))[0 .. self.bytes.items.len / self.entry_size];
     }
 
     pub fn pop(self: *Self) []const u8 {
@@ -93,8 +98,8 @@ pub const ByteArray = struct {
     }
 
     inline fn cast(comptime T: type, data: *anyopaque) *T {
-        if (@alignOf(T) == 0) return @ptrCast(*T, data);
-        return @ptrCast(*T, @alignCast(@alignOf(T), data));
+        if (@alignOf(T) == 0) return @as(*T, @ptrCast(data));
+        return @ptrCast(@alignCast(data));
     }
 
     pub const ByteIterator = struct {

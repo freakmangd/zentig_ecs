@@ -20,15 +20,15 @@ const InputWrapper = struct {
     pub const AxisType = void;
 
     pub fn getButtonPressed(button: ButtonType) !bool {
-        return input_state[@enumToInt(button)].pressed;
+        return input_state[@intFromEnum(button)].pressed;
     }
 
     pub fn getButtonDown(button: ButtonType) !bool {
-        return input_state[@enumToInt(button)].down;
+        return input_state[@intFromEnum(button)].down;
     }
 
     pub fn getButtonReleased(button: ButtonType) !bool {
-        return input_state[@enumToInt(button)].released;
+        return input_state[@intFromEnum(button)].released;
     }
 
     pub fn getAxis(axis: AxisType) !f32 {
@@ -88,5 +88,5 @@ fn up_readInput(input: Input) void {
 
 fn changeInputState() void {
     std.debug.print("Update spacebar down state to `false`\n", .{});
-    input_state[@enumToInt(Buttons.space)].down = false;
+    input_state[@intFromEnum(Buttons.space)].down = false;
 }

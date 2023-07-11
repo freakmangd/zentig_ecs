@@ -73,7 +73,7 @@ pub const uniqueTypePtr = struct {
         const gen = struct {
             var id: u1 = undefined;
         };
-        return @ptrCast(UniqueTypePtr, &gen.id);
+        return @ptrCast(&gen.id);
     }
 }.typeId;
 

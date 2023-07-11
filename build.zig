@@ -29,8 +29,8 @@ pub fn build(b: *std.Build) void {
     });
 
     const examples = [_]struct { []const u8, []const u8 }{
-        //.{ "example", "examples/example.zig" },
-        //.{ "example-input", "examples/input_example.zig" },
+        .{ "example", "examples/example.zig" },
+        .{ "input", "examples/input_example.zig" },
     };
 
     for (examples) |ex_info| {
@@ -50,9 +50,10 @@ pub fn build(b: *std.Build) void {
     }
 
     const main_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/tests.zig" },
+        .root_source_file = .{ .path = "src/init.zig" },
         .optimize = optimize,
     });
+    main_tests.addModule("zentig", zentig_mod);
 
     const run_tests = b.addRunArtifact(main_tests);
 

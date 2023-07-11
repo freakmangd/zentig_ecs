@@ -6,7 +6,7 @@ const TypeMap = @import("type_map.zig");
 const print = std.debug.print;
 const Allocator = std.mem.Allocator;
 
-pub const Error = Allocator.Error || error{Overflow};
+pub const Error = error{ OutOfMemory, Overflow };
 
 pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
     const null_bit = 1 << (@typeInfo(Index).Int.bits - 1);
@@ -76,8 +76,12 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
 
         fn appendBytes(self: *Self, ent: ecs.Entity, bytes_start: *const anyopaque) !void {
             try self.entities.append(self.alloc, ent);
-            self.ent_to_comp_idx[ent] = @intCast(Index, self.components_data.len());
+            self.ent_to_comp_idx[ent] = @as(Index, @intCast(self.components_data.len()));
             try self.components_data.appendPtr(self.alloc, bytes_start);
+        }
+
+        pub fn willResize(self: *const Self) bool {
+            return self.entities.items.len >= self.components_data.getCapacity();
         }
 
         pub fn reassign(self: *Self, old: ecs.Entity, new: ecs.Entity) void {
@@ -103,7 +107,7 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
             if (index_of_rem == self.entities.items.len) return;
 
             // ... so we can assign that here
-            self.ent_to_comp_idx[last_ent] = @intCast(Index, index_of_rem);
+            self.ent_to_comp_idx[last_ent] = @as(Index, @intCast(index_of_rem));
         }
 
         fn indexOfEntityInEnts(self: *const Self, ent: ecs.Entity) usize {
@@ -135,8 +139,8 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
         }
 
         inline fn cast(comptime T: type, data: *anyopaque) *T {
-            if (@alignOf(T) == 0) return @ptrCast(*T, data);
-            return @ptrCast(*T, @alignCast(@alignOf(T), data));
+            if (@alignOf(T) == 0) return @ptrCast(data);
+            return @ptrCast(@alignCast(data));
         }
 
         pub inline fn iterator(self: *Self) ByteArray.ByteIterator {

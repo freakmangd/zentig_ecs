@@ -6,7 +6,7 @@ pub const Name = struct { []const u8 };
 
 pub const Transform = struct {
     pos: math.Vec3 = math.Vec3.init(0, 0, 0),
-    rot: math.Quaternion = math.Quaternion.identity(),
+    rot: math.Vec4 = math.Vec4.identity(),
     scale: math.Vec3 = math.Vec3.one(),
 };
 

@@ -29,13 +29,14 @@ const default_stages = struct {
     const pre_draw    = 7;
     const draw        = 8;
     const post_draw   = 9;
-    const cleanup     = 10;
+    const shutdown    = 10;
+    const cleanup     = 11;
     // zig fmt: on
 };
 
 warnings: []const u8 = "",
 
-max_entities: usize = 20_000,
+max_entities: usize = 100_000,
 stage_defs: []const StageDef = &.{},
 
 comp_types: TypeMap = .{},
@@ -212,33 +213,38 @@ pub fn addSystemsToStage(comptime self: *Self, comptime stage_tag: @TypeOf(.enum
     if (comptime !std.meta.trait.isTuple(@TypeOf(systems))) @compileError("Expected tuple for @TypeOf(systems).");
 
     const stage_name = @tagName(stage_tag);
+    const stage_index = comptime blk: {
+        // if stage is part of DEFAULT_STAGES, we already know the index
+        if (@hasDecl(default_stages, stage_name)) break :blk @field(default_stages, stage_name);
 
-    // if stage is part of DEFAULT_STAGES, we already know the index
-    if (comptime @hasDecl(default_stages, stage_name)) {
-        const stage_index = @field(default_stages, stage_name);
-        addSystemsToStage_final(self, stage_index, systems);
-        return;
-    }
-
-    for (self.stage_defs, 0..) |sdef, i| {
-        if (std.mem.eql(u8, sdef.name, stage_name)) {
-            addSystemsToStage_final(self, i, systems);
-            return;
+        for (self.stage_defs, 0..) |sdef, i| {
+            if (std.mem.eql(u8, sdef.name, stage_name)) {
+                break :blk i;
+            }
         }
-    }
 
-    @compileError("Stage " ++ stage_name ++ " is not in world.");
-}
+        @compileError("Stage " ++ stage_name ++ " is not in world.");
+    };
 
-fn addSystemsToStage_final(comptime self: *Self, stage_index: usize, systems: anytype) void {
+    // Very stupid thing I'm doing here, because
+    // I cant manage to get a mut pointer to the
+    // stage def's TypeBuilder :(
     var stage_defs: [self.stage_defs.len]StageDef = undefined;
-    std.mem.copy(StageDef, &stage_defs, self.stage_defs);
+    std.mem.copyForwards(StageDef, &stage_defs, self.stage_defs);
 
     for (systems) |sys| {
-        stage_defs[stage_index].def.addTupleField(stage_defs[stage_index].def.type_def.fields.len, comptime @TypeOf(sys), &sys);
+        stage_defs[stage_index].def.appendTupleField(@TypeOf(sys), &sys);
     }
 
     self.stage_defs = &stage_defs;
+}
+
+pub fn addSystemsToStages(comptime self: *Self, system_lists: anytype) void {
+    inline for (std.meta.fields(system_lists)) |list_field| {
+        if (!self.hasStage(list_field.name)) @compileError("Cannot add systems to stage " ++ list_field.name ++ " as it does not exist.");
+        const list = @field(system_lists, list_field.name);
+        _ = list;
+    }
 }
 
 /// Shorthand for `addSystemsToStage(.init, ...)`

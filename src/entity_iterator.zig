@@ -21,5 +21,5 @@ pub fn init(entities_start: *const anyopaque, len: usize, bits: u8) Self {
 pub fn next(self: *Self) ?ztg.Entity {
     if (self.index >= self.len) return null;
     self.index += 1;
-    return @bitCast(ztg.Entity, (self.entities_start + (self.index * self.bits))[0..self.bits]);
+    return @as(ztg.Entity, @bitCast((self.entities_start + (self.index * self.bits))[0..self.bits]));
 }
