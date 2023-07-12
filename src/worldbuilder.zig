@@ -262,12 +262,6 @@ pub fn addDrawSystems(comptime self: *Self, systems: anytype) void {
     addSystemsToStage(self, .draw, systems);
 }
 
-/// Set the crash handler function, returning .success from the function prevents the crash.
-/// Only return .success if you are sure you have fixed the CrashReason.
-pub fn setCrashFn(comptime self: *Self, comptime f: ztg.OnCrashFn) void {
-    self.on_crash_fn = f;
-}
-
 fn defaultCrash(com: ztg.Commands, r: ztg.CrashReason) anyerror!ztg.Status {
     _ = com;
     std.log.err("Crashed due to: {}\n", .{r});

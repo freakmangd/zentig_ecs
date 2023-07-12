@@ -362,7 +362,7 @@ pub fn World(comptime wb: WorldBuilder) type {
         /// If the entity limit is exceeded and the list cannot be condensed, there are a few outcomes
         /// depending on your `WorldBuilder.on_ent_overflow` option:
         ///
-        /// `.crash` => (default) invokes the crash function, which will most likely panic. See `WorldBuilder.setCrashFn`
+        /// `.crash` => (default) invokes the crash function, which will most likely panic.
         /// `.overwrite_last` => returns the last entity in the entity list, after removing all of its components.
         /// `.overwrite_first` => returns the first entity in the entity list, after removing all of its components
         pub fn newEnt(self: *Self) Allocator.Error!ecs.Entity {
@@ -478,7 +478,7 @@ pub fn World(comptime wb: WorldBuilder) type {
         pub fn giveEntMany(self: *Self, ent: ecs.Entity, components: anytype) !void {
             if (comptime wb.comp_types.types.len == 0) return;
             inline for (std.meta.fields(@TypeOf(components))) |field| {
-                try self.giveEnt(ent, field.type, @field(components, field.name));
+                try self.giveEnt(ent, @field(components, field.name));
             }
         }
 

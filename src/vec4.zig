@@ -11,8 +11,13 @@ y: f32 = 0.0,
 z: f32 = 0.0,
 w: f32 = 0.0,
 
-pub inline fn init(x: f32, y: f32, z: f32, w: f32) Self {
-    return .{ .x = x, .y = y, .z = z, .w = w };
+pub inline fn init(x: anytype, y: anytype, z: anytype, w: anytype) Vec3 {
+    return .{
+        .x = if (comptime @typeInfo(@TypeOf(x)) == .Int) @floatFromInt(x) else x,
+        .y = if (comptime @typeInfo(@TypeOf(y)) == .Int) @floatFromInt(y) else y,
+        .z = if (comptime @typeInfo(@TypeOf(z)) == .Int) @floatFromInt(z) else z,
+        .w = if (comptime @typeInfo(@TypeOf(w)) == .Int) @floatFromInt(w) else w,
+    };
 }
 
 pub inline fn set(self: *Self, x: f32, y: f32, z: f32, w: f32) void {
