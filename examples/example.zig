@@ -89,7 +89,7 @@ const Mover = struct {
 
     fn update(q: ztg.Query(.{ Mover, ztg.base.Transform })) void {
         for (q.items(0), q.items(1)) |m, tr| {
-            tr.pos.addEql(m.dir.mul(m.speed));
+            tr.translate(m.dir.mul(m.speed));
         }
     }
 };
@@ -102,14 +102,14 @@ pub fn main() !void {
     var world = try MyWorld.init(alloc);
     defer world.deinit();
 
-    // runs the .pre_load, .load, and .post_load stages.
-    try world.runLoadStages();
+    // runs the .load stage
+    try world.runStage(.load);
 
-    // runs the .pre_update, .update, and .post_update stages.
-    try world.runUpdateStages();
+    // runs the .update stage
+    try world.runStage(.update);
 
     std.debug.print("Next frame!\n", .{});
 
     // ditto
-    try world.runUpdateStages();
+    try world.runStage(.update);
 }

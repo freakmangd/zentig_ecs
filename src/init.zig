@@ -4,6 +4,8 @@ pub usingnamespace @import("ecs.zig");
 pub usingnamespace @import("query.zig");
 
 pub const math = @import("math/init.zig");
+pub const zmath = @import("zmath");
+
 pub const Vec2 = @import("math/vec2.zig").Vec2;
 pub const Vec3 = @import("math/vec3.zig").Vec3;
 pub const Vec4 = @import("math/vec4.zig").Vec4;
