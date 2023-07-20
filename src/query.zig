@@ -1,7 +1,9 @@
 const std = @import("std");
-const Entity = @import("ecs.zig").Entity;
-const TypeBuilder = @import("type_builder.zig");
-const TypeMap = @import("type_map.zig");
+const ztg = @import("init.zig");
+
+const meta = ztg.meta;
+const Entity = ztg.Entity;
+const TypeMap = ztg.meta.TypeMap;
 
 /// Takes tuple of types: `.{ Player, Position, Sprite }` and returns
 /// an object that can be used to iterate through entities that have all of those components
@@ -34,37 +36,16 @@ pub fn QueryOpts(comptime query_types_raw: anytype, comptime _options: anytype) 
             break :blk false;
         };
 
-        // remove entites from query types
-        const types_tuple = blk: {
-            var req: TypeMap = .{};
-            var opt: TypeMap = .{};
-            var r_utps: []const TypeMap.UniqueTypePtr = &.{};
-            var o_utps: []const TypeMap.UniqueTypePtr = &.{};
-            var is_opt = [_]bool{false} ** query_types_raw.len;
-
-            for (query_types_raw, 0..) |QT, i| {
-                if (QT == Entity) continue;
-
-                if (@typeInfo(QT) == .Optional) {
-                    if (opt.has(std.meta.Child(QT))) @compileError("Cannot use the same type twice in a Query.");
-                    opt.append(std.meta.Child(QT));
-                    o_utps = o_utps ++ [_]TypeMap.UniqueTypePtr{TypeMap.uniqueTypePtr(std.meta.Child(QT))};
-                    is_opt[i] = true;
-                } else {
-                    if (req.has(QT)) @compileError("Cannot use the same type twice in a Query.");
-                    req.append(QT);
-                    r_utps = r_utps ++ [_]TypeMap.UniqueTypePtr{TypeMap.uniqueTypePtr(QT)};
-                }
-            }
-
-            if (req.types.len == 0 and opt.types.len > 0) @compileError("Cannot have a query for only optional types.");
-            break :blk .{ req, r_utps, opt, o_utps, is_opt };
-        };
+        const types_tuple = getRawTypesInfo(query_types_raw);
         pub const req_types = types_tuple[0];
         pub const req_utps = types_tuple[1];
         pub const opt_types = types_tuple[2];
         pub const opt_utps = types_tuple[3];
         pub const is_optional = types_tuple[4];
+
+        const options_tuple = getOptionsInfo(options);
+        pub const with_utps = options_tuple[0];
+        pub const without_utps = options_tuple[1];
 
         comp_ptrs: [req_types.types.len][]*anyopaque,
         opt_ptrs: [opt_types.types.len][]?*anyopaque,
@@ -87,11 +68,13 @@ pub fn QueryOpts(comptime query_types_raw: anytype, comptime _options: anytype) 
                     v.* = null;
                 }
             }
+
             return self;
         }
 
-        pub fn deinit(self: *Self, alloc: std.mem.Allocator) void {
-            for (self.comp_ptrs) |comp| alloc.free(comp);
+        pub fn deinit(self: *const Self, alloc: std.mem.Allocator) void {
+            for (self.comp_ptrs) |ptrs| alloc.free(ptrs);
+            for (self.opt_ptrs) |ptrs| alloc.free(ptrs);
             if (has_entities) alloc.free(self.entities);
         }
 
@@ -105,7 +88,7 @@ pub fn QueryOpts(comptime query_types_raw: anytype, comptime _options: anytype) 
         ///   img.drawAt(tr.pos);
         /// }
         /// ```
-        pub fn items(self: *const Self, comptime idx: usize) Items(idx) {
+        pub inline fn items(self: *const Self, comptime idx: usize) Items(idx) {
             const OutChildType = query_types_raw[idx];
 
             if (comptime OutChildType == Entity) return self.entities[0..self.len];
@@ -129,7 +112,7 @@ pub fn QueryOpts(comptime query_types_raw: anytype, comptime _options: anytype) 
         /// const tr = q.single(0);
         /// std.debug.print("Player is located at {d}, {d}.", .{ tr.pos.x, tr.pos.y });
         /// ```
-        pub fn single(self: *const Self, comptime idx: usize) Single(idx) {
+        pub inline fn single(self: *const Self, comptime idx: usize) Single(idx) {
             const OutChildType = query_types_raw[idx];
 
             if (comptime OutChildType == Entity) {
@@ -148,7 +131,7 @@ pub fn QueryOpts(comptime query_types_raw: anytype, comptime _options: anytype) 
             @compileError(std.fmt.comptimePrint("Index {} could not be resolved", .{idx}));
         }
 
-        pub fn first(self: *const Self, comptime idx: usize) Single(idx) {
+        pub inline fn first(self: *const Self, comptime idx: usize) Single(idx) {
             const OutChildType = query_types_raw[idx];
 
             if (comptime OutChildType == Entity) return self.entities[0];
@@ -172,11 +155,59 @@ pub fn QueryOpts(comptime query_types_raw: anytype, comptime _options: anytype) 
         }
 
         fn Single(comptime idx: usize) type {
+            if (comptime idx >= query_types_raw.len) @compileError("Index for query outside of query types range.");
             if (comptime query_types_raw[idx] == Entity) return Entity;
             if (comptime @typeInfo(query_types_raw[idx]) == .Optional) return ?*UnwrapOpt(query_types_raw[idx]);
             return *query_types_raw[idx];
         }
     };
+}
+
+fn getRawTypesInfo(comptime query_types_raw: anytype) struct {
+    TypeMap,
+    []const meta.UniqueTypePtr,
+    TypeMap,
+    []const meta.UniqueTypePtr,
+    [query_types_raw.len]bool,
+} {
+    var req: TypeMap = .{};
+    var opt: TypeMap = .{};
+    var r_utps: []const meta.UniqueTypePtr = &.{};
+    var o_utps: []const meta.UniqueTypePtr = &.{};
+    var is_opt = [_]bool{false} ** query_types_raw.len;
+
+    for (query_types_raw, 0..) |QT, i| {
+        // remove entites from query types
+        if (QT == Entity) continue;
+
+        if (@typeInfo(QT) == .Optional) {
+            if (opt.has(std.meta.Child(QT))) @compileError("Cannot use the same type twice in a Query.");
+            opt.append(std.meta.Child(QT));
+            o_utps = o_utps ++ [_]meta.UniqueTypePtr{meta.uniqueTypePtr(std.meta.Child(QT))};
+            is_opt[i] = true;
+        } else {
+            if (req.has(QT)) @compileError("Cannot use the same type twice in a Query.");
+            req.append(QT);
+            r_utps = r_utps ++ [_]meta.UniqueTypePtr{meta.uniqueTypePtr(QT)};
+        }
+    }
+
+    return .{ req, r_utps, opt, o_utps, is_opt };
+}
+
+fn getOptionsInfo(comptime options: anytype) struct { []const meta.UniqueTypePtr, []const meta.UniqueTypePtr } {
+    var w_utps: []const meta.UniqueTypePtr = &.{};
+    var wo_utps: []const meta.UniqueTypePtr = &.{};
+
+    for (options) |OT| {
+        if (@hasDecl(OT, "QueryWith")) {
+            w_utps = w_utps ++ [_]meta.UniqueTypePtr{meta.uniqueTypePtr(OT.QueryWith)};
+        } else if (@hasDecl(OT, "QueryWithout")) {
+            wo_utps = wo_utps ++ [_]meta.UniqueTypePtr{meta.uniqueTypePtr(OT.QueryWithout)};
+        }
+    }
+
+    return .{ w_utps, wo_utps };
 }
 
 fn assertOkQuery(comptime query_types_raw: anytype, comptime options: anytype) void {

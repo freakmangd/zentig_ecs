@@ -9,8 +9,7 @@ const Buttons = enum(usize) {
     space = 0,
 };
 
-// This is a barebones version of an InputWrapper, it is not expected that you
-// make your own, a raylib input wrapper comes built in.
+// This is a barebones version of an InputWrapper.
 //
 // a user made wrapper must have `ButtonType`, `AxisType`, `getButtonPressed`, `getButtonDown`,
 // `getButtonReleased`, and `getAxis`. All errors from functions are passed back through `.update()`
@@ -60,16 +59,16 @@ pub fn main() !void {
     var world = try World.init(alloc);
     defer world.deinit();
 
-    // required to set up Input, specifically `.pre_init` for setup
-    try world.runInitStages();
-    // required to update Input, specifically `.pre_update` for reading input
-    try world.runUpdateStages();
+    // required to set up Input
+    try world.runStage(.load);
+    // required to update Input
+    try world.runStage(.update);
 
     // `input_state[0].down` is set to `false`
     changeInputState();
 
-    // on the second run, `.pre_update` of Input catches the change and updates the controllers
-    try world.runUpdateStages();
+    // on the second run, Input catches the change and updates the controllers
+    try world.runStage(.update);
 }
 
 const PLAYER_ONE = 0;

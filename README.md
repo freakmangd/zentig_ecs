@@ -2,13 +2,17 @@
 A Zig ECS library. 
 
 Zentig is designed for scalability and ease of use, while staying out of your way.
-It's heavily inspired by everything that makes [bevy_ecs](https://github.com/bevyengine/bevy) so great.
+It's heavily inspired by everything that makes [bevy_ecs](https://github.com/bevyengine/bevy)
+so great and [Unity](https://unity.com/) so approachable.
 
 ### WARNING:
 It is not recommended to use zentig for anything major in it's current state.
 While functional, it is still very obtuse and not optimized as it lacks real testing.
 
+That being said, if you encounter any issues please feel free to open an issue!
+
 ## Installation
+### Local
 ```cmd
 cd dir_with_build_dot_zig_file
 git clone https://github.com/freakmangd/zentig_ecs.git lib/zentig_ecs
@@ -16,10 +20,39 @@ git clone https://github.com/freakmangd/zentig_ecs.git lib/zentig_ecs
 
 `build.zig`
 ```zig
-@import("lib/zentig_ecs/lib.zig").addAsPackage("zentig", exe);
+// Other libraries use `ztg` for linking
+const ztg = @import("lib/zentig_ecs/build.zig").addAsModule("zentig", b, exe, target, optimize, .{});
 ```
 
-## Simple
+### Package Manager
+The zig package manager is in very early stages so this is a (semi) convoluted process!
+#### Getting the full commit SHA of latest master
+Run this command in your terminal: `git ls-remote https://github.com/freakmangd/zentig_ecs HEAD`.
+
+The output will be something like `[LONG STRING OF CHARACTERS AND NUMBERS] HEAD`.
+
+The "long string of characters and numbers" is the full commit SHA of the latest master branch.
+#### Adding to your project
+To your `build.zig.zon` add the lines in the `dependencies` object.
+```zig
+// Your dependencies object
+.dependencies = .{
+    // Add this
+    .zentig = .{
+        .url = "https://github.com/freakmangd/zentig_ecs/archive/[FULL COMMIT SHA].tar.gz",
+    },
+    // ...
+},
+```
+Then run `zig build` to get the `hash`, it will be in a compile error note.
+Then update your `build.zig.zon` to include the `hash` next to the `url` field.
+```zig
+.url = "https://github.com/freakmangd/zentig_ecs/archive/[FULL COMMIT SHA].tar.gz",
+// add here
+.hash = "[HASH ZIG GAVE YOU]",
+```
+
+## Overview
 
 An entity is just a `usize`:
 ```zig
@@ -45,9 +78,9 @@ pub fn playerSpeak(q: ztg.Query(.{Player}, .{})) !void {
 Registering systems/components into a world:
 ```zig
 const MyWorld = blk: {
-  var wb = ztg.WorldBuilder.init(.{});
-  wb.addComponents(.{Player});
-  wb.addUpdateSystems(.{playerSpeak});
+  var wb = ztg.WorldBuilder.init(&.{});
+  wb.addComponents(&.{Player});
+  wb.addSystemsToStage(.update, .{playerSpeak});
   break :blk wb.Build();
 };
 ```
@@ -57,9 +90,9 @@ Calling systems is easily integratable into your game framework:
 test "running systems" {
   var world = MyWorld.init(testing.allocator);
 
-  world.runInitStages();
-  world.runUpdateStages();
-  world.runDrawStages();
+  world.runStage(.load);
+  world.runStage(.update);
+  world.runStage(.draw);
   
   // Support for user defined stages
   world.runStageList(&.{ .post_process, .pre_reset, .post_mortem });
@@ -68,98 +101,41 @@ test "running systems" {
 
 ## Scalability
 The `.include()` function in `WorldBuilder` makes it easy to compartmentalize your game systems.
+As well as integrate third party libraries with only one extra line!
 
 `main.zig`:
 ```zig
-// --snip--
 // .include() looks for a `pub fn include(comptime *WorldBuilder) (!)void` def in each struct
 // if the function errors, it's a compile error. But the signature can return either `!void` or `void`
-  wb.include(.{
-    ztg.base,
-    @include("player.zig"),
-  });
-// --snip
+wb.include(&.{
+  ztg.base,
+  @include("player.zig"),
+  @include("my_library"),
+});
 ```
 
 `player.zig`:
 ```zig
-pub fn include(comptime wb: *WorldBuilder) anyerror!void {
+pub fn include(comptime wb: *ztg.WorldBuilder) void {
   wb.addComponents(.{ Player, PlayerGun, PlayerHUD });
   wb.addSystemsToStage(.update, .{ update_player, update_gun, update_hud });
-  wb.include(...);
 }
 ```
 
-## Full Example
+`my_library/init.zig`:
 ```zig
-const std = @import("std");
-const ztg = @import("zentig");
-
-// This would most likely be a player.zig file instead
-const player = struct {
-  // This is called when passed into a .include() call on a WorldBuilder
-  pub fn include(comptime wb: *ztg.WorldBuilder) void {
-    // All components used in the world must be added before .Build() is called on the WorldBuilder
-    wb.addComponents(.{Player});
-    // Adds a system to the UPDATE stage of the world, systems can only be added during comptime
-    wb.addUpdateSystems(.{playerSpeak});
-  }
-  
-  // A basic component
-  pub const Player = struct {
-    name: []const u8,
-  };
-  
-  // A "Bundle" is just a name for a predetermined list of Components,
-  // it's really just so you dont forget to add something when making entities
-  pub const PlayerBundle = struct {
-    Player,
-    ztg.base.Transform,
-  };
-  
-  // A basic system
-  pub fn playerSpeak(query: ztg.Query(.{Player, ztg.base.Transform}, .{})) !void {
-    // Query is a wrapper for MultiArrayList, where all the types you passed into the
-    // original tuple get indexed as "a" through "z".
-    for (query.items(.a), query.items(.b)) |plr, trn| {
-      std.debug.print("My name is {s}, and I'm located at {} {}.\n", .{plr.name, trn.pos.x, trn.pos.y});
-    }
-  }
-};
-
-// Constructing the world type must be done at comptime.
-// `.init(anytype)` passes `anytype` to `.include(anytype)`
-const MyWorld = ztg.WorldBuilder.init(.{
-  ztg.base,
-  player,
-}).Build();
-
-pub fn main() !void {
-  var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
-  const alloc = gpa.allocator();
-
-  var world = try MyWorld.init(alloc);
-  defer world.deinit();
-
-  // Create a new entity for the player
-  const player_ent = try world.newEnt();
-  
-  // Use the PlayerBundle struct as a blueprint
-  try world.giveEntMany(player_ent, player.PlayerBundle{
-    .{ .name = "Player" },
-    .{ .pos = ztg.Vec3.init(10, 10, 10) },
+pub fn include(comptime wb: *ztg.WorldBuilder) void {
+  wb.include(&.{
+      ztg.base, // Namespaces can be included more than once to "ensure" they are included
+      //...
   });
-
-  // runs all the functions added to the UPDATE stage
-  try world.runStage(.update);
 }
 ```
 
-Output:
-```
-My name is Player, and I'm located at 1.0e+01 1.0e+01.
-```
+## Full Examples
+See full examples in the [examples folder](https://github.com/freakmangd/zentig_ecs/tree/main/examples).
 
-## Raylib Support (WIP)
+## Raylib Support
 
-Zentig comes packed in with useful components around Raylib.
+While it is easy to get started with a raylib with just zentig_ecs, I've created a library that
+wraps common components and provides systems that act on those components [here](

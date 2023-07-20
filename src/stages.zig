@@ -1,78 +1,92 @@
 const std = @import("std");
-const util = @import("util.zig");
-const Commands = @import("commands.zig");
+const ztg = @import("init.zig");
+
 const Allocator = std.mem.Allocator;
-const StageDef = @import("init.zig").WorldBuilder.StageDef;
-const TypeBuilder = @import("type_builder.zig");
+const Commands = ztg.Commands;
+const StageDef = ztg.WorldBuilder.StageDef;
+const TypeBuilder = ztg.meta.TypeBuilder;
 
 pub fn Init(comptime stage_defs: []const StageDef, comptime World: type) type {
     const Inner = CompileStagesList(stage_defs);
+    const inner = Inner{};
 
     return struct {
         // inner: struct {
-        //   UPDATE: tuple {
-        //     fn (Alloc, Query(...)) anyerror!void = @import("...").system_fn,
-        //     fn (Alloc, Query(...), Query(...)) anyerror!void = @import("...").system_fn,
+        //   UPDATE: struct {
+        //     body: struct {
+        //       before: tuple {
+        //       },
+        //       during: tuple {
+        //         fn (Alloc, Query(...)) anyerror!void = @import("...").system_fn,
+        //         fn (Alloc, Query(...), Query(...)) anyerror!void = @import("...").system_fn,
+        //       },
+        //       after: tuple {
+        //       },
+        //     },
         //     ...
         //   },
         //   ...
         // }
-        inner: Inner,
-
         pub const StageField = std.meta.FieldEnum(Inner);
 
-        pub fn runStage(comptime this: @This(), world: *World, comptime stage_field: StageField) anyerror!void {
-            const stage = @field(this.inner, std.meta.fieldInfo(Inner, stage_field).name);
+        pub fn runStage(world: *World, comptime stage_field: StageField, comptime catch_errs: bool, comptime errCallback: if (catch_errs) fn (anyerror) void else void) !void {
+            const stage = @field(inner, std.meta.fieldInfo(Inner, stage_field).name);
 
-            inline for (std.meta.fields(@TypeOf(stage))) |stage_field_info| {
-                var args = try world.initParamsForSystem(@typeInfo(stage_field_info.type).Fn.params);
-                defer world.deinitParamsForSystem(&args);
-
-                if (comptime util.canReturnError(stage_field_info.type)) {
-                    try @call(.auto, @field(stage, stage_field_info.name), args);
-                } else {
-                    @call(.auto, @field(stage, stage_field_info.name), args);
-                }
-
-                try world.postSystemCleanup();
+            inline for (std.meta.fields(@TypeOf(stage))) |label_info| {
+                try runSystemTuple(label_info.type.before, world, catch_errs, errCallback);
+                try runSystemTuple(label_info.type.during, world, catch_errs, errCallback);
+                try runSystemTuple(label_info.type.after, world, catch_errs, errCallback);
             }
         }
 
-        pub fn runStageCatchErrors(comptime this: @This(), world: *World, comptime stage_field: StageField, comptime errCallback: fn (anyerror) void) !void {
-            const stage = @field(this.inner, std.meta.fieldInfo(Inner, stage_field).name);
+        inline fn runSystemTuple(systems: anytype, world: *World, comptime catch_errs: bool, comptime errCallback: if (catch_errs) fn (anyerror) void else void) !void {
+            inline for (systems) |sys| {
+                const System = @TypeOf(sys);
 
-            inline for (std.meta.fields(@TypeOf(stage))) |stage_field_info| {
-                var args = try world.initParamsForSystem(@typeInfo(stage_field_info.type).Fn.params);
+                var args = try world.initParamsForSystem(@typeInfo(System).Fn.params);
                 defer world.deinitParamsForSystem(&args);
 
-                if (comptime util.canReturnError(stage_field_info.type)) {
-                    @call(.auto, @field(stage, stage_field_info.name), args) catch |err| {
-                        errCallback(err);
-                    };
+                if (comptime ztg.meta.canReturnError(System)) {
+                    if (comptime catch_errs) {
+                        @call(.auto, sys, args) catch |err| {
+                            errCallback(err);
+                        };
+                    } else {
+                        try @call(.auto, sys, args);
+                    }
                 } else {
-                    @call(.auto, @field(stage, stage_field_info.name), args);
+                    @call(.auto, sys, args);
                 }
 
-                try world.postSystemCleanup();
+                try world.postSystemUpdate();
             }
         }
 
-        pub fn runStageRuntime(comptime this: @This(), world: *World, stage_name: []const u8) anyerror!void {
-            inline for (std.meta.fields(Inner)) |field| {
+        pub fn runStageRuntime(world: *World, stage_name: []const u8) anyerror!void {
+            inline for (std.meta.fields(Inner), 0..) |field, i| {
                 if (std.mem.eql(u8, field.name, stage_name)) {
-                    try runStage(this, world, @as(StageField, @enumFromInt(std.meta.fieldIndex(Inner, field.name).?)));
-                    break;
+                    return runStage(world, @enumFromInt(i), false, void{});
                 }
             }
+            std.debug.panic("Cannot find stage {s} in stage list.", .{stage_name});
         }
     };
 }
 
 fn CompileStagesList(comptime stage_defs: []const StageDef) type {
-    var final = TypeBuilder.init(false, .Auto);
-    for (stage_defs) |sdef| {
-        const Stage = sdef.def.Build();
-        final.addField(sdef.name, Stage, &Stage{});
+    var stages_list = TypeBuilder{};
+    inline for (stage_defs) |sdef| {
+        var stage = TypeBuilder{};
+        inline for (sdef.labels) |label| {
+            const Label = struct {
+                const before = label.before.Build(){};
+                const during = label.during.Build(){};
+                const after = label.after.Build(){};
+            };
+            stage.addField(label.name, Label, &Label{});
+        }
+        const Stage = stage.Build();
+        stages_list.addField(sdef.name, Stage, &Stage{});
     }
-    return final.Build();
+    return stages_list.Build();
 }

@@ -43,22 +43,22 @@ pub fn init(comptime Self: type) type {
             return unsigned * sign;
         }
 
-        pub inline fn direction(orig: Self, to: Self) Self {
-            return Self.subtract(to, orig).getNormalized();
+        pub inline fn directionTo(orig: Self, to: Self) Self {
+            return Self.sub(to, orig).getNormalized();
         }
 
         pub inline fn distance(a: Self, b: Self) f32 {
-            return Self.length(Self.subtract(a, b));
+            return Self.length(Self.sub(a, b));
         }
 
         pub inline fn getNormalized(self: Self) Self {
             const m = Self.length(self);
             if (m == 0) return self;
-            return Self.divide(self, m);
+            return Self.div(self, m);
         }
 
         pub inline fn moveTowards(orig: Self, to: Self, max_dist: f32) Self {
-            const to_vec = Self.subtract(to, orig);
+            const to_vec = Self.sub(to, orig);
             const sqr_dist = Self.sqrLength(to_vec);
 
             if (sqr_dist < math.floatEps(f32) or (max_dist >= 0 and sqr_dist <= max_dist * max_dist)) return to;
@@ -70,12 +70,12 @@ pub fn init(comptime Self: type) type {
         }
 
         pub inline fn project(a: Self, b: Self) Self {
-            return Self.multiply(b, Self.dot(a, b) / Self.dot(b, b));
+            return Self.mul(b, Self.dot(a, b) / Self.dot(b, b));
         }
 
         pub inline fn reflect(dir: Self, normal: Self) Self {
             const factor = -2 * Self.dot(dir, normal);
-            return Self.add(dir, Self.multiply(dir, factor));
+            return Self.add(dir, Self.mul(dir, factor));
         }
 
         /// Returns a copy of `vec` with it's length clamped to max_len
@@ -84,8 +84,8 @@ pub fn init(comptime Self: type) type {
 
             if (sqr_len > max_len * max_len) {
                 const len = math.sqrt(sqr_len);
-                const normalized = Self.divide(vec, len);
-                return Self.multiply(normalized, max_len);
+                const normalized = Self.div(vec, len);
+                return Self.mul(normalized, max_len);
             }
 
             return vec;
@@ -93,7 +93,21 @@ pub fn init(comptime Self: type) type {
     };
 }
 
-const Vec2 = @import("vec2.zig");
+pub fn convertFieldToF32(obj: anytype, comptime field_name: []const u8, default: f32) f32 {
+    const O = @TypeOf(obj);
+    const fi = std.meta.fieldIndex(O, field_name) orelse return default;
+
+    const FieldType = std.meta.fields(O)[fi].type;
+    return switch (@typeInfo(FieldType)) {
+        .Int => @floatFromInt(@field(obj, field_name)),
+        .Float => @floatCast(@field(obj, field_name)),
+        .ComptimeFloat => @field(obj, field_name),
+        .ComptimeInt => @field(obj, field_name),
+        else => @compileError("Cannot convert type " ++ @typeName(FieldType) ++ " to f32."),
+    };
+}
+
+const Vec2 = @import("vec2.zig").Vec2;
 
 test "angle" {
     const v = Vec2.right();
@@ -106,7 +120,7 @@ test "direction" {
     const v0 = Vec2.zero();
     const v1 = Vec2.right();
 
-    try std.testing.expect(v0.direction(v1).equals(Vec2.right()));
+    try std.testing.expect(v0.directionTo(v1).equals(Vec2.right()));
 }
 
 test "getNormalized" {}

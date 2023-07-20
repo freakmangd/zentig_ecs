@@ -1,0 +1,19 @@
+NEEDS TO BE DONE:
+
+Stage ordering
+    wb.addStages(.{
+        .init = .{ ztg.before(.body, preinit_loadTextures) }, // <- built-in .body label that stages are added to by default
+        .update = .{ ztg.label(.get_input, getInput), ztg.after(.get_input, playerUpdate) },
+    });
+
+NICE TO HAVE:
+
+Level Management:
+Store component by type name and have lookup table in file?
+Comptime string hashmap to convert names into compontent_utps
+
+Change ComponentArray to use the enum NULL syntax
+
+???:
+
+Crashes when using c_allocator, but not gpa

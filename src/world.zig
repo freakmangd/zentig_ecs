@@ -1,132 +1,116 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const util = @import("util.zig");
-const TypeMap = @import("type_map.zig");
-const TypeBuilder = @import("type_builder.zig");
-const ecs = @import("ecs.zig");
-const Commands = @import("commands.zig");
+const ztg = @import("init.zig");
 const ea = @import("entity_array.zig");
 const ca = @import("component_array.zig");
-const profiler = @import("profiler.zig");
-const Allocator = std.mem.Allocator;
 
-// Level Management:
-// Store component by type name and have lookup table in file?
-// Comptime string hashmap to convert names into compontent_utps
+const Allocator = std.mem.Allocator;
+const TypeMap = ztg.meta.TypeMap;
+const TypeBuilder = ztg.meta.TypeBuilder;
+
+pub const CommandsGiveEntError = error{UnregisteredComponent} || ca.Error;
 
 const WorldInfo = struct {
-    main_alloc: if (builtin.mode == .Debug) std.heap.GeneralPurposeAllocator(.{ .stack_trace_frames = 12 }) else void,
-    arena: std.heap.ArenaAllocator,
-    rand: std.rand.DefaultPrng,
+    const use_c_alloc = false;
+
+    alloc: std.mem.Allocator,
+    frame_arena: std.heap.ArenaAllocator = undefined,
+    rng: std.rand.DefaultPrng,
+
+    fn init(alloc: std.mem.Allocator) !*WorldInfo {
+        var self = try alloc.create(WorldInfo);
+        self.* = .{
+            .alloc = alloc,
+            .rng = std.rand.DefaultPrng.init(@bitCast(std.time.milliTimestamp())),
+        };
+        self.frame_arena = std.heap.ArenaAllocator.init(self.allocator());
+        return self;
+    }
 
     fn deinit(self: *WorldInfo) void {
-        if (comptime builtin.mode == .Debug) _ = self.main_alloc.deinit();
-        self.arena.deinit();
+        self.frame_arena.deinit();
+        self.alloc.destroy(self);
+    }
+
+    inline fn allocator(self: *WorldInfo) std.mem.Allocator {
+        return if (comptime use_c_alloc) std.heap.c_allocator else self.alloc;
     }
 };
 
-pub fn worldInfo() WorldInfo {
-    return .{
-        .main_alloc = blk: {
-            if (comptime builtin.mode == .Debug) {
-                break :blk std.heap.GeneralPurposeAllocator(.{ .stack_trace_frames = 12 }){};
-            } else {
-                break :blk void{};
-            }
-        },
-        .arena = undefined,
-        .rand = std.rand.DefaultPrng.init(@bitCast(std.time.milliTimestamp())),
-    };
-}
-
 pub fn World(comptime wb: WorldBuilder) type {
-    comptime {
-        if (wb.max_entities == 0) @compileError("Cannot have max_ents == 0.");
-    }
+    if (wb.max_entities == 0) @compileError("Cannot have max_ents == 0.");
 
     const Resources = wb.resources.Build();
     const MinEntityIndex = std.meta.Int(.unsigned, @typeInfo(std.math.IntFittingRange(0, wb.max_entities)).Int.bits + 1);
-
     const comp_types_len = wb.comp_types.types.len;
 
     return struct {
         const Self = @This();
 
         const StagesList = @import("stages.zig").Init(wb.stage_defs, Self);
-        const stages_list = StagesList{ .inner = .{} };
 
         const ComponentArray = ca.ComponentArray(MinEntityIndex, wb.max_entities);
         const EntityArray = ea.EntityArray(wb.max_entities);
 
-        alloc: Allocator,
         info: *WorldInfo,
 
+        alloc: Allocator,
         frame_arena: *std.heap.ArenaAllocator,
-        frame_alloc: Allocator = undefined,
+        frame_alloc: Allocator,
+        rand: std.rand.Random,
 
-        next_ent: ecs.Entity = 0,
+        next_ent: ztg.Entity = 0,
         entities: EntityArray,
 
         comp_arrays: [comp_types_len]ComponentArray = undefined,
-
         resources: Resources = .{},
-        event_pools: EventPools(wb.event_types),
-        commands_vtable: Commands.Vtable,
 
-        changes_list: ChangesList = undefined,
-        changes_queue: ChangeQueue = undefined,
+        event_pools: EventPools(wb.event_types),
+        changes_list: ChangesList,
+        changes_queue: ChangeQueue,
 
         /// User must call `.deinit()` once the world is to be descoped. (in a defer block preferrably)
         /// All systems that request an `Allocator` will get the one passed here.
         ///
-        /// Also runs the `.setup` stage, useful for things that will only run once and need to be done before
+        /// Also runs the `.init` stage, useful for things that will only run once and need to be done before
         /// anything else, without relying on most anything else (Allocator and Random are available).
         ///
         /// Example:
         /// ```zig
-        /// var wi = ztg.worldInfo();
-        /// var world = MyWorld.init(&wi);
+        /// var world = MyWorld.init(alloc);
         /// defer world.deinit();
         /// ```
-        pub fn init(info: *WorldInfo) !Self {
+        pub fn init(allocator: std.mem.Allocator) !Self {
             if (comptime builtin.mode == .Debug) {
-                //std.debug.print("Entity has utp {}\n", .{TypeMap.uniqueTypePtr(ecs.Entity)});
+                //std.debug.print("Entity has utp {}\n", .{ztg.meta.uniqueTypePtr(ztg.Entity)});
                 //inline for (wb.comp_types.types) |T| {
                 //    @setEvalBranchQuota(20_000);
-                //    std.debug.print("{s} has utp {}\n", .{ @typeName(T), TypeMap.uniqueTypePtr(T) });
+                //    std.debug.print("{s} has utp {}\n", .{ @typeName(T), ztg.meta.uniqueTypePtr(T) });
                 //}
 
                 if (wb.warnings.len > 0)
-                    std.log.warn("\n====== World was constructed with warnings: ======\n" ++ wb.warnings, .{});
+                    ztg.log.warn("\n====== World was constructed with warnings: ======\n" ++ wb.warnings, .{});
             }
 
-            const alloc = blk: {
-                break :blk if (comptime builtin.mode == .Debug) info.main_alloc.allocator() else std.heap.c_allocator;
-            };
-            info.arena = std.heap.ArenaAllocator.init(alloc);
+            var info = try WorldInfo.init(allocator);
 
-            var self = Self{
+            const alloc = info.allocator();
+            const frame_alloc = info.frame_arena.allocator();
+
+            var self: Self = .{
                 .alloc = alloc,
                 .info = info,
-                .frame_arena = &info.arena,
-                .frame_alloc = info.arena.allocator(),
+                .frame_arena = &info.frame_arena,
+                .frame_alloc = frame_alloc,
+                .rand = info.rng.random(),
 
                 .entities = EntityArray.init(),
 
-                .commands_vtable = .{
-                    .add_component_fn = Self.commands_giveEnt,
-                    .remove_ent_fn = Self.commands_removeEnt,
-                    .new_ent_fn = Self.commands_newEnt,
-                    .run_stage_fn = Self.commands_runStageFn,
-                    .get_res_fn = Self.commands_getResPtr,
-                    .check_ent_has_fn = Self.commands_checkEntHas,
-                },
-
-                .event_pools = EventPools(wb.event_types){},
+                .event_pools = EventPools(wb.event_types).init(),
+                .changes_list = ChangesList.init(frame_alloc),
+                .changes_queue = ChangeQueue.init(frame_alloc),
             };
-
-            self.changes_list = ChangesList.init(self.frame_alloc);
-            self.changes_queue = ChangeQueue.init(self.frame_alloc);
 
             if (comptime wb.comp_types.types.len > 0) {
                 var last_successful_init_loop: usize = 0;
@@ -143,10 +127,10 @@ pub fn World(comptime wb: WorldBuilder) type {
                 }
             }
 
-            self.getResPtr(Allocator).* = alloc;
-            self.getResPtr(std.rand.Random).* = info.rand.random();
+            self.getResPtr(Allocator).* = allocator;
+            self.getResPtr(std.rand.Random).* = info.rng.random();
 
-            try self.runStage(.setup);
+            try self.runStage(.init);
 
             return self;
         }
@@ -154,33 +138,38 @@ pub fn World(comptime wb: WorldBuilder) type {
         fn deinit_errCallback(comptime msg: []const u8) fn (anyerror) void {
             return struct {
                 fn f(err: anyerror) void {
-                    std.log.err(msg, .{err});
+                    ztg.log.err(msg, .{err});
                 }
             }.f;
         }
 
         pub fn deinit(self: *Self) void {
+            self.postSystemUpdate() catch |err| {
+                ztg.log.err("Found error {} while trying to clean up world for deinit.", .{err});
+            };
             self.cleanForNextFrame();
 
-            self.runStageCatchErrors(.shutdown, deinit_errCallback("Encountered error {} in shutdown stage.")) catch |err| switch (err) {
+            self.runStageCatchErrors(.deinit, deinit_errCallback("Encountered error {} in cleanup stage")) catch |err| switch (err) {
                 error.OutOfMemory => {
-                    std.log.err("Encountered OOM error in shutdown stage. Some systems may not have been run!", .{});
+                    ztg.log.err("Encountered OOM error in deinit stage. Some systems may not have been run!", .{});
                 },
+                else => {},
             };
 
-            self.runStageCatchErrors(.cleanup, deinit_errCallback("Encountered error {} in cleanup stage")) catch |err| switch (err) {
-                error.OutOfMemory => {
-                    std.log.err("Encountered OOM error in cleanup stage. Some systems may not have been run!", .{});
-                },
-            };
-
-            self.event_pools.deinit(self.alloc);
+            self.event_pools.deinit(self.frame_alloc);
             self.changes_queue.deinit();
             self.changes_list.deinit();
 
-            inline for (wb.comp_types.types, &self.comp_arrays) |CT, *c| {
-                if (comptime @hasDecl(CT, "onDestroy")) self.invokeOnDestroyForArray(c, CT);
-                c.deinit();
+            inline for (wb.comp_types.types, &self.comp_arrays) |CT, *comp_arr| {
+                if (comptime @hasDecl(CT, "onRemove")) {
+                    if (comptime @sizeOf(CT) > 0) {
+                        var comp_iter = comp_arr.iterator();
+                        while (comp_iter.nextAs(CT)) |comp| self.invokeOnRemoveForComponent(CT, comp);
+                    } else {
+                        for (0..comp_arr.len()) |_| self.invokeOnRemoveForComponent(CT, &CT{});
+                    }
+                }
+                comp_arr.deinit();
             }
 
             self.info.deinit();
@@ -190,10 +179,10 @@ pub fn World(comptime wb: WorldBuilder) type {
         ///
         /// Example:
         /// ```zig
-        /// world.runStage(.render);
+        /// try world.runStage(.render);
         /// ```
         pub inline fn runStage(self: *Self, comptime stage_id: StagesList.StageField) anyerror!void {
-            try stages_list.runStage(self, stage_id);
+            try StagesList.runStage(self, stage_id, false, void{});
         }
 
         /// For discarding errors in systems so that every system runs. Useful for stages
@@ -202,10 +191,10 @@ pub fn World(comptime wb: WorldBuilder) type {
         ///
         /// Example:
         /// ```zig
-        /// world.runStage(.render);
+        /// try world.runStage(.render);
         /// ```
         pub inline fn runStageCatchErrors(self: *Self, comptime stage_id: StagesList.StageField, comptime errCallback: fn (anyerror) void) !void {
-            return stages_list.runStageCatchErrors(self, stage_id, errCallback);
+            return StagesList.runStage(self, stage_id, true, errCallback);
         }
 
         /// If you are going to run multiple stages in a row, consider `.runStageNameList()`
@@ -215,18 +204,16 @@ pub fn World(comptime wb: WorldBuilder) type {
         /// world.runStageByName("render");
         /// ```
         pub inline fn runStageByName(self: *Self, stage_name: []const u8) anyerror!void {
-            try stages_list.runStageRuntime(self, stage_name);
+            try StagesList.runStageRuntime(self, stage_name);
         }
 
         fn commands_runStageFn(ptr: *anyopaque, stage_name: []const u8) anyerror!void {
             try commandsCast(ptr).runStageByName(stage_name);
         }
 
-        /// If you are going to run builtin pre_X, X, post_X stages, consider `.runInitStages()`, `.runUpdateStages()`, or `.runDrawStages()`
-        ///
         /// Example:
         /// ```zig
-        /// world.runStageList(&.{ .ping_send, .ping_receive, .ping_read });
+        /// try world.runStageList(&.{ .ping_send, .ping_receive, .ping_read });
         /// ```
         pub fn runStageList(self: *Self, comptime stage_ids: []const StagesList.StageField) anyerror!void {
             inline for (stage_ids) |sid| {
@@ -234,11 +221,9 @@ pub fn World(comptime wb: WorldBuilder) type {
             }
         }
 
-        /// If you are going to run builtin pre_X, X, post_X stages, consider `.runInitStages()`, `.runUpdateStages()`, or `.runDrawStages()`
-        ///
         /// Example:
         /// ```zig
-        /// world.runStageList(&.{ "ping_send", "ping_receive", "ping_read" });
+        /// try world.runStageList(&.{ "ping_send", "ping_receive", "ping_read" });
         /// ```
         pub fn runStageNameList(self: *Self, stage_ids: []const []const u8) anyerror!void {
             for (stage_ids) |sid| {
@@ -246,28 +231,8 @@ pub fn World(comptime wb: WorldBuilder) type {
             }
         }
 
-        /// Runs the stages: .pre_init, .init, .post_init
-        pub fn runInitStages(self: *Self) anyerror!void {
-            inline for (.{ .pre_init, .init, .post_init }) |stage| {
-                try runStage(self, stage);
-            }
-        }
-
-        /// Runs the stages: .pre_update, .update, .post_update
-        pub fn runUpdateStages(self: *Self) anyerror!void {
-            inline for (.{ .pre_update, .update, .post_update }) |stage| {
-                try runStage(self, stage);
-            }
-        }
-
-        /// Runs the stages .pre_draw, .draw, .post_draw
-        pub fn runDrawStages(self: *Self) anyerror!void {
-            inline for (.{ .pre_draw, .draw, .post_draw }) |stage| {
-                try runStage(self, stage);
-            }
-        }
-
-        pub fn postSystemCleanup(self: *Self) !void {
+        /// For internal use, do not call
+        pub fn postSystemUpdate(self: *Self) anyerror!void {
             if (comptime comp_types_len == 0) return;
 
             for (self.changes_queue.items) |rem| {
@@ -276,64 +241,62 @@ pub fn World(comptime wb: WorldBuilder) type {
                         var arr = &self.comp_arrays[comp.component_id];
                         try arr.assignData(comp.ent, comp.data);
                     },
-                    .removed_ent => |ent| self.removeEntAndAssociatedComponents(ent),
-                    .removed_component => |comp| _ = self.comp_arrays[comp.component_id].swapRemove(comp.ent),
+                    .removed_ent => |ent| try self.removeEntAndAssociatedComponents(ent),
+                    .removed_component => |rem_comp| {
+                        const utp = self.comp_arrays[rem_comp.component_id].component_utp;
+                        const comp = self.comp_arrays[rem_comp.component_id].get(rem_comp.ent) orelse {
+                            ztg.log.err("Trying to remove a component of type {s} from ent {} when ent does not have that component", .{ wb.comp_types.nameFromUtp(utp), rem_comp.ent });
+                            continue;
+                        };
+                        try self.invokeOnRemoveForComponentByUtp(comp, utp);
+                        self.comp_arrays[rem_comp.component_id].swapRemove(rem_comp.ent);
+                    },
                 }
             }
 
             self.changes_queue.clearAndFree();
         }
 
-        fn removeEntAndAssociatedComponents(self: *Self, ent: ecs.Entity) void {
+        pub fn removeEntAndAssociatedComponents(self: *Self, ent: ztg.Entity) anyerror!void {
             const res = self.entities.swapRemoveEnt(ent);
-            if (res == false) return;
+            if (res == false) {
+                ztg.log.warn("Tried to remove ent {} which does not exist.", .{ent});
+                return;
+            }
 
             for (&self.comp_arrays) |*list| {
                 if (list.get(ent)) |comp| {
-                    self.invokeOnDestroyForComponentByUtp(comp, list.component_utp);
+                    try self.invokeOnRemoveForComponentByUtp(comp, list.component_utp);
                     _ = list.swapRemove(ent);
                 }
             }
         }
 
-        fn invokeOnDestroyForComponent(self: *Self, comptime T: type, comp: if (@sizeOf(T) == 0) void else *T) void {
-            const member_fn_type = comptime util.isMemberFn(T, T.onDestroy);
-            const fn_params = @typeInfo(@TypeOf(T.onDestroy)).Fn.params;
+        fn invokeOnRemoveForComponent(self: *Self, comptime T: type, comp: *T) anyerror!void {
+            const member_fn_type = comptime util.isMemberFn(T, T.onRemove);
+            const fn_params = @typeInfo(@TypeOf(T.onRemove)).Fn.params;
             const params = self.initParamsForSystem(if (comptime member_fn_type != .non_member) fn_params[1..] else fn_params) catch {
                 @panic("Failed to get args for deinit system for type `" ++ @typeName(T) ++ "`.");
             };
 
-            if (comptime @sizeOf(T) > 0) {
-                const member_params = if (comptime member_fn_type != .non_member)
-                    .{if (comptime member_fn_type == .by_value) comp.* else comp}
-                else
-                    .{};
+            const member_params = comptime switch (member_fn_type) {
+                .non_member => .{},
+                .by_value => .{comp.*},
+                .by_ptr => .{comp},
+            };
 
-                @call(.auto, T.onDestroy, member_params ++ params);
+            if (comptime ztg.meta.canReturnError(T.onRemove)) {
+                try @call(.auto, T.onRemove, member_params ++ params);
             } else {
-                if (comptime member_fn_type != .non_member) {
-                    var dummy = T{};
-                    @call(.auto, T.onDestroy, .{&dummy} ++ params);
-                } else {
-                    @call(.auto, T.onDestroy, params);
-                }
+                @call(.auto, T.onRemove, member_params ++ params);
             }
         }
 
-        fn invokeOnDestroyForComponentByUtp(self: *Self, comp: *anyopaque, comp_utp: TypeMap.UniqueTypePtr) void {
+        fn invokeOnRemoveForComponentByUtp(self: *Self, comp: *anyopaque, comp_utp: ztg.meta.UniqueTypePtr) anyerror!void {
             inline for (wb.comp_types.types) |CT| {
-                if (comptime @hasDecl(CT, "onDestroy") and TypeMap.uniqueTypePtr(CT) == comp_utp) {
-                    invokeOnDestroyForComponent(self, CT, if (comptime @sizeOf(CT) == 0) void{} else @ptrCast(@alignCast(comp)));
+                if (comptime @hasDecl(CT, "onRemove") and ztg.meta.uniqueTypePtr(CT) == comp_utp) {
+                    try invokeOnRemoveForComponent(self, CT, if (comptime @sizeOf(CT) == 0) &CT{} else @ptrCast(@alignCast(comp)));
                 }
-            }
-        }
-
-        fn invokeOnDestroyForArray(self: *Self, comp_arr: *ComponentArray, comptime T: type) void {
-            if (comptime @sizeOf(T) > 0) {
-                var comp_iter = comp_arr.iterator();
-                while (comp_iter.nextAs(T)) |comp| self.invokeOnDestroyForComponent(T, comp);
-            } else {
-                for (0..comp_arr.len()) |_| self.invokeOnDestroyForComponent(T, void{});
             }
         }
 
@@ -342,7 +305,7 @@ pub fn World(comptime wb: WorldBuilder) type {
         /// Example:
         ///
         /// ```zig
-        /// try world.runInitStages();
+        /// try world.runLoadStages();
         ///
         /// while(game.isRunning) {
         ///   try world.runUpdateStages();
@@ -353,7 +316,7 @@ pub fn World(comptime wb: WorldBuilder) type {
         pub fn cleanForNextFrame(self: *Self) void {
             self.changes_list.clearAndFree();
             self.event_pools.clear();
-            if (!self.frame_arena.reset(.free_all)) std.log.err("Failed to reset frame arena.", .{});
+            if (!self.frame_arena.reset(.free_all)) ztg.log.err("Failed to reset frame arena.", .{});
         }
 
         /// Returns the next free index for components. Invalidated after hitting the entity limit,
@@ -365,7 +328,7 @@ pub fn World(comptime wb: WorldBuilder) type {
         /// `.crash` => (default) invokes the crash function, which will most likely panic.
         /// `.overwrite_last` => returns the last entity in the entity list, after removing all of its components.
         /// `.overwrite_first` => returns the first entity in the entity list, after removing all of its components
-        pub fn newEnt(self: *Self) Allocator.Error!ecs.Entity {
+        pub fn newEnt(self: *Self) Allocator.Error!ztg.Entity {
             if (self.next_ent + 1 > wb.max_entities) {
                 const new_next_ent = cleanEntList(&self.comp_arrays, &self.entities, &self.changes_list);
 
@@ -384,7 +347,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             return self.next_ent - 1;
         }
 
-        inline fn handleEntOverflow(self: *Self) ecs.Entity {
+        inline fn handleEntOverflow(self: *Self) ztg.Entity {
             switch (wb.on_ent_overflow) {
                 .crash => self.crash(std.fmt.comptimePrint("Exceeded entity limit of {}.", .{wb.max_entities}), .hit_ent_limit),
                 .overwrite_last => {
@@ -400,13 +363,13 @@ pub fn World(comptime wb: WorldBuilder) type {
             }
         }
 
-        fn reuseEntity(self: *Self, ent: ecs.Entity) !void {
+        fn reuseEntity(self: *Self, ent: ztg.Entity) !void {
             self.removeEntAndAssociatedComponents(ent);
             try self.changes_list.append(.{ .added_ent = self.next_ent });
             self.entities.append(ent);
         }
 
-        fn commands_newEnt(ptr: *anyopaque) Allocator.Error!ecs.Entity {
+        fn commands_newEnt(ptr: *anyopaque) Allocator.Error!ztg.Entity {
             return commandsCast(ptr).newEnt();
         }
 
@@ -418,7 +381,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             var old_ents = entities.*;
             entities.reset();
 
-            var next_ent: ecs.Entity = 0;
+            var next_ent: ztg.Entity = 0;
             for (old_ents.constSlice(), 0..) |ent_en, i| {
                 const ent = @intFromEnum(ent_en);
 
@@ -452,17 +415,17 @@ pub fn World(comptime wb: WorldBuilder) type {
         }
 
         /// Queues the removal of all components in lists correlated with `ent`
-        pub fn removeEnt(self: *Self, ent: ecs.Entity) Allocator.Error!void {
+        pub fn removeEnt(self: *Self, ent: ztg.Entity) Allocator.Error!void {
             try self.changes_queue.append(.{ .removed_ent = ent });
             try self.changes_list.append(.{ .removed_ent = ent });
         }
 
-        fn commands_removeEnt(ptr: *anyopaque, ent: ecs.Entity) Allocator.Error!void {
+        fn commands_removeEnt(ptr: *anyopaque, ent: ztg.Entity) Allocator.Error!void {
             try commandsCast(ptr).removeEnt(ent);
         }
 
-        /// Adds a component to the entity `ent`
-        pub fn giveEnt(self: *Self, ent: ecs.Entity, comp: anytype) !void {
+        /// Registers a component to the entity `ent`
+        pub fn giveEnt(self: *Self, ent: ztg.Entity, comp: anytype) anyerror!void {
             if (comptime wb.comp_types.types.len == 0) return;
             const Component = @TypeOf(comp);
             const idx = comptime wb.comp_types.indexOf(Component) orelse @compileError("Tried to add Component " ++ @typeName(Component) ++ ", which was not registred.");
@@ -470,12 +433,28 @@ pub fn World(comptime wb: WorldBuilder) type {
             try self.comp_arrays[idx].assign(ent, comp);
             try self.changes_list.append(.{ .added_component = .{
                 .ent = ent,
-                .component_utp = TypeMap.uniqueTypePtr(Component),
+                .component_utp = ztg.meta.uniqueTypePtr(Component),
             } });
+
+            if (comptime @hasDecl(Component, "onAdded")) {
+                const OnAddedFn = @TypeOf(Component.onAdded);
+
+                const args = blk: {
+                    const params = @typeInfo(OnAddedFn).Fn.params;
+                    const params_start = if (comptime params[0].type.? == ztg.Entity) 1 else 0;
+                    break :blk self.initParamsForSystem(params[params_start..]);
+                };
+
+                if (ztg.util.canReturnError(OnAddedFn)) {
+                    try @call(.auto, Component.onAdded, args);
+                } else {
+                    @call(.auto, Component.onAdded, args);
+                }
+            }
         }
 
         /// Adds every field in the components object to its component list at the Entity index
-        pub fn giveEntMany(self: *Self, ent: ecs.Entity, components: anytype) !void {
+        pub fn giveEntMany(self: *Self, ent: ztg.Entity, components: anytype) !void {
             if (comptime wb.comp_types.types.len == 0) return;
             inline for (std.meta.fields(@TypeOf(components))) |field| {
                 try self.giveEnt(ent, @field(components, field.name));
@@ -483,19 +462,19 @@ pub fn World(comptime wb: WorldBuilder) type {
         }
 
         /// Returns true or false depending on whether `ent` has been assigned a component of type `Component`
-        pub inline fn checkEntHas(self: *Self, ent: ecs.Entity, comptime Component: type) bool {
+        pub inline fn checkEntHas(self: *Self, ent: ztg.Entity, comptime Component: type) bool {
             return self.getEntsComponent(ent, Component) != null;
         }
 
         /// Returns an optional pointer to the component assigned to `ent`
-        pub inline fn getEntsComponent(self: *Self, ent: ecs.Entity, comptime Component: type) ?*anyopaque {
+        pub inline fn getEntsComponent(self: *Self, ent: ztg.Entity, comptime Component: type) ?*anyopaque {
             return self.comp_arrays[comptime wb.comp_types.indexOf(Component)].get(ent);
         }
 
-        fn commands_giveEnt(ptr: *anyopaque, ent: ecs.Entity, component_utp: TypeMap.UniqueTypePtr, data: *const anyopaque) ca.Error!void {
+        fn commands_giveEnt(ptr: *anyopaque, ent: ztg.Entity, component_utp: ztg.meta.UniqueTypePtr, data: *const anyopaque) CommandsGiveEntError!void {
             if (comptime wb.comp_types.types.len == 0) return;
             var self = commandsCast(ptr);
-            const idx = getIndexFromUtp(component_utp) orelse std.debug.panic("Tried to give an entity a component with utp {} but a component with that utp was not registered.", .{component_utp});
+            const idx = wb.comp_types.fromUtp(component_utp) orelse return error.UnregisteredComponent;
 
             var arr = &self.comp_arrays[idx];
 
@@ -519,18 +498,15 @@ pub fn World(comptime wb: WorldBuilder) type {
             } });
         }
 
-        fn commands_checkEntHas(ptr: *anyopaque, ent: ecs.Entity, component_utp: TypeMap.UniqueTypePtr) bool {
-            _ = component_utp;
-            _ = ent;
+        fn commands_checkEntHas(ptr: *anyopaque, ent: ztg.Entity, component_utp: ztg.meta.UniqueTypePtr) bool {
             if (comptime wb.comp_types.types.len == 0) return false;
             var self = commandsCast(ptr);
-            _ = self;
-
-            return false;
+            const idx = wb.comp_types.fromUtp(component_utp) orelse std.debug.panic("Tried to give an entity a component with utp {} but a component with that utp was not registered.", .{component_utp});
+            return self.comp_arrays[idx].contains(ent);
         }
 
         /// Removes component of type `Component` from entity `ent`
-        pub fn removeComponent(self: *Self, ent: ecs.Entity, comptime Component: type) ca.Error!void {
+        pub fn removeComponent(self: *Self, ent: ztg.Entity, comptime Component: type) ca.Error!void {
             if (comptime wb.comp_types.types.len == 0) return;
             try self.changes_queue.append(.{ .removed_component = .{ .ent = ent, .component_id = wb.comp_types.indexOf(Component) } });
         }
@@ -547,123 +523,179 @@ pub fn World(comptime wb: WorldBuilder) type {
             return &@field(self.resources, std.fmt.comptimePrint("{}", .{wb.added_resources.indexOf(T).?}));
         }
 
-        fn commands_getResPtr(ptr: *anyopaque, utp: TypeMap.UniqueTypePtr) *anyopaque {
+        fn commands_getResPtr(ptr: *anyopaque, utp: ztg.meta.UniqueTypePtr) *anyopaque {
             inline for (wb.added_resources.types, 0..) |T, i| {
-                if (TypeMap.uniqueTypePtr(T) == utp) return &@field(commandsCast(ptr).resources, std.fmt.comptimePrint("{}", .{i}));
+                if (ztg.meta.uniqueTypePtr(T) == utp) return &@field(commandsCast(ptr).resources, std.fmt.comptimePrint("{}", .{i}));
             }
             std.debug.panic("Resource with utp {} is not in world.", .{utp});
         }
 
-        const QueryList = struct {
-            array: *ComponentArray,
-            out_idx: usize,
-            is_optional: bool = false,
-            out: union(enum) {
-                req: []*anyopaque,
-                opt: []?*anyopaque,
-            } = undefined,
-        };
+        pub fn commands(self: *Self) ztg.Commands {
+            return .{
+                .ctx = self,
+                .vtable = &.{
+                    .add_component_fn = Self.commands_giveEnt,
+                    .remove_ent_fn = Self.commands_removeEnt,
+                    .new_ent_fn = Self.commands_newEnt,
+                    .run_stage_fn = Self.commands_runStageFn,
+                    .get_res_fn = Self.commands_getResPtr,
+                    .check_ent_has_fn = Self.commands_checkEntHas,
+                },
+            };
+        }
 
         /// The method used for generating queries for systems
         ///
         /// Example:
         /// ```zig
-        /// const q = world.query(ztg.Query(.{ ztg.base.Transform });
+        /// const q = try world.query(ztg.Query(.{ztg.base.Transform});
+        /// for (q.items(0)) |tr| std.debug.print("{d:0.1}\n", .{tr.pos.x});
         /// ```
-        pub fn query(self: *Self, comptime QT: type) !QT {
-            if (QT.has_entities and QT.req_types.types.len == 0) return queryJustEntities(self);
+        pub fn query(self: *Self, alloc: std.mem.Allocator, comptime QT: type) !QT {
+            if (QT.has_entities and QT.req_types.types.len == 0) return self.queryJustEntities(alloc, QT);
 
-            var qlists = try self.initQueryLists(QT.req_utps, QT.opt_utps);
-            var out = try QT.init(self.frame_alloc, qlists[0].array.len());
-            registerQListsOut(qlists, &out);
+            var ents_qlists = try self.initQueryLists(
+                alloc,
+                QT.req_utps,
+                QT.opt_utps,
+                QT.with_utps,
+                QT.without_utps,
+            );
+            const ents = ents_qlists[0];
+            var qlists = ents_qlists[1];
+            defer alloc.free(qlists);
+
+            var out = try QT.init(alloc, ents.len);
+
+            // Link qlists and the result query
+            for (qlists) |*list| {
+                switch (list.*) {
+                    .required => list.required.out = out.comp_ptrs[list.required.out_idx],
+                    .optional => list.optional.out = if (comptime QT.opt_types.types.len > 0) .{ .opt = out.opt_ptrs[list.optional.out_idx] } else unreachable,
+                    else => {},
+                }
+            }
 
             out.len = fillQuery(
+                ents,
                 qlists,
                 if (comptime QT.has_entities) out.entities else null,
-                QT.options,
             );
 
             return out;
         }
 
-        fn initQueryLists(self: *Self, req_utps: []const TypeMap.UniqueTypePtr, opt_utps: []const TypeMap.UniqueTypePtr) ![]QueryList {
-            var smallest: *ComponentArray = self.getListFromUtp(req_utps[0]) orelse std.debug.panic("AKFIJAWF", .{});
-            var smallest_idx: usize = 0;
+        // For queries which the only required type is Entity
+        fn queryJustEntities(self: *Self, alloc: std.mem.Allocator, comptime QT: type) !QT {
+            var out = try QT.init(alloc, self.entities.len);
+            for (out.entities, self.entities.constSlice(), 0..) |*o, ent, i| {
+                if (!self.checkEntAgainstOptions(@intFromEnum(ent), QT.options)) continue;
+                o.* = @intFromEnum(ent);
+                inline for (out.opt_ptrs, QT.opt_types.types) |opt_ptrs, O| opt_ptrs[i] = self.getListOf(O).get(@intFromEnum(ent));
+            }
+            out.len = self.entities.len;
+            return out;
+        }
 
-            var lists = try std.ArrayList(QueryList).initCapacity(self.frame_alloc, req_utps.len + opt_utps.len);
-            lists.appendAssumeCapacity(QueryList{ .array = smallest, .out_idx = 0 });
+        fn checkEntAgainstOptions(self: *Self, ent: ztg.Entity, options: anytype) bool {
+            inline for (options) |OT| {
+                if (@hasDecl(OT, "QueryWith")) {
+                    if (!self.getListOf(OT.QueryWith).contains(ent)) return false;
+                } else if (@hasDecl(OT, "QueryWithout")) {
+                    if (self.getListOf(OT.QueryWithout).contains(ent)) return false;
+                }
+            }
+            return true;
+        }
+
+        const QueryList = union(enum) {
+            required: struct {
+                array: *const ComponentArray,
+                out_idx: usize,
+                out: []*anyopaque = undefined,
+            },
+            optional: struct {
+                array: *const ComponentArray,
+                out_idx: usize,
+                out: []?*anyopaque = undefined,
+            },
+            with: *const ComponentArray,
+            without: *const ComponentArray,
+
+            pub inline fn appendEnt(self: *QueryList, idx: usize, ent: usize) bool {
+                switch (self.*) {
+                    .required => |req| {
+                        req.out[idx] = req.array.get(ent) orelse return false;
+                        return true;
+                    },
+                    .optional => |opt| {
+                        opt.out[idx] = opt.array.get(ent);
+                        return true;
+                    },
+                    .with => |array| return array.contains(ent),
+                    .without => |array| return !array.contains(ent),
+                }
+            }
+        };
+
+        fn initQueryLists(
+            self: *Self,
+            alloc: std.mem.Allocator,
+            req_utps: []const ztg.meta.UniqueTypePtr,
+            opt_utps: []const ztg.meta.UniqueTypePtr,
+            with_utps: []const ztg.meta.UniqueTypePtr,
+            without_utps: []const ztg.meta.UniqueTypePtr,
+        ) !struct { []const ztg.Entity, []QueryList } {
+            var smallest: *ComponentArray = self.assertListFromUtp(req_utps[0]);
+
+            var lists = try std.ArrayList(QueryList).initCapacity(alloc, req_utps.len + opt_utps.len + with_utps.len + without_utps.len);
+            lists.appendAssumeCapacity(QueryList{ .required = .{
+                .array = smallest,
+                .out_idx = 0,
+            } });
 
             for (req_utps[1..], 1..) |utp, i| {
-                const check = self.getListFromUtp(utp) orelse std.debug.panic("FJAWIFJAOWF", .{});
-                lists.appendAssumeCapacity(QueryList{ .array = check, .out_idx = i });
+                const check = self.assertListFromUtp(utp);
+                lists.appendAssumeCapacity(QueryList{ .required = .{
+                    .array = check,
+                    .out_idx = i,
+                } });
 
-                if (check.len() < smallest.len()) {
-                    smallest = check;
-                    smallest_idx = i;
-                }
+                if (check.len() < smallest.len()) smallest = check;
             }
 
             for (opt_utps, 0..) |utp, i| {
-                lists.appendAssumeCapacity(QueryList{ .array = self.getListFromUtp(utp) orelse std.debug.panic("FAJIOFWJWA", .{}), .out_idx = i, .is_optional = true });
+                lists.appendAssumeCapacity(QueryList{ .optional = .{
+                    .array = self.assertListFromUtp(utp),
+                    .out_idx = i,
+                } });
             }
 
-            // move smallest list to front of list
-            const smallest_qlist = lists.swapRemove(smallest_idx);
-            lists.insertAssumeCapacity(0, smallest_qlist);
+            for (with_utps) |utp| {
+                const check = self.assertListFromUtp(utp);
+                lists.appendAssumeCapacity(QueryList{ .with = check });
 
-            return lists.toOwnedSlice();
-        }
-
-        fn registerQListsOut(qlists: []QueryList, query_out: anytype) void {
-            const QT = std.meta.Child(@TypeOf(query_out));
-
-            for (qlists) |*list| {
-                list.out = blk: {
-                    if (list.is_optional) {
-                        if (comptime QT.opt_types.types.len > 0) break :blk .{ .opt = query_out.opt_ptrs[list.out_idx] } else unreachable;
-                    } else {
-                        break :blk .{ .req = query_out.comp_ptrs[list.out_idx] };
-                    }
-                };
+                if (check.len() < smallest.len()) smallest = check;
             }
+
+            for (without_utps) |utp| {
+                const check = self.assertListFromUtp(utp);
+                lists.appendAssumeCapacity(QueryList{ .without = check });
+            }
+
+            return .{ smallest.entities.items, try lists.toOwnedSlice() };
         }
 
-        fn fillQuery(qlists: []const QueryList, entities_out: ?[]ecs.Entity, comptime options: anytype) usize {
-            _ = options;
-
+        fn fillQuery(checked_entities: []const ztg.Entity, qlists: []QueryList, entities_out: ?[]ztg.Entity) usize {
             var len: usize = 0;
-            ents_loop: for (qlists[0].array.entities.items) |ent| {
-                qlists[0].out.req[len] = qlists[0].array.get(ent) orelse {
-                    std.debug.panic("Component list {s} has entity {} registered but has no corresponding component.", .{ wb.comp_types.nameFromUtp(qlists[0].array.component_utp), ent });
-                };
-
-                for (qlists[1..]) |list| {
-                    switch (list.out) {
-                        .req => |o| {
-                            if (list.array.get(ent)) |comp_ptr| {
-                                o[len] = comp_ptr;
-                            } else {
-                                continue :ents_loop;
-                            }
-                        },
-                        .opt => |o| {
-                            o[len] = list.array.get(ent);
-                        },
-                    }
+            ents_loop: for (checked_entities) |ent| {
+                for (qlists) |*list| {
+                    if (!list.appendEnt(len, ent)) continue :ents_loop;
+                    if (entities_out) |eout| eout[len] = ent;
                 }
-
-                if (entities_out) |eout| eout[len] = ent;
                 len += 1;
             }
-
             return len;
-        }
-
-        fn queryJustEntities(self: *Self) !ecs.Query(.{ecs.Entity}) {
-            var out = try ecs.Query(.{ecs.Entity}).init(self.frame_alloc, self.entities.len);
-            for (out.entities, self.entities.constSlice()) |*o, ent| o.* = @intFromEnum(ent);
-            out.len = self.entities.len;
-            return out;
         }
 
         fn InitParamsForSystemOut(comptime params: []const std.builtin.Type.Fn.Param) type {
@@ -677,7 +709,7 @@ pub fn World(comptime wb: WorldBuilder) type {
         ///
         /// Example:
         /// ```zig
-        /// const params = try world.initParamsForSystem(@typeInfo(myFunction).Fn.params);
+        /// const params = try world.initParamsForSystem(@typeInfo(@TypeOf(myFunction)).Fn.params);
         /// defer world.deinitParamsForSystem(params);
         ///
         /// @call(.auto, myFunction, params);
@@ -694,13 +726,10 @@ pub fn World(comptime wb: WorldBuilder) type {
         inline fn initParam(self: *Self, comptime T: type) !T {
             const is_container = comptime std.meta.trait.isContainer(T);
 
-            if (comptime T == Commands) {
-                return Commands{
-                    .ctx = self,
-                    .vtable = &self.commands_vtable,
-                };
+            if (comptime T == ztg.Commands) {
+                return self.commands();
             } else if (comptime is_container and @hasDecl(T, "IsQueryType")) {
-                return self.query(T);
+                return self.query(self.frame_alloc, T);
             } else if (comptime is_container and @hasDecl(T, "EventSendType")) {
                 return .{
                     .alloc = self.frame_alloc,
@@ -710,7 +739,7 @@ pub fn World(comptime wb: WorldBuilder) type {
                 return .{
                     .items = self.event_pools.getPtr(T.EventRecvType).items,
                 };
-            } else if (comptime wb.added_resources.has(util.DerefType(T))) {
+            } else if (comptime wb.added_resources.has(ztg.meta.DerefType(T))) {
                 if (comptime std.meta.trait.isSingleItemPtr(T)) {
                     return self.getResPtr(@typeInfo(T).Pointer.child);
                 } else if (comptime wb.added_resources.has(T)) {
@@ -736,21 +765,21 @@ pub fn World(comptime wb: WorldBuilder) type {
             return &self.comp_arrays[idx];
         }
 
-        inline fn getIndexFromUtp(utp: TypeMap.UniqueTypePtr) ?usize {
-            return wb.comp_types.fromUtp(utp);
+        inline fn getListFromUtp(self: *Self, utp: ztg.meta.UniqueTypePtr) ?*ComponentArray {
+            const idx = wb.comp_types.fromUtp(utp) orelse return null;
+            return &self.comp_arrays[idx];
         }
 
-        inline fn getListFromUtp(self: *Self, utp: TypeMap.UniqueTypePtr) ?*ComponentArray {
-            const idx = getIndexFromUtp(utp) orelse return null;
-            return &self.comp_arrays[idx];
+        inline fn assertListFromUtp(self: *Self, utp: ztg.meta.UniqueTypePtr) *ComponentArray {
+            return self.getListFromUtp(utp) orelse std.debug.panic("Type with utp {} was not registered to world.", .{utp});
         }
 
         inline fn commandsCast(ptr: *anyopaque) *Self {
             return @ptrCast(@alignCast(ptr));
         }
 
-        fn crash(self: *Self, comptime crash_msg: []const u8, r: ecs.CrashReason) noreturn {
-            _ = wb.on_crash_fn(.{ .ctx = self, .vtable = &self.commands_vtable }, r) catch |err| std.debug.panic("onCrashFn errored due to {}", .{err});
+        fn crash(self: *Self, comptime crash_msg: []const u8, r: ztg.CrashReason) noreturn {
+            _ = wb.on_crash_fn(self.commands(), r) catch |err| std.debug.panic("onCrashFn errored due to {}", .{err});
             @panic(crash_msg);
         }
     };
@@ -759,35 +788,35 @@ pub fn World(comptime wb: WorldBuilder) type {
 /// For internal queueing of commands. Cleared after a stage is completed.
 const ChangeQueue = std.ArrayList(union(enum) {
     added_component: struct {
-        ent: ecs.Entity,
+        ent: ztg.Entity,
         component_id: usize,
         data: *const anyopaque,
     },
-    removed_ent: ecs.Entity,
+    removed_ent: ztg.Entity,
     removed_component: struct {
-        ent: ecs.Entity,
+        ent: ztg.Entity,
         component_id: usize,
     },
 });
 
 const ComponentChange = struct {
-    ent: ecs.Entity,
-    component_utp: TypeMap.UniqueTypePtr,
+    ent: ztg.Entity,
+    component_utp: ztg.meta.UniqueTypePtr,
 };
 
 /// For public callback use, e.g. getting added entities this frame. Cleared each frame.
 const ChangesList = std.ArrayList(union(enum) {
-    added_ent: ecs.Entity,
-    removed_ent: ecs.Entity,
+    added_ent: ztg.Entity,
+    removed_ent: ztg.Entity,
     added_component: ComponentChange,
     removed_component: ComponentChange,
 });
 
 fn EventPools(comptime event_tm: TypeMap) type {
     const Inner = blk: {
-        var tb = TypeBuilder.init(false, .Auto);
-        for (event_tm.types, 0..) |T, i| {
-            tb.addField(std.fmt.comptimePrint("{}", .{i}), std.ArrayListUnmanaged(T), &std.ArrayListUnmanaged(T){});
+        var tb = TypeBuilder{ .is_tuple = true };
+        inline for (event_tm.types) |T| {
+            tb.appendTupleField(std.ArrayListUnmanaged(T), null);
         }
         break :blk tb.Build();
     };
@@ -795,7 +824,15 @@ fn EventPools(comptime event_tm: TypeMap) type {
     return struct {
         const Self = @This();
 
-        inner: Inner = .{},
+        inner: Inner,
+
+        pub fn init() Self {
+            var inner: Inner = undefined;
+            inline for (std.meta.fields(Inner), event_tm.types) |field, T| {
+                @field(inner, field.name) = std.ArrayListUnmanaged(T){};
+            }
+            return .{ .inner = inner };
+        }
 
         pub fn deinit(self: *Self, alloc: Allocator) void {
             inline for (std.meta.fields(Inner)) |field| {
@@ -804,8 +841,8 @@ fn EventPools(comptime event_tm: TypeMap) type {
         }
 
         pub fn getPtr(self: *Self, comptime EventType: type) *std.ArrayListUnmanaged(EventType) {
-            if (comptime !event_tm.has(EventType)) @compileError("Event `" ++ @typeName(EventType) ++ "` was not registered.");
-            return &@field(self.inner, Inner_fieldNameOf(EventType));
+            const field_name = comptime std.fmt.comptimePrint("{}", .{event_tm.indexOf(EventType) orelse @compileError("Event `" ++ @typeName(EventType) ++ "` was not registered.")});
+            return &@field(self.inner, field_name);
         }
 
         pub fn clear(self: *Self) void {
@@ -813,16 +850,10 @@ fn EventPools(comptime event_tm: TypeMap) type {
                 @field(self.inner, field.name).clearRetainingCapacity();
             }
         }
-
-        inline fn Inner_fieldNameOf(comptime T: type) []const u8 {
-            return std.fmt.comptimePrint("{}", .{event_tm.indexOf(T).?});
-        }
     };
 }
 
 const testing = std.testing;
-const base = @import("mods/base.zig");
-const physics = @import("mods/physics.zig");
 const WorldBuilder = @import("worldbuilder.zig");
 
 const my_file = struct {
@@ -831,6 +862,14 @@ const my_file = struct {
         win_message: []const u8,
 
         frames: usize = 0,
+
+        fn ini_MyResource(mr: *MyResource) void {
+            mr.win_message = "You did it!";
+        }
+
+        fn up_MyResource(mr: *MyResource) void {
+            mr.frames += 1;
+        }
     };
 
     const MyComponent = struct {
@@ -848,21 +887,15 @@ const my_file = struct {
         wb.addUpdateSystems(.{up_MyComponent});
 
         // Registering/initing resources
-        wb.addSystemsToStage(.setup, .{setup_MyResource});
-        wb.addUpdateSystems(.{up_MyResource});
+        wb.addSystems(.{
+            .init = .{MyResource.ini_MyResource},
+            .update = .{MyResource.up_MyResource},
+        });
         wb.addResource(MyResource, .{ .finish_line = 200, .win_message = undefined });
     }
 
-    fn setup_MyResource(mr: *MyResource) void {
-        mr.win_message = "You did it!";
-    }
-
-    fn up_MyResource(mr: *MyResource) void {
-        mr.frames += 1;
-    }
-
     // systems that error will bubble up the error to the run*Stage call
-    fn up_MyComponent(q: ecs.Query(.{MyComponent}), mr: MyResource) !void {
+    fn up_MyComponent(q: ztg.Query(.{MyComponent}), mr: MyResource) !void {
         for (q.items(0)) |mc| {
             mc.position = try std.math.add(i32, mc.position, mc.speed);
 
@@ -872,18 +905,16 @@ const my_file = struct {
 };
 
 const MyWorld = WorldBuilder.init(&.{
-    base, physics, my_file,
+    ztg.base, ztg.physics, my_file,
 }).Build();
 
 test "creation" {
-    var wi = worldInfo();
-    var world = try MyWorld.init(&wi);
+    var world = try MyWorld.init(std.testing.allocator);
     defer world.deinit();
 }
 
-test "adding entities" {
-    var wi = worldInfo();
-    var world = try MyWorld.init(&wi);
+test "adding/removing entities" {
+    var world = try MyWorld.init(std.testing.allocator);
     defer world.deinit();
 
     // Generally, youd do this by requesting a Commands argument in your system
@@ -893,32 +924,32 @@ test "adding entities" {
         .speed = 100,
     });
 
-    try world.runUpdateStages();
+    try world.runStage(.update);
 
-    var q = try world.query(ecs.Query(.{my_file.MyComponent}));
+    var q = try world.query(std.testing.allocator, ztg.Query(.{my_file.MyComponent}));
+    defer q.deinit(std.testing.allocator);
 
-    try testing.expectEqual(@as(usize, 0), q.items(0)[0].score);
+    try testing.expectEqual(@as(usize, 0), q.single(0).score);
 
-    try world.runUpdateStages();
+    try world.runStage(.update);
 
-    try testing.expectEqual(@as(usize, 1), q.items(0)[0].score);
+    try testing.expectEqual(@as(usize, 1), q.single(0).score);
 
-    try world.removeEnt(ent);
-    try world.postSystemCleanup();
+    try world.removeEntAndAssociatedComponents(ent);
 
-    var q2 = try world.query(ecs.Query(.{my_file.MyComponent}));
+    var q2 = try world.query(std.testing.allocator, ztg.Query(.{my_file.MyComponent}));
+    defer q2.deinit(std.testing.allocator);
 
     try testing.expectEqual(@as(usize, 0), q2.len);
 }
 
 test "resources" {
-    var wi = worldInfo();
-    var world = try MyWorld.init(&wi);
+    var world = try MyWorld.init(std.testing.allocator);
     defer world.deinit();
 
     try testing.expectEqual(@as(usize, 0), world.getRes(my_file.MyResource).frames);
 
-    try world.runUpdateStages();
+    try world.runStage(.update);
 
     try testing.expectEqual(@as(usize, 1), world.getRes(my_file.MyResource).frames);
 
@@ -937,7 +968,7 @@ fn test_addEnt(comp_arrs: []MyWorld.ComponentArray, ent_list: *MyWorld.EntityArr
     next_ent.* += 1;
 }
 
-fn test_removeEnt(comp_arrs: []MyWorld.ComponentArray, ent_list: *MyWorld.EntityArray, ent: ecs.Entity) void {
+fn test_removeEnt(comp_arrs: []MyWorld.ComponentArray, ent_list: *MyWorld.EntityArray, ent: ztg.Entity) void {
     const res = ent_list.swapRemoveEnt(ent);
     if (res == false) return;
 
@@ -982,8 +1013,16 @@ test "cleanEntList" {
 
     try test_addEnt(&comp_arrs, &list, &next_ent, 4);
 
-    try testing.expectEqualSlices(MyWorld.EntityArray.Index, &.{ 0, 1, 2, 3, 4 }, list.constSlice());
-    try testing.expectEqual(@as(?ecs.Entity, 5), next_ent);
+    const Index = MyWorld.EntityArray.Index;
+
+    try testing.expectEqualSlices(MyWorld.EntityArray.Index, &.{
+        @as(Index, @enumFromInt(0)),
+        @as(Index, @enumFromInt(1)),
+        @as(Index, @enumFromInt(2)),
+        @as(Index, @enumFromInt(3)),
+        @as(Index, @enumFromInt(4)),
+    }, list.constSlice());
+    try testing.expectEqual(@as(?ztg.Entity, 5), next_ent);
 
     try testing.expect(comp_arrs[0].contains(0));
     try testing.expectEqual(@as(u8, 0), comp_arrs[0].getAs(u8, 0).?.*);
@@ -991,3 +1030,5 @@ test "cleanEntList" {
     try testing.expect(comp_arrs[0].contains(4));
     try testing.expectEqual(@as(u8, 4), comp_arrs[0].getAs(u8, 4).?.*);
 }
+
+test "events" {}

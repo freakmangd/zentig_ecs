@@ -29,10 +29,12 @@ const game_file = struct {
 const player_file = struct {
     pub fn include(comptime world: *ztg.WorldBuilder) void {
         world.addComponents(&.{ Player, Jetpack, Backpack });
-        world.addSystemsToStage(.init, .{playerSpawn});
-        world.addUpdateSystems(.{playerSpeach});
         world.addStage(.player_update);
-        world.addSystemsToStage(.player_update, .{playerSpecial});
+        world.addSystems(.{
+            .load = .{playerSpawn},
+            .update = .{playerSpeach},
+            .player_update = .{playerSpecial},
+        });
     }
 
     pub const Player = struct {
@@ -81,8 +83,8 @@ const player_file = struct {
         try com.runStage(.player_update);
     }
 
-    fn playerSpecial(q: ztg.Query(.{ Player, game_file.Sprite })) !void {
-        for (q.items(1)) |spr| {
+    fn playerSpecial(q: ztg.QueryOpts(.{game_file.Sprite}, .{ztg.With(Player)})) !void {
+        for (q.items(0)) |spr| {
             try std.testing.expectEqual(@as(usize, 0), spr.img);
         }
     }

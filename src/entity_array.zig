@@ -5,7 +5,7 @@ pub fn EntityArray(comptime size: usize) type {
     return struct {
         const Self = @This();
 
-        const IndexTagType = ecs.util.MinEntInt(size);
+        const IndexTagType = std.math.IntFittingRange(0, size + 1);
         pub const Index = enum(IndexTagType) {
             NULL = std.math.maxInt(IndexTagType),
             _,
@@ -91,7 +91,10 @@ test EntityArray {
 
     try std.testing.expect(!arr.hasEntity(1));
     try std.testing.expectEqual(@as(usize, 2), arr.constSlice().len);
-    try std.testing.expectEqualSlices(EntityArray(10).Index, &.{ 0, 2 }, arr.constSlice());
+    try std.testing.expectEqualSlices(EntityArray(10).Index, &.{
+        @as(EntityArray(10).Index, @enumFromInt(0)),
+        @as(EntityArray(10).Index, @enumFromInt(2)),
+    }, arr.constSlice());
 
     _ = arr.swapRemoveEnt(2);
 

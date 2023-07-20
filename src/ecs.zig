@@ -1,11 +1,5 @@
 const std = @import("std");
 const ztg = @import("init.zig");
-const TypeBuilder = @import("type_builder.zig");
-const TypeMap = @import("type_map.zig");
-
-pub usingnamespace @import("query.zig");
-
-pub const util = @import("util.zig");
 
 pub const Entity = usize;
 
@@ -13,16 +7,42 @@ pub const EntityHandle = struct {
     com: ztg.Commands,
     ent: Entity,
 
-    pub fn giveEnt(self: EntityHandle, comp: anytype) !void {
-        try self.com.giveEnt(comp);
+    pub inline fn giveEnt(self: EntityHandle, comp: anytype) !void {
+        try self.com.giveEnt(self.ent, comp);
     }
 
-    pub fn giveEntMany(self: EntityHandle, comps: anytype) !void {
+    pub inline fn giveEntMany(self: EntityHandle, comps: anytype) !void {
         try self.com.giveEntMany(self.ent, comps);
+    }
+
+    pub inline fn checkEntHas(self: EntityHandle, comptime Comp: type) bool {
+        return self.com.checkEntHas(self.ent, Comp);
     }
 };
 
-//pub const EntityIter = @import("entity_iterator.zig");
+fn StageLabelOffset(comptime _label: @TypeOf(.enum_literal), comptime f: anytype, comptime offset: comptime_int) type {
+    return struct {
+        comptime f: @TypeOf(f) = f,
+        comptime label: @TypeOf(.enum_literal) = _label,
+        comptime offset: comptime_int = offset,
+    };
+}
+
+pub fn stageLabelOffset(comptime _label: @TypeOf(.enum_literal), comptime f: anytype, comptime offset: comptime_int) StageLabelOffset(_label, f, offset) {
+    return .{};
+}
+
+pub fn before(comptime _label: @TypeOf(.enum_literal), comptime f: anytype) StageLabelOffset(_label, f, -1) {
+    return .{};
+}
+
+pub fn label(comptime _label: @TypeOf(.enum_literal), comptime f: anytype) StageLabelOffset(_label, f, 0) {
+    return .{};
+}
+
+pub fn after(comptime _label: @TypeOf(.enum_literal), comptime f: anytype) StageLabelOffset(_label, f, 1) {
+    return .{};
+}
 
 pub fn EventSender(comptime T: type) type {
     return struct {

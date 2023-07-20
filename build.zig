@@ -1,16 +1,54 @@
 const std = @import("std");
-const zentig = @import("lib.zig");
+const zmath = @import("deps/zmath/build.zig");
+
+const ZentigModule = struct {
+    zentig_mod: *std.build.Module,
+    zmath_mod: *std.build.Module,
+    zmath_options_mod: *std.build.Module,
+
+    target: std.zig.CrossTarget,
+    optimize: std.builtin.OptimizeMode,
+
+    b: *std.Build,
+    exe: *std.build.Step.Compile,
+};
 
 pub fn addAsModule(
     name: []const u8,
     b: *std.Build,
     exe: *std.build.Step.Compile,
-) *std.build.Module {
+    target: std.zig.CrossTarget,
+    optimize: std.builtin.OptimizeMode,
+    options: struct { import_zmath_as: ?[]const u8 = null, import_zmath_options_as: ?[]const u8 = null },
+) ZentigModule {
+    const zmath_pkg = zmath.package(b, target, optimize, .{});
+
     const mod = b.createModule(.{
         .source_file = .{ .path = srcdir ++ "/src/init.zig" },
+        .dependencies = &.{
+            .{ .name = "zmath", .module = zmath_pkg.zmath },
+        },
     });
+
+    if (options.import_zmath_as) |impas|
+        exe.addModule(impas, zmath_pkg.zmath);
+
+    if (options.import_zmath_options_as) |impas|
+        exe.addModule(impas, zmath_pkg.zmath_options);
+
     exe.addModule(name, mod);
-    return mod;
+
+    return .{
+        .zentig_mod = mod,
+        .zmath_mod = zmath_pkg.zmath,
+        .zmath_options_mod = zmath_pkg.zmath_options,
+
+        .target = target,
+        .optimize = optimize,
+
+        .b = b,
+        .exe = exe,
+    };
 }
 
 const srcdir = struct {
@@ -23,9 +61,13 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const zmath_pkg = zmath.package(b, target, optimize, .{});
+
     const zentig_mod = b.addModule("zentig", .{
         .source_file = std.Build.FileSource.relative("src/init.zig"),
-        .dependencies = &[_]std.Build.ModuleDependency{},
+        .dependencies = &[_]std.Build.ModuleDependency{
+            .{ .name = "zmath", .module = zmath_pkg.zmath },
+        },
     });
 
     const examples = [_]struct { []const u8, []const u8 }{
@@ -54,6 +96,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     main_tests.addModule("zentig", zentig_mod);
+    main_tests.addModule("zmath", zmath_pkg.zmath);
 
     const run_tests = b.addRunArtifact(main_tests);
 
