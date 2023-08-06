@@ -29,20 +29,20 @@ pub fn indexOf(comptime self: Self, comptime T: type) ?usize {
     return null;
 }
 
-pub fn fromUtp(comptime self: Self, utp: meta.UniqueTypePtr) ?usize {
-    inline for (self.types, 0..) |t, i| {
+pub fn nameFromIndex(comptime self: Self, idx: usize) []const u8 {
+    inline for (self.types, 0..) |T, i| {
         @setEvalBranchQuota(20_000);
-        if (meta.uniqueTypePtr(t) == utp) return i;
+        if (idx == i) return @typeName(T);
     }
-    return null;
+    return "ERROR";
 }
 
-pub fn nameFromUtp(comptime self: Self, utp: meta.UniqueTypePtr) []const u8 {
-    inline for (self.types) |t| {
+pub fn hasUtp(comptime self: Self, utp: meta.Utp) bool {
+    inline for (self.types) |T| {
         @setEvalBranchQuota(20_000);
-        if (meta.uniqueTypePtr(t) == utp) return @typeName(t);
+        if (meta.utpOf(T) == utp) return true;
     }
-    return "Error::NonRegisteredType";
+    return false;
 }
 
 test {
@@ -53,5 +53,4 @@ test {
     };
 
     try std.testing.expectEqual(0, comptime typemap.indexOf(u32).?);
-    try std.testing.expectEqual(0, comptime typemap.fromUtp(meta.uniqueTypePtr(u32)).?);
 }

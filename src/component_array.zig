@@ -1,5 +1,7 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const ztg = @import("init.zig");
+const util = @import("util.zig");
 const ByteArray = @import("etc/byte_array.zig");
 const Allocator = std.mem.Allocator;
 
@@ -13,8 +15,8 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
 
         alloc: std.mem.Allocator,
 
-        component_utp: ztg.meta.UniqueTypePtr,
-        component_name: []const u8,
+        component_id: util.CompId,
+        component_name: if (builtin.mode == .Debug) []const u8 else void,
 
         components_data: ByteArray = undefined,
         entities: std.ArrayListUnmanaged(ztg.Entity) = undefined,
@@ -29,8 +31,8 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
 
             var self = Self{
                 .alloc = alloc,
-                .component_utp = ztg.meta.uniqueTypePtr(T),
-                .component_name = @typeName(T),
+                .component_id = util.compId(T),
+                .component_name = if (builtin.mode == .Debug) @typeName(T) else void{},
             };
 
             self.components_data = ByteArray.init(T);
@@ -41,9 +43,7 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
 
             self.ent_to_comp_idx = try alloc.alloc(Index, max_ents);
 
-            for (self.ent_to_comp_idx) |*etc| {
-                etc.* = null_bit;
-            }
+            @memset(self.ent_to_comp_idx, null_bit);
 
             return self;
         }
@@ -59,11 +59,8 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
         }
 
         pub fn assign(self: *Self, ent: ztg.Entity, entry: anytype) !void {
-            if (ztg.meta.uniqueTypePtr(@TypeOf(entry)) != self.component_utp) std.debug.panic("Incorrect type. Expected UTP {}, found UTP {} (Type: {s}).", .{
-                self.component_utp,
-                ztg.meta.uniqueTypePtr(@TypeOf(entry)),
-                @typeName(@TypeOf(entry)),
-            });
+            assertType(@TypeOf(entry));
+
             try self.appendBytes(ent, std.mem.asBytes(&entry));
         }
 
@@ -122,7 +119,8 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
         }
 
         pub fn getAs(self: *const Self, comptime T: type, ent: ztg.Entity) ?*T {
-            if (ztg.meta.uniqueTypePtr(T) != self.component_utp) std.debug.panic("Incorrect type.", .{});
+            assertType(T);
+
             var g = self.get(ent) orelse return null;
             return cast(T, g);
         }
@@ -143,13 +141,25 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
         pub inline fn iterator(self: *Self) ByteArray.ByteIterator {
             return self.components_data.iterator();
         }
+
+        fn assertType(self: Self, comptime T: type) void {
+            if (util.compId(T) != self.component_id) switch (builtin.mode) {
+                .Debug => std.debug.panic("Incorrect type. Expected Type: {s} (ID {}), found Type {s} (ID: {}).", .{
+                    self.component_name,
+                    self.component_id,
+                    @typeName(T),
+                    util.compId(T),
+                }),
+                else => std.debug.panic("Type {s} is not correct for component array.", .{@typeName(T)}),
+            };
+        }
     };
 }
 
 const CAT = ComponentArray(usize, 10);
 
 const Data = struct {
-    lmao: u32,
+    val: u32,
     uhh: bool = false,
     xd: f32 = 100.0,
     ugh: enum { ok, bad } = .ok,
@@ -174,11 +184,11 @@ test "data" {
     var arr = try CAT.initForTests(Data);
     defer arr.deinit();
 
-    try arr.assign(2, Data{ .lmao = 100_000 });
-    try arr.assignData(5, &Data{ .lmao = 20_000 });
+    try arr.assign(2, Data{ .val = 100_000 });
+    try arr.assignData(5, &Data{ .val = 20_000 });
 
-    try std.testing.expectEqual(@as(u32, 100_000), arr.getAs(Data, 2).?.lmao);
-    try std.testing.expectEqual(@as(u32, 20_000), arr.getAs(Data, 5).?.lmao);
+    try std.testing.expectEqual(@as(u32, 100_000), arr.getAs(Data, 2).?.val);
+    try std.testing.expectEqual(@as(u32, 20_000), arr.getAs(Data, 5).?.val);
 
     try std.testing.expect(arr.contains(2));
     arr.swapRemove(2);

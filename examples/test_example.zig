@@ -3,8 +3,7 @@ const ztg = @import("zentig");
 const testing = std.testing;
 
 test "ztg.World" {
-    var wi = ztg.worldInfo();
-    var world = try game_file.MyWorld.init(&wi);
+    var world = try game_file.MyWorld.init(std.testing.allocator);
     defer world.deinit();
 
     try world.runStageList(&.{ .init, .update });
@@ -29,11 +28,9 @@ const game_file = struct {
 const player_file = struct {
     pub fn include(comptime world: *ztg.WorldBuilder) void {
         world.addComponents(&.{ Player, Jetpack, Backpack });
-        world.addStage(.player_update);
         world.addSystems(.{
             .load = .{playerSpawn},
-            .update = .{playerSpeach},
-            .player_update = .{playerSpecial},
+            .update = .{ playerSpeach, playerSpecial },
         });
     }
 
@@ -60,7 +57,7 @@ const player_file = struct {
         // all the types. (PlayerBundle)
         const plr = try com.newEntWithMany(PlayerBundle{
             .{ .name = "Player" },
-            .{ .pos = ztg.Vec3.init(10, 10, 0) },
+            ztg.base.Transform.initWith(.{ .pos = ztg.vec3(10, 10, 0) }),
             .{ .img = 0 },
         });
 
@@ -74,13 +71,11 @@ const player_file = struct {
         // try com.giveEntMany(plr.ent, .{ ... });
     }
 
-    fn playerSpeach(com: ztg.Commands, q: ztg.Query(.{ Player, ztg.base.Transform })) !void {
+    fn playerSpeach(q: ztg.Query(.{ Player, ztg.base.Transform })) !void {
         for (q.items(0), q.items(1)) |player, trn| {
             try std.testing.expectEqualStrings("Player", player.name);
-            try std.testing.expect(trn.pos.equals(.{ .x = 10, .y = 10 }));
+            try std.testing.expect(trn.getPos().equals(.{ .x = 10, .y = 10 }));
         }
-
-        try com.runStage(.player_update);
     }
 
     fn playerSpecial(q: ztg.QueryOpts(.{game_file.Sprite}, .{ztg.With(Player)})) !void {

@@ -1,7 +1,8 @@
 const std = @import("std");
+const testing = std.testing;
+
 const ztg = @import("../init.zig");
 const math = std.math;
-const util = ztg.util;
 
 pub const Vec2 = extern struct {
     const vec_funcs = @import("vec_funcs.zig");
@@ -22,49 +23,70 @@ pub const Vec2 = extern struct {
         self.y = y;
     }
 
-    pub inline fn equals(a: Vec2, b: Vec2) bool {
-        return a.x == b.x and a.y == b.y;
-    }
-
-    pub inline fn splat(s: f32) Vec2 {
-        return .{ .x = s, .y = s };
-    }
-
-    pub inline fn one() Vec2 {
-        return .{ .x = 1, .y = 1 };
-    }
-
+    /// Returns T with all of it's components set to the original vector's
+    /// T's only required components must be `x`, and `y`
     pub inline fn into(self: Vec2, comptime T: type) T {
         return .{ .x = self.x, .y = self.y };
     }
 
     pub inline fn intoVectorOf(self: Vec2, comptime T: type) @Vector(2, T) {
         if (comptime std.meta.trait.isFloat(T)) {
-            return .{ @as(T, @floatCast(self.x)), @as(T, @floatCast(self.y)) };
+            if (comptime T == f32) {
+                return self.intoSimd();
+            } else {
+                return .{ @as(T, @floatCast(self.x)), @as(T, @floatCast(self.y)) };
+            }
         } else if (comptime std.meta.trait.isIntegral(T)) {
             return .{ @as(T, @intFromFloat(self.x)), @as(T, @intFromFloat(self.y)) };
+        } else {
+            @compileError("Cannot turn self into a vector of " ++ @typeName(T));
         }
     }
 
-    pub inline fn intoSimd(self: Vec2) @Vector(2, f32) {
-        return @bitCast(self);
+    test intoVectorOf {
+        try testing.expectEqual(@Vector(2, i32){ 1, 2 }, init(1.4, 2.8).intoVectorOf(i32));
+        try testing.expectEqual(@Vector(2, c_int){ 20, 12 }, init(20.2, 12.7).intoVectorOf(i32));
     }
 
-    pub inline fn fromSimd(self: @Vector(2, f32)) Vec2 {
-        return @bitCast(self);
+    /// Converts vector to an angle in radians
+    /// starting at .{ 1, 0 } and going ccw towards .{ 0, 1 }
+    pub inline fn intoDirAngle(self: Vec2) ztg.math.Radians {
+        return math.atan2(f32, self.y, self.x);
     }
 
-    /// For use when integrating with the zmath library
+    test intoDirAngle {
+        try testing.expectEqual(@as(ztg.math.Radians, 0), init(1, 0).intoDirAngle());
+        try testing.expectEqual(std.math.degreesToRadians(ztg.math.Radians, 90), init(0, 1).intoDirAngle());
+        try testing.expectEqual(std.math.degreesToRadians(ztg.math.Radians, 180), init(-1, 0).intoDirAngle());
+    }
+
+    /// Converts angle theta to a vector representation
+    /// starting at .{ 1, 0 } and going ccw towards .{ 0, 1 }
+    pub inline fn fromDirAngle(theta: ztg.math.Radians) Vec2 {
+        return .{
+            .x = math.cos(theta),
+            .y = math.sin(theta),
+        };
+    }
+
+    test fromDirAngle {
+        try Vec2.expectApproxEqAbs(init(0, -1), fromDirAngle(std.math.pi * 1.5));
+        try Vec2.expectApproxEqAbs(init(1, 0), fromDirAngle(0));
+    }
+
+    /// For use when integrating with the zmath library, sets z and w to 0
     pub inline fn intoZMath(self: Vec2) @Vector(4, f32) {
         return .{ self.x, self.y, 0.0, 0.0 };
     }
 
+    /// For use when integrating with the zmath library, discards z and w components
     pub inline fn fromZMath(vec: @Vector(4, f32)) Vec2 {
         return .{ vec[0], vec[1] };
     }
 
+    /// Creates a new Vec2 from the components of other
     pub inline fn from(other: anytype) Vec2 {
-        return .{ .x = other.x, .y = .other.y };
+        return .{ .x = other.x, .y = other.y };
     }
 
     /// Will try to convert vec to a Vec2
@@ -77,30 +99,37 @@ pub const Vec2 = extern struct {
         };
     }
 
-    pub inline fn extend(self: Vec2, z: f32) ztg.Vec3 {
-        return .{ .x = self.x, .y = self.y, .z = z };
-    }
-
-    pub inline fn extendInto(self: Vec2, z: f32, comptime T: type) T {
-        return .{ .x = self.x, .y = self.y, .z = z };
-    }
-
-    const Component = enum { x, y };
-    pub inline fn swizzle(self: Vec2, comptime x: Component, comptime y: Component) Vec2 {
-        return @shuffle(f32, self.intoVectorOf(f32), undefined, [_]i32{ @intFromEnum(x), @intFromEnum(y) });
-    }
-
-    pub inline fn toDirAngle(self: Vec2) f32 {
-        return math.atan2(f32, self.y, self.x);
-    }
-
-    pub inline fn fromDirAngle(theta: f32) Vec2 {
-        return .{
-            .x = math.cos(theta),
-            .y = math.sin(theta),
+    test fromAny {
+        const MyVector = struct {
+            x: c_int,
+            y: u8,
         };
+
+        try Vec2.expectEqual(init(-2, 5), fromAny(MyVector{ .x = -2, .y = 5 }));
+
+        const MyOtherVec = struct {
+            x: f16,
+        };
+
+        try Vec2.expectEqual(init(10, 0), fromAny(MyOtherVec{ .x = 10 }));
     }
 
+    /// Creates a Vec3 from self and sets the z component
+    pub inline fn extend(self: Vec2, z: f32) ztg.Vec3 {
+        return self.extendInto(ztg.Vec3, z);
+    }
+
+    /// Creates a T, which must have `x`, `y`, and `z` components, from self and sets the w component
+    pub inline fn extendInto(self: Vec2, comptime T: type, z: f32) T {
+        return .{ .x = self.x, .y = self.y, .z = z };
+    }
+
+    /// Just returns the x component
+    pub inline fn flatten(self: Vec2) f32 {
+        return self.x;
+    }
+
+    /// Returns a new Vec2 with all of it's components set to a number within [min, max)
     pub inline fn random(rand: std.rand.Random, _min: f32, _max: f32) Vec2 {
         return .{
             .x = std.math.lerp(_min, _max, rand.float(f32)),
@@ -108,73 +137,9 @@ pub const Vec2 = extern struct {
         };
     }
 
-    pub inline fn random01(rand: std.rand.Random) Vec2 {
-        return random(rand, 0, 1);
-    }
-
+    /// Returns a new random Vec2 that lies on the outside of a unit circle
     pub inline fn randomOnUnitCircle(rand: std.rand.Random) Vec2 {
         return fromDirAngle(rand.float(f32) * std.math.pi * 2);
-    }
-
-    pub inline fn length(self: Vec2) f32 {
-        return @sqrt((self.x * self.x) + (self.y * self.y));
-    }
-
-    pub inline fn sqrLength(self: Vec2) f32 {
-        return (self.x * self.x) + (self.y * self.y);
-    }
-
-    pub inline fn min(a: Vec2, b: Vec2) Vec2 {
-        return .{
-            .x = @min(a.x, b.x),
-            .y = @min(a.y, b.y),
-        };
-    }
-
-    pub inline fn max(a: Vec2, b: Vec2) Vec2 {
-        return .{
-            .x = @max(a.x, b.x),
-            .y = @max(a.y, b.y),
-        };
-    }
-
-    pub inline fn getNegated(self: Vec2) Vec2 {
-        return .{ .x = -self.x, .y = -self.y };
-    }
-
-    pub inline fn div(v: Vec2, s: f32) Vec2 {
-        return .{ .x = v.x / s, .y = v.y / s };
-    }
-
-    pub inline fn mul(v: Vec2, s: f32) Vec2 {
-        return .{ .x = v.x * s, .y = v.y * s };
-    }
-
-    pub inline fn add(v0: Vec2, v1: Vec2) Vec2 {
-        return .{ .x = v0.x + v1.x, .y = v0.y + v1.y };
-    }
-
-    pub inline fn sub(v0: Vec2, v1: Vec2) Vec2 {
-        return .{ .x = v0.x - v1.x, .y = v0.y - v1.y };
-    }
-
-    pub inline fn scale(v0: Vec2, v1: Vec2) Vec2 {
-        return .{ .x = v0.x * v1.x, .y = v0.y * v1.y };
-    }
-
-    pub inline fn lerp(orig: Vec2, to: Vec2, t: f32) Vec2 {
-        const t_clamped = math.clamp(t, 0, 1);
-        return .{
-            .x = orig.x + (to.x - orig.x) * t_clamped,
-            .y = orig.y + (to.y - orig.y) * t_clamped,
-        };
-    }
-
-    pub inline fn lerpUnclamped(orig: Vec2, to: Vec2, t: f32) Vec2 {
-        return .{
-            .x = orig.x + (to.x - orig.x) * t,
-            .y = orig.y + (to.y - orig.y) * t,
-        };
     }
 
     pub inline fn perpendicular(dir: Vec2) Vec2 {
@@ -184,44 +149,21 @@ pub const Vec2 = extern struct {
         };
     }
 
-    pub inline fn dot(a: Vec2, b: Vec2) f32 {
-        return a.x * b.x + a.y * b.y;
+    /// Returns a new copy of the vector rotated ccw by `angle` radians
+    pub inline fn getRotated(self: Vec2, angle: ztg.math.Radians) Vec2 {
+        return .{
+            .x = @mulAdd(f32, std.math.cos(angle), self.x, -std.math.sin(angle) * self.y),
+            .y = @mulAdd(f32, std.math.sin(angle), self.x, std.math.cos(angle) * self.y),
+        };
     }
 
-    pub inline fn setNormalized(self: *Vec2) void {
-        const m = length(self);
-        if (m == 0) return;
-        self.x /= m;
-        self.y /= m;
+    /// Rotates the vector ccw in place by `angle` radians
+    pub inline fn setRotated(self: *Vec2, angle: ztg.math.Radians) void {
+        self.* = self.getRotated(angle);
     }
 
-    pub inline fn setNegated(self: *Vec2) void {
-        self.x = -self.x;
-        self.y = -self.y;
-    }
-
-    pub inline fn addEql(self: *Vec2, other: Vec2) void {
-        self.x += other.x;
-        self.y += other.y;
-    }
-
-    pub inline fn subEql(self: *Vec2, other: Vec2) void {
-        self.x -= other.x;
-        self.y -= other.y;
-    }
-
-    pub inline fn mulEql(self: *Vec2, scalar: f32) void {
-        self.x *= scalar;
-        self.y *= scalar;
-    }
-
-    pub inline fn divEql(self: *Vec2, scalar: f32) void {
-        self.x /= scalar;
-        self.y /= scalar;
-    }
-
-    pub inline fn scaleEql(self: *Vec2, other: Vec2) void {
-        self.x *= other.x;
-        self.y *= other.y;
+    pub fn format(value: Vec2, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = options;
+        try writer.print("Vec2({" ++ fmt ++ "}, {" ++ fmt ++ "})", .{ value.x, value.y });
     }
 };

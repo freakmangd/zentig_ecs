@@ -5,14 +5,11 @@ const zmath = @import("zmath");
 const Self = @This();
 
 basis: zmath.Mat,
-basis_isdirty: bool = true,
-
 __data: struct {
     rot: ztg.Vec4,
     scale: ztg.Vec3,
+    basis_isdirty: bool = true,
 },
-
-parent: ?*Self = null,
 
 pub fn init(_pos: ztg.Vec3, _rot: ztg.Vec4, _scale: ztg.Vec3) Self {
     return .{
@@ -32,17 +29,24 @@ pub inline fn initWith(with: struct {
     return init(with.pos, with.rot, with.scale);
 }
 
-pub inline fn default() Self {
+pub inline fn fromPos(pos: ztg.Vec3) Self {
+    return init(pos, ztg.Vec4.identity(), ztg.Vec3.one());
+}
+
+pub inline fn fromRot(rot: ztg.Vec3) Self {
+    return init(ztg.Vec3.zero(), rot, ztg.Vec3.one());
+}
+
+pub inline fn fromScale(_scale: ztg.Vec3) Self {
+    return init(ztg.Vec3.zero(), ztg.Vec4.identity(), _scale);
+}
+
+pub inline fn identity() Self {
     return init(ztg.Vec3.zero(), ztg.Vec4.identity(), ztg.Vec3.one());
 }
 
 pub inline fn getPos(self: Self) ztg.Vec3 {
     return ztg.Vec3.fromZMath(self.basis[3]);
-}
-
-pub fn getGlobalPos(self: Self) ztg.Vec3 {
-    if (self.parent) |parent| return self.getPos().add(parent.getGlobalPos());
-    return self.getPos();
 }
 
 pub inline fn setPos(self: *Self, new_pos: ztg.Vec3) void {
@@ -59,21 +63,23 @@ pub inline fn getRot(self: Self) ztg.Vec4 {
     return self.__data.rot;
 }
 
-pub fn getGlobalRot(self: Self) ztg.Vec4 {
-    if (self.parent) |parent| return self.__data.rot.add(parent.getGlobalRot());
-    return self.getRot();
-}
-
 pub inline fn setRot(self: *Self, new_rot: ztg.Vec4) void {
     self.__data.rot = new_rot;
-    self.basis_isdirty = true;
+    self.__data.basis_isdirty = true;
+}
+
+pub inline fn setRotEuler(self: *Self, x: f32, y: f32, z: f32) void {
+    self.__data.rot = ztg.Vec4.fromEulerAngles(.{ .x = x, .y = y, .z = z });
+    self.__data.basis_isdirty = true;
 }
 
 pub inline fn rotate(self: *Self, by: ztg.Vec4) void {
-    std.debug.print("before {}\n", .{std.math.radiansToDegrees(f32, by.z)});
-    self.__data.rot.addEql(by);
-    std.debug.print("added {}\n", .{std.math.radiansToDegrees(f32, by.z)});
-    self.basis_isdirty = true;
+    self.__data.rot = self.__data.rot.quatMultiply(by);
+    self.__data.basis_isdirty = true;
+}
+
+pub inline fn rotateEuler(self: *Self, x: f32, y: f32, z: f32) void {
+    self.rotate(ztg.Vec4.fromEulerAngles(.{ .x = x, .y = y, .z = z }));
 }
 
 pub inline fn getScale(self: Self) ztg.Vec3 {
@@ -82,27 +88,49 @@ pub inline fn getScale(self: Self) ztg.Vec3 {
 
 pub inline fn setScale(self: Self, new_scale: ztg.Vec3) void {
     self.__data.scale = new_scale;
-    self.basis_isdirty = true;
+    self.__data.basis_isdirty = true;
 }
 
 pub inline fn scale(self: *Self, scalar: ztg.Vec3) void {
     self.__data.scale.scaleEql(scalar);
-    self.basis_isdirty = true;
+    self.__data.basis_isdirty = true;
 }
 
 pub fn updateBasis(self: *Self) void {
-    const mat0 = zmath.scalingV(self.__data.scale.intoZMath());
-    const mat1 = zmath.mul(mat0, zmath.rotationX(self.__data.rot.x));
-    const mat2 = zmath.mul(mat1, zmath.rotationY(self.__data.rot.y));
-    const mat3 = zmath.mul(mat2, zmath.rotationZ(self.__data.rot.z));
-    const mat4 = zmath.mul(mat3, zmath.translationV(self.getPos().intoZMath()));
-
-    self.basis_isdirty = false;
-    self.basis = mat4;
+    self.__data.basis_isdirty = false;
+    self.basis = self.calculateLatestMatrix();
 }
 
-pub fn getGlobalMatrix(self: *Self) zmath.Mat {
-    if (self.basis_isdirty) self.updateBasis();
-    if (self.parent) |parent| return zmath.mul(parent.getGlobalMatrix(), self.basis);
+pub fn calculateLatestMatrix(self: Self) zmath.Mat {
+    const mat0 = zmath.scalingV(self.__data.scale.intoZMath());
+    const mat1 = zmath.mul(mat0, zmath.matFromQuat(self.__data.rot.intoZMath()));
+    return zmath.mul(mat1, zmath.translationV(self.getPos().intoZMath()));
+}
+
+pub fn getUpdatedBasis(self: *Self) zmath.Mat {
+    if (self.__data.basis_isdirty) self.updateBasis();
     return self.basis;
+}
+
+pub inline fn onAdded(ent: ztg.Entity, com: ztg.Commands) !void {
+    if (!com.checkEntHas(ent, ztg.base.GlobalTransform)) try com.giveEnt(ent, ztg.base.GlobalTransform.identity());
+}
+
+test {
+    var t = Self.initWith(.{
+        .pos = .{ .x = 100 },
+    });
+
+    try std.testing.expectEqual(ztg.vec3(100, 0, 0), t.getPos());
+
+    t.translate(.{
+        .y = 100,
+        .z = -20,
+    });
+
+    try std.testing.expectEqual(ztg.vec3(100, 100, -20), t.getPos());
+
+    t.rotateEuler(120, 80, 90);
+
+    try std.testing.expectEqual(ztg.Vec4.fromEulerAngles(.{ .x = 120, .y = 80, .z = 90 }), t.getRot());
 }

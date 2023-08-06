@@ -43,7 +43,7 @@ pub fn addTupleField(comptime self: *Self, comptime index: usize, comptime T: ty
 }
 
 pub fn appendTupleField(comptime self: *Self, comptime T: type, comptime default_value: ?*const anyopaque) void {
-    return addField(self, std.fmt.comptimePrint("{}", .{self.type_def.fields.len}), T, default_value);
+    return addField(self, std.fmt.comptimePrint("{}", .{self.fields.len}), T, default_value);
 }
 
 pub fn addTupleFieldExtra(

@@ -1,10 +1,26 @@
-NEEDS TO BE DONE:
+TODO:
 
-Stage ordering
-    wb.addStages(.{
-        .init = .{ ztg.before(.body, preinit_loadTextures) }, // <- built-in .body label that stages are added to by default
-        .update = .{ ztg.label(.get_input, getInput), ztg.after(.get_input, playerUpdate) },
-    });
+figure out why its a stack overflow when you have too many components registered
+only heap allocate the things that need to be heap allocated.
+
+change system ordering to allow more defined ordering, such as:
+
+ztg.ordered(myUpdate).after(.gtr_update).label(.check_collisions)
+
+also find a way to make labels more unique?
+i can see someone using a very generic label in a library and fucking things up
+
+idk if its possible but maybe:
+
+const MyLabels = enum {
+    gtr_update,
+    check_collisions,
+};
+
+ztg.ordered(myUpdate).after(MyLabels.gtr_update)
+
+maybe @typeName(T) ++ @tagName(v)?
+and if it's not an enum (zero sized struct) use the type name?
 
 NICE TO HAVE:
 
@@ -16,4 +32,4 @@ Change ComponentArray to use the enum NULL syntax
 
 ???:
 
-Crashes when using c_allocator, but not gpa
+Crashes when using any allocator other than gpa

@@ -1,15 +1,27 @@
 const std = @import("std");
 
-pub usingnamespace @import("ecs.zig");
+pub const Entity = usize;
+pub const EntityHandle = @import("entity_handle.zig");
+
+pub usingnamespace @import("events.zig");
+pub usingnamespace @import("query_modifiers.zig");
 pub usingnamespace @import("query.zig");
+pub usingnamespace @import("stage_offset.zig");
 
 pub const math = @import("math/init.zig");
 pub const zmath = @import("zmath");
 
+pub const StateMachine = @import("state_machine.zig");
+
 pub const Vec2 = @import("math/vec2.zig").Vec2;
 pub const Vec3 = @import("math/vec3.zig").Vec3;
 pub const Vec4 = @import("math/vec4.zig").Vec4;
-pub const Mat3 = @import("math/mat3.zig");
+
+pub const vec2 = Vec2.init;
+pub const vec3 = Vec3.init;
+pub const vec4 = Vec4.init;
+
+//pub const Mat3 = @import("math/mat3.zig");
 
 pub const WorldBuilder = @import("worldbuilder.zig");
 pub const Commands = @import("commands.zig");
@@ -20,10 +32,22 @@ pub const physics = @import("mods/physics.zig");
 
 pub const log = std.log.scoped(.zentig);
 
-pub const util = @import("util.zig");
 pub const meta = @import("meta.zig");
 pub const profiler = @import("etc/profiler.zig");
 
+pub const CrashReason = enum { hit_ent_limit };
+
 test {
-    std.testing.refAllDeclsRecursive(@This());
+    _ = @import("ecs.zig");
+    _ = @import("events.zig");
+    _ = @import("query_modifiers.zig");
+    _ = @import("query.zig");
+    _ = math;
+    _ = WorldBuilder;
+    _ = Commands;
+    _ = base;
+    _ = input;
+    _ = physics;
+    _ = meta;
+    _ = profiler;
 }

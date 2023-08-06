@@ -14,9 +14,9 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const examples = [_]struct { []const u8, []const u8 }{
-        .{ "example", "examples/example.zig" },
-        .{ "input", "examples/input_example.zig" },
+    const examples = [_]struct { []const u8, []const u8, []const u8 }{
+        .{ "example", "examples/example.zig", "Run basic example" },
+        .{ "input", "examples/input_example.zig", "Run input example" },
     };
 
     for (examples) |ex_info| {
@@ -31,21 +31,29 @@ pub fn build(b: *std.Build) void {
 
         const run_example_cmd = b.addRunArtifact(example);
 
-        const run_example_step = b.step(ex_info[0], "Run the example");
+        const run_example_step = b.step(ex_info[0], ex_info[2]);
         run_example_step.dependOn(&run_example_cmd.step);
     }
 
-    const main_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/init.zig" },
-        .optimize = optimize,
-    });
-    main_tests.addModule("zentig", zentig_mod);
-    main_tests.addModule("zmath", zmath_pkg.zmath);
+    const tests = [_]struct { []const u8, []const u8, []const u8 }{
+        .{ "example_test", "examples/test_example.zig", "Run testing example" },
+        .{ "test", "src/init.zig", "Run all tests" },
+    };
 
-    const run_tests = b.addRunArtifact(main_tests);
+    for (tests) |test_info| {
+        const t = b.addTest(.{
+            .root_source_file = .{ .path = test_info[1] },
+            .target = target,
+            .optimize = optimize,
+        });
+        t.addModule("zentig", zentig_mod);
+        t.addModule("zmath", zmath_pkg.zmath);
 
-    const test_step = b.step("test", "Run library tests");
-    test_step.dependOn(&run_tests.step);
+        const run_tests = b.addRunArtifact(t);
+
+        const test_step = b.step(test_info[0], test_info[2]);
+        test_step.dependOn(&run_tests.step);
+    }
 }
 
 const ZentigModule = struct {
@@ -60,7 +68,47 @@ const ZentigModule = struct {
     exe: *std.build.Step.Compile,
 };
 
-pub fn addAsModule(
+pub fn addAsLocalModule(
+    name: []const u8,
+    path_to_root: []const u8,
+    b: *std.Build,
+    exe: *std.Build.Step.Compile,
+    target: std.zig.CrossTarget,
+    optimize: std.builtin.OptimizeMode,
+    options: struct {
+        import_zmath_as: ?[]const u8 = null,
+        import_zmath_options_as: ?[]const u8 = null,
+    },
+) ZentigModule {
+    const zmath_pkg = zmath.package(b, target, optimize, .{});
+
+    const zentig_dep = b.anonymousDependency(path_to_root, @This(), .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe.addModule(name, zentig_dep.module("zentig"));
+
+    if (options.import_zmath_as) |mn|
+        exe.addModule(mn, zmath_pkg.zmath);
+
+    if (options.import_zmath_options_as) |mn|
+        exe.addModule(mn, zmath_pkg.zmath_options);
+
+    return .{
+        .zentig_mod = zentig_dep.module("zentig"),
+        .zmath_mod = zmath_pkg.zmath,
+        .zmath_options_mod = zmath_pkg.zmath_options,
+
+        .target = target,
+        .optimize = optimize,
+
+        .b = b,
+        .exe = exe,
+    };
+}
+
+pub fn addAsLocalModule2(
     name: []const u8,
     b: *std.Build,
     exe: *std.build.Step.Compile,

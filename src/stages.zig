@@ -42,9 +42,7 @@ pub fn Init(comptime stage_defs: []const StageDef, comptime World: type) type {
         inline fn runSystemTuple(systems: anytype, world: *World, comptime catch_errs: bool, comptime errCallback: if (catch_errs) fn (anyerror) void else void) !void {
             inline for (systems) |sys| {
                 const System = @TypeOf(sys);
-
-                var args = try world.initParamsForSystem(@typeInfo(System).Fn.params);
-                defer world.deinitParamsForSystem(&args);
+                var args = try world.initParamsForSystem(world.frame_alloc, @typeInfo(System).Fn.params);
 
                 if (comptime ztg.meta.canReturnError(System)) {
                     if (comptime catch_errs) {
@@ -62,13 +60,13 @@ pub fn Init(comptime stage_defs: []const StageDef, comptime World: type) type {
             }
         }
 
-        pub fn runStageRuntime(world: *World, stage_name: []const u8) anyerror!void {
+        pub fn runStageByName(world: *World, stage_name: []const u8) anyerror!void {
             inline for (std.meta.fields(Inner), 0..) |field, i| {
                 if (std.mem.eql(u8, field.name, stage_name)) {
                     return runStage(world, @enumFromInt(i), false, void{});
                 }
             }
-            std.debug.panic("Cannot find stage {s} in stage list.", .{stage_name});
+            return error.UnknownStage;
         }
     };
 }

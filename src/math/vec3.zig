@@ -25,70 +25,60 @@ pub const Vec3 = extern struct {
         self.z = z;
     }
 
-    pub inline fn equals(a: Vec3, b: Vec3) bool {
-        return a.x == b.x and a.y == b.y and a.z == b.z;
-    }
-
-    pub inline fn one() Vec3 {
-        return .{ .x = 1, .y = 1, .z = 1 };
-    }
-
-    pub inline fn forward() Vec3 {
-        return .{ .z = 1 };
-    }
-
-    pub inline fn backward() Vec3 {
-        return .{ .z = -1 };
-    }
-
-    pub inline fn splat(s: f32) Vec3 {
-        return .{ .x = s, .y = s, .z = s };
-    }
-
+    /// Returns T with all of it's components set to the original vector's
+    /// T's only required components must be `x`, `y`, and `z`
     pub inline fn into(self: Vec3, comptime T: type) T {
         return .{ .x = self.x, .y = self.y, .z = self.z };
     }
 
-    pub inline fn into2(self: Vec3, comptime T: type) T {
+    /// Returns T with it's x and y components set to the original vector's x and y
+    /// T's only required components must be `x` and `y`
+    pub inline fn intoVec2(self: Vec3, comptime T: type) T {
         return .{ .x = self.x, .y = self.y };
     }
 
     pub inline fn intoVectorOf(self: Vec3, comptime T: type) @Vector(3, T) {
         if (comptime std.meta.trait.isFloat(T)) {
-            return .{ @floatCast(self.x), @floatCast(self.y), @floatCast(self.z) };
+            if (comptime T == f32) {
+                return self.intoSimd();
+            } else {
+                return .{ @floatCast(self.x), @floatCast(self.y), @floatCast(self.z) };
+            }
         } else if (comptime std.meta.trait.isIntegral(T)) {
             return .{ @intFromFloat(self.x), @intFromFloat(self.y), @intFromFloat(self.z) };
+        } else {
+            @compileError("Cannot turn self into a vector of " ++ @typeName(T));
         }
     }
 
-    pub inline fn intoSimd(self: Vec3) @Vector(3, f32) {
-        return @bitCast(self);
+    /// Returns a Quaternion from self, interpreting self as having Euler angles
+    pub inline fn intoQuatAsEuler(self: Vec3) ztg.Vec4 {
+        return ztg.Vec4.fromEulerAngles(self);
     }
 
-    pub inline fn fromSimd(self: @Vector(3, f32)) Vec3 {
-        return @bitCast(self);
-    }
-
-    /// For use when integrating with the zmath library
+    /// For use when integrating with the zmath library, sets w to 0
     pub inline fn intoZMath(self: Vec3) @Vector(4, f32) {
         return .{ self.x, self.y, self.z, 0.0 };
     }
 
+    /// For use when integrating with the zmath library, ignores w component
     pub inline fn fromZMath(vec: @Vector(4, f32)) Vec3 {
         return .{ .x = vec[0], .y = vec[1], .z = vec[2] };
     }
 
+    /// Creates a Vec3 from other, other must have `x`, `y`, and `z` components
     pub inline fn from(other: anytype) Vec3 {
         return .{ .x = other.x, .y = other.y, .z = other.z };
     }
 
-    pub inline fn from2(vec2: anytype, z: f32) Vec3 {
+    /// Creates a Vec3 from other, other must have `x` and `y` components
+    pub inline fn fromVec2(vec2: anytype, z: f32) Vec3 {
         return .{ .x = vec2.x, .y = vec2.y, .z = z };
     }
 
-    /// Will try to convert vec to a Vec3
-    /// e.g. if vec has an x field, it will use it,
-    /// same goes for the y and z fields.
+    /// Will try to convert vec to a `Vec3`
+    /// e.g. if `vec` has an `x` field, it will use it,
+    /// same goes for the `y` and `z` fields.
     pub inline fn fromAny(vec: anytype) Vec3 {
         return .{
             .x = vec_funcs.convertFieldToF32(vec, "x", 0),
@@ -97,120 +87,52 @@ pub const Vec3 = extern struct {
         };
     }
 
+    /// Creates a `Vec4` from `self` and sets the `w` component
     pub inline fn extend(self: Vec3, w: f32) ztg.Vec4 {
+        return self.extendInto(ztg.Vec4, w);
+    }
+
+    /// Creates a `T`, which must have `x`, `y`, `z`, and `w` components, from self and sets the `w` component
+    pub inline fn extendInto(self: Vec3, comptime T: type, w: f32) T {
         return .{ .x = self.x, .y = self.y, .z = self.z, .w = w };
     }
 
-    const Component = enum { x, y, z };
-    pub inline fn swizzle(self: Vec3, comptime x: Component, comptime y: Component, comptime z: Component) Vec3 {
-        return @shuffle(f32, self.intoVectorOf(f32), undefined, [_]i32{ @intFromEnum(x), @intFromEnum(y), @intFromEnum(z) });
+    /// Returns a `Vec2` from self, discarding the `z` component
+    pub inline fn flatten(self: Vec3) ztg.Vec2 {
+        return self.flattenInto(ztg.Vec2);
     }
 
-    pub inline fn toQuatAsEuler(self: Vec3) ztg.Vec4 {
-        return ztg.Vec4.fromEulerAngles(self);
+    /// Creates a `T`, which must have `x` and `y` components, from self and discards the `z` component
+    pub inline fn flattenInto(self: Vec3, comptime T: type) T {
+        return .{ .x = self.x, .y = self.y };
     }
 
     pub inline fn cross(a: Vec3, b: Vec3) Vec3 {
         return .{
-            .x = a.y * b.z - a.z * b.y,
-            .y = a.z * b.x - a.x * b.z,
-            .z = a.x * b.y - a.y * b.x,
+            .x = @mulAdd(f32, a.y, b.z, -a.z * b.y),
+            .y = @mulAdd(f32, a.z, b.x, -a.x * b.z),
+            .z = @mulAdd(f32, a.x, b.y, -a.y * b.x),
         };
     }
 
-    pub inline fn dot(a: Vec3, b: Vec3) f32 {
-        return a.x * b.x + a.y * b.y + a.z * b.z;
-    }
-
-    pub inline fn length(self: Vec3) f32 {
-        return @sqrt((self.x * self.x) + (self.y * self.y) + (self.z * self.z));
-    }
-
-    pub inline fn sqrLength(self: Vec3) f32 {
-        return (self.x * self.x) + (self.y * self.y) + (self.z * self.z);
-    }
-
-    pub inline fn min(a: Vec3, b: Vec3) Vec3 {
+    /// Returns a new Vec3 with all of it's components set to a number within [min, max)
+    pub inline fn random(rand: std.rand.Random, _min: f32, _max: f32) Vec3 {
         return .{
-            .x = @min(a.x, b.x),
-            .y = @min(a.y, b.y),
-            .z = @min(a.z, b.z),
+            .x = std.math.lerp(_min, _max, rand.float(f32)),
+            .y = std.math.lerp(_min, _max, rand.float(f32)),
+            .z = std.math.lerp(_min, _max, rand.float(f32)),
         };
     }
 
-    pub inline fn max(a: Vec3, b: Vec3) Vec3 {
-        return .{
-            .x = @max(a.x, b.x),
-            .y = @max(a.y, b.y),
-            .z = @max(a.z, b.z),
-        };
+    /// Returns a new random Vec3 that lies on the surface of a unit sphere
+    pub inline fn randomOnUnitSphere(rand: std.rand.Random) Vec3 {
+        var rand_vec = @Vector(3, f32){ rand.float(f32), rand.float(f32), rand.float(f32) };
+        rand_vec *= 1 / ztg.math.lengthVec(rand_vec);
+        return Vec3.fromSimd(rand_vec);
     }
 
-    pub inline fn getNegated(self: Vec3) Vec3 {
-        return .{ .x = -self.x, .y = -self.y, .z = -self.z };
-    }
-
-    pub inline fn div(v: Vec3, s: f32) Vec3 {
-        return .{ .x = v.x / s, .y = v.y / s, .z = v.z / s };
-    }
-
-    pub inline fn mul(v: Vec3, s: f32) Vec3 {
-        return .{ .x = v.x * s, .y = v.y * s, .z = v.z * s };
-    }
-
-    pub inline fn add(v0: Vec3, v1: Vec3) Vec3 {
-        return .{ .x = v0.x + v1.x, .y = v0.y + v1.y, .z = v0.z + v1.z };
-    }
-
-    pub inline fn sub(v0: Vec3, v1: Vec3) Vec3 {
-        return .{ .x = v0.x - v1.x, .y = v0.y - v1.y, .z = v0.z - v1.z };
-    }
-
-    pub inline fn scale(v0: Vec3, v1: Vec3) Vec3 {
-        return .{ .x = v0.x * v1.x, .y = v0.y * v1.y, .z = v0.z * v1.z };
-    }
-
-    pub inline fn setNormalized(self: *Vec3) void {
-        const m = length(self);
-        if (m == 0) return;
-        self.x /= m;
-        self.y /= m;
-        self.z /= m;
-    }
-
-    pub inline fn setNegated(self: *Vec3) void {
-        self.x = -self.x;
-        self.y = -self.y;
-        self.z = -self.z;
-    }
-
-    pub inline fn addEql(self: *Vec3, other: Vec3) void {
-        self.x += other.x;
-        self.y += other.y;
-        self.z += other.z;
-    }
-
-    pub inline fn subEql(self: *Vec3, other: Vec3) void {
-        self.x -= other.x;
-        self.y -= other.y;
-        self.z -= other.z;
-    }
-
-    pub inline fn mulEql(self: *Vec3, scalar: f32) void {
-        self.x *= scalar;
-        self.y *= scalar;
-        self.z *= scalar;
-    }
-
-    pub inline fn divEql(self: *Vec3, scalar: f32) void {
-        self.x /= scalar;
-        self.y /= scalar;
-        self.z /= scalar;
-    }
-
-    pub inline fn scaleEql(self: *Vec3, other: Vec3) void {
-        self.x *= other.x;
-        self.y *= other.y;
-        self.z *= other.z;
+    pub fn format(value: Vec3, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = options;
+        try writer.print("Vec3({" ++ fmt ++ "}, {" ++ fmt ++ "}, {" ++ fmt ++ "})", .{ value.x, value.y, value.z });
     }
 };

@@ -3,11 +3,13 @@ const std = @import("std");
 pub const TypeBuilder = @import("etc/type_builder.zig");
 pub const TypeMap = @import("etc/type_map.zig");
 
+pub const EnumLiteral = @TypeOf(.enum_literal);
+
 pub fn canReturnError(comptime Fn: type) bool {
-    return comptime @typeInfo(@typeInfo(Fn).Fn.return_type.?) == .ErrorUnion;
+    comptime return @typeInfo(@typeInfo(Fn).Fn.return_type.?) == .ErrorUnion;
 }
 
-const MemberFnType = enum {
+pub const MemberFnType = enum {
     by_value,
     by_ptr,
     by_const_ptr,
@@ -37,28 +39,32 @@ pub fn DerefType(comptime T: type) type {
     return T;
 }
 
-pub const UniqueTypePtr = *const opaque {};
-pub const uniqueTypePtr = struct {
-    inline fn typeId(comptime T: type) UniqueTypePtr {
-        comptime return typeIdImpl(T);
+pub fn ReturnType(comptime f: anytype) type {
+    return @typeInfo(@TypeOf(f)).Fn.return_type.?;
+}
+
+pub const Utp = *const opaque {};
+pub const utpOf = struct {
+    inline fn utpOf(comptime T: type) Utp {
+        comptime return utpOfImpl(T);
     }
-    inline fn typeIdImpl(comptime T: type) UniqueTypePtr {
+    inline fn utpOfImpl(comptime T: type) Utp {
         _ = T;
         const gen = struct {
             var id: u1 = undefined;
         };
         return @ptrCast(&gen.id);
     }
-}.typeId;
+}.utpOf;
 
 //pub const UniqueTypePtr = *const anyopaque;
 //pub fn uniqueTypePtr(comptime T: type) UniqueTypePtr {
 //    return @typeName(T);
 //}
 
-//pub const UniqueTypePtr = u64;
+//pub const TypeId = u64;
 //var id_counter: u64 = 0;
-//pub fn uniqueTypePtr(comptime T: type) UniqueTypePtr {
+//pub fn typeId(comptime T: type) u64 {
 //    _ = T;
 //    const static = struct {
 //        var id: ?u64 = null;

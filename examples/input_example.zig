@@ -2,7 +2,7 @@ const std = @import("std");
 const ztg = @import("zentig");
 
 var input_state = [_]struct { pressed: bool, down: bool, released: bool }{
-    .{ .pressed = false, .down = true, .released = false },
+    .{ .pressed = false, .down = false, .released = false },
 };
 
 const Buttons = enum(usize) {
@@ -18,36 +18,34 @@ const InputWrapper = struct {
     // there are no axes in this example
     pub const AxisType = void;
 
-    pub fn getButtonPressed(button: ButtonType) !bool {
+    pub fn isButtonPressed(button: ButtonType) bool {
         return input_state[@intFromEnum(button)].pressed;
     }
 
-    pub fn getButtonDown(button: ButtonType) !bool {
+    pub fn isButtonDown(button: ButtonType) bool {
         return input_state[@intFromEnum(button)].down;
     }
 
-    pub fn getButtonReleased(button: ButtonType) !bool {
+    pub fn isButtonReleased(button: ButtonType) bool {
         return input_state[@intFromEnum(button)].released;
     }
 
-    pub fn getAxis(axis: AxisType) !f32 {
+    pub fn getAxis(axis: AxisType) f32 {
         _ = axis;
         return 0.0;
     }
 };
 
-const Input = blk: {
-    var cb = ztg.input.ControllerBuilder(InputWrapper).init();
-    cb.addButtons(&.{"Jump"});
-    break :blk cb.BuildInput();
-};
+const Input = ztg.input.Input(InputWrapper, &.{.jump}, &.{}, .{});
 
 const World = blk: {
-    var wb = ztg.WorldBuilder.init(.{
+    var wb = ztg.WorldBuilder.init(&.{
         Input,
     });
-    wb.addSystemsToStage(.init, .{ini_setupInput});
-    wb.addUpdateSystems(.{up_readInput});
+    wb.addSystems(.{
+        .init = .{ini_setupInput},
+        .update = .{up_readInput},
+    });
     break :blk wb.Build();
 };
 
@@ -65,6 +63,7 @@ pub fn main() !void {
     try world.runStage(.update);
 
     // `input_state[0].down` is set to `false`
+    std.debug.print("Update spacebar down state to `true`\n", .{});
     changeInputState();
 
     // on the second run, Input catches the change and updates the controllers
@@ -73,19 +72,19 @@ pub fn main() !void {
 
 const PLAYER_ONE = 0;
 
-fn ini_setupInput(alloc: std.mem.Allocator, input: *Input) !void {
-    try input.newController(alloc, .{
-        .buttons = &.{
-            .{ "Jump", Buttons.space },
+fn ini_setupInput(input: *Input) !void {
+    try input.addBindings(0, .{
+        .buttons = .{
+            .jump = &.{Buttons.space},
         },
+        .axes = .{},
     });
 }
 
 fn up_readInput(input: Input) void {
-    std.debug.print("Is Jump down? {}\n", .{input.getButtonDown(PLAYER_ONE, "Jump")});
+    std.debug.print("Is Jump down? {}\n", .{input.isDown(PLAYER_ONE, .jump)});
 }
 
 fn changeInputState() void {
-    std.debug.print("Update spacebar down state to `false`\n", .{});
-    input_state[@intFromEnum(Buttons.space)].down = false;
+    input_state[@intFromEnum(Buttons.space)].down = true;
 }

@@ -101,15 +101,15 @@ pub fn Input(
         }
 
         pub inline fn isDown(self: Self, controller: usize, button: Buttons) bool {
-            return self.controllers[controller].buttons.isSet(@intFromEnum(button) * 3);
+            return self.controllers[controller].buttons.isSet(@as(usize, @intCast(@intFromEnum(button))) * 3);
         }
 
         pub inline fn isPressed(self: Self, controller: usize, button: Buttons) bool {
-            return self.controllers[controller].buttons.isSet((@intFromEnum(button) * 3) + 1);
+            return self.controllers[controller].buttons.isSet((@as(usize, @intCast(@intFromEnum(button))) * 3) + 1);
         }
 
         pub inline fn isReleased(self: Self, controller: usize, button: Buttons) bool {
-            return self.controllers[controller].buttons.isSet((@intFromEnum(button) * 3) + 2);
+            return self.controllers[controller].buttons.isSet((@as(usize, @intCast(@intFromEnum(button))) * 3) + 2);
         }
 
         pub inline fn getAxis(self: Self, controller: usize, axis: Axes) f32 {
@@ -157,6 +157,10 @@ pub fn Input(
             };
             defer file.close();
 
+            defer for (self.controllers) |c| {
+                if (c.button_bindings.items.len + c.axis_bindings.items.len == 0)
+                    log.warn("Found 0 bindings for controller {} after importing file.", .{c});
+            };
             return self.readBindings(file.reader());
         }
 
@@ -290,25 +294,29 @@ pub fn Input(
 
         fn update_Self(self: *Self) void {
             for (&self.controllers) |*ct| {
-                for (ct.button_bindings.items) |bb| {
-                    const is_down = Wrapper.isButtonDown(bb.binding);
-                    const is_pres = Wrapper.isButtonPressed(bb.binding);
-                    const is_rel = Wrapper.isButtonReleased(bb.binding);
-                    ct.buttons.setValue(@as(usize, bb.index) * 3, is_down);
-                    ct.buttons.setValue(@as(usize, bb.index) * 3 + 1, is_pres);
-                    ct.buttons.setValue(@as(usize, bb.index) * 3 + 2, is_rel);
+                if (comptime button_literals.len > 0) {
+                    for (ct.button_bindings.items) |bb| {
+                        const is_down = Wrapper.isButtonDown(bb.binding);
+                        const is_pres = Wrapper.isButtonPressed(bb.binding);
+                        const is_rel = Wrapper.isButtonReleased(bb.binding);
+                        ct.buttons.setValue(@as(usize, bb.index) * 3, is_down);
+                        ct.buttons.setValue(@as(usize, bb.index) * 3 + 1, is_pres);
+                        ct.buttons.setValue(@as(usize, bb.index) * 3 + 2, is_rel);
+                    }
                 }
-                for (ct.axis_bindings.items) |ab| {
-                    const value = Wrapper.getAxis(ab.binding);
-                    ct.axes[ab.index] = value;
+                if (comptime axis_literals.len > 0) {
+                    for (ct.axis_bindings.items) |ab| {
+                        const value = Wrapper.getAxis(ab.binding);
+                        ct.axes[ab.index] = value;
+                    }
                 }
             }
         }
 
         fn dei_Self(self: *Self) void {
             for (&self.controllers) |*con| {
-                con.button_bindings.deinit(self.alloc);
-                con.axis_bindings.deinit(self.alloc);
+                if (comptime button_literals.len > 0) con.button_bindings.deinit(self.alloc);
+                if (comptime axis_literals.len > 0) con.axis_bindings.deinit(self.alloc);
             }
         }
     };

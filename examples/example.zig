@@ -41,7 +41,7 @@ const player = struct {
         // Use the PlayerBundle struct as a blueprint
         const plr_ent = try com.newEntWithMany(player.PlayerBundle{
             .{ .name = "Player" },
-            .{ .pos = ztg.Vec3.init(10, 10, 0) },
+            ztg.base.Transform.initWith(.{ .pos = ztg.vec3(10, 10, 0) }),
         });
 
         try plr_ent.giveEnt(Mover{
@@ -59,7 +59,7 @@ const player = struct {
         // The number in items() represents the position of the Type in the Query type.
         // 0 for Player, 1 for Transform, etc.
         for (q.items(0), q.items(1)) |plr, tr| {
-            std.debug.print("My name is {s}, and I'm located at {d} {d}.\n", .{ plr.name, tr.pos.x, tr.pos.y });
+            std.debug.print("My name is {s}, and I'm located at {d} {d}.\n", .{ plr.name, tr.getPos().x, tr.getPos().y });
             std.debug.print("The current frame is {}\n", .{time.frame_count});
         }
     }
@@ -84,7 +84,7 @@ const Mover = struct {
         wb.include(&.{ztg.base});
 
         wb.addComponents(&.{Mover});
-        wb.addUpdateSystems(.{update});
+        wb.addSystemsToStage(.update, .{update});
     }
 
     fn update(q: ztg.Query(.{ Mover, ztg.base.Transform })) void {

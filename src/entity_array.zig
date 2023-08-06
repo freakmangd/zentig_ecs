@@ -1,5 +1,5 @@
 const std = @import("std");
-const ecs = @import("ecs.zig");
+const ztg = @import("init.zig");
 
 pub fn EntityArray(comptime size: usize) type {
     return struct {
@@ -13,43 +13,70 @@ pub fn EntityArray(comptime size: usize) type {
 
         ents: [size]Index = undefined,
         idx_lookup: [size]Index = undefined,
+        parent_lookup: [size]Index = undefined,
         len: usize = 0,
 
         pub fn init() Self {
             var self = Self{};
+            @memset(&self.ents, Index.NULL);
             @memset(&self.idx_lookup, Index.NULL);
+            @memset(&self.parent_lookup, Index.NULL);
             return self;
         }
 
-        pub fn getIndexOf(self: *const Self, ent: ecs.Entity) usize {
+        pub fn deinit(self: *const Self, alloc: std.mem.Allocator) void {
+            alloc.free(self.parent_lookup);
+        }
+
+        pub fn getIndexOf(self: *const Self, ent: ztg.Entity) ?usize {
+            if (self.idx_lookup[ent] == Index.NULL) return null;
             return @intFromEnum(self.idx_lookup[ent]);
         }
 
-        pub fn getEntityAt(self: *const Self, idx: usize) ecs.Entity {
+        pub fn getEntityAt(self: *const Self, idx: usize) ?ztg.Entity {
+            if (self.ents[idx] == Index.NULL) return null;
             return @intFromEnum(self.ents[idx]);
         }
 
-        pub fn set(self: *Self, idx: usize, ent: ecs.Entity) void {
+        pub fn set(self: *Self, idx: usize, ent: ztg.Entity) void {
             self.ents[idx] = @enumFromInt(ent);
             self.idx_lookup[ent] = @enumFromInt(idx);
         }
 
-        pub fn append(self: *Self, ent: ecs.Entity) void {
+        pub fn setParent(self: *Self, ent: ztg.Entity, parent: ?ztg.Entity) !void {
+            if (!self.hasEntity(ent)) return error.EntityDoesntExist;
+            if (parent) |p| if (!self.hasEntity(p)) return error.ParentDoesntExist;
+            self.parent_lookup[ent] = if (parent) |p| @enumFromInt(p) else Index.NULL;
+        }
+
+        pub fn getParent(self: *const Self, ent: ztg.Entity) !?ztg.Entity {
+            if (!self.hasEntity(ent)) return error.EntityDoesntExist;
+            if (self.parent_lookup[ent] != Index.NULL) return @intFromEnum(self.parent_lookup[ent]);
+            return null;
+        }
+
+        pub fn getChildren(self: *const Self, alloc: std.mem.Allocator, ent: ztg.Entity) ![]const ztg.Entity {
+            if (!self.hasEntity(ent)) return error.EntityDoesntExist;
+            var children = std.ArrayList(ztg.Entity).init(alloc);
+            for (self.parent_lookup, 0..) |pl, ch| if (@intFromEnum(pl) == ent) try children.append(ch);
+            return children.toOwnedSlice();
+        }
+
+        pub fn append(self: *Self, ent: ztg.Entity) void {
             self.set(self.len, ent);
             self.len += 1;
         }
 
-        pub fn appendSlice(self: *Self, ents: []const ecs.Entity) void {
+        pub fn appendSlice(self: *Self, ents: []const ztg.Entity) void {
             for (ents) |ent| self.append(ent);
         }
 
-        pub fn swapRemoveEnt(self: *Self, ent: ecs.Entity) bool {
+        pub fn swapRemoveEnt(self: *Self, ent: ztg.Entity) bool {
             if (self.len == 0) return false;
-            if (!self.hasEntity(ent)) return false;
-            const idx = self.getIndexOf(ent);
+            const idx = self.getIndexOf(ent) orelse return false;
 
             if (idx != self.len - 1) {
-                self.set(idx, self.getEntityAt(self.len - 1));
+                self.set(idx, self.getEntityAt(self.len - 1).?);
             } else {
                 self.ents[idx] = Index.NULL;
             }
@@ -59,8 +86,8 @@ pub fn EntityArray(comptime size: usize) type {
             return true;
         }
 
-        pub fn hasEntity(self: *Self, ent: ecs.Entity) bool {
-            return self.getIndexOf(ent) != @intFromEnum(Index.NULL);
+        pub fn hasEntity(self: *const Self, ent: ztg.Entity) bool {
+            return self.getIndexOf(ent) != null;
         }
 
         pub fn reset(self: *Self) void {
@@ -78,7 +105,8 @@ pub fn EntityArray(comptime size: usize) type {
 }
 
 test EntityArray {
-    var arr = EntityArray(10).init();
+    var arr = try EntityArray(10).init(std.testing.allocator);
+    defer arr.deinit(std.testing.allocator);
 
     arr.append(0);
     arr.append(1);

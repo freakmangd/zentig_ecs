@@ -13,25 +13,25 @@ const World = world.World;
 
 const Self = @This();
 
-const StageLabel = struct {
-    name: []const u8,
-    before: TypeBuilder,
-    during: TypeBuilder,
-    after: TypeBuilder,
-};
-
 pub const StageDef = struct {
     name: []const u8,
-    labels: []const StageLabel,
+    stages: []const Stage,
+};
+
+pub const Stage = struct {
+    inner: TypeBuilder,
+    order: usize,
 };
 
 const default_stages = struct {
     // zig fmt: off
-    const init   = 0;
-    const load   = 1;
-    const update = 2;
-    const draw   = 3;
-    const deinit = 4;
+    pub const init        = 0;
+    pub const load        = 1;
+    pub const pre_update  = 2;
+    pub const update      = 3;
+    pub const post_update = 4;
+    pub const draw        = 5;
+    pub const deinit      = 6;
     // zig fmt: on
 };
 
@@ -44,14 +44,16 @@ comp_types: TypeMap = .{},
 event_types: TypeMap = .{},
 included: TypeMap = .{},
 
-resources: TypeBuilder,
+resources: TypeBuilder = .{},
 added_resources: TypeMap = .{},
 
 // TODO: implement
 optimize: OptimizeMode = .low_alloc,
 
-on_crash_fn: ztg.OnCrashFn = defaultCrash,
+on_crash_fn: OnCrashFn = defaultCrash,
 on_ent_overflow: OnEntOverflow = .crash,
+
+pub const OnCrashFn = fn (ztg.Commands, ztg.CrashReason) anyerror!void;
 
 const OptimizeMode = enum {
     /// (DEFAULT) Pre-allocates everything with a known max. Reduces the number of allocations per frame greatly, but can use a lot of memory with large components
@@ -74,9 +76,7 @@ const OnEntOverflow = enum {
 /// Passes `includes` to `self.include(...)`
 /// Also adds `Allocator` and `Random` resources
 pub fn init(comptime includes: []const type) Self {
-    var self = Self{
-        .resources = TypeBuilder{},
-    };
+    var self = Self{};
 
     for (@typeInfo(default_stages).Struct.decls) |decl| {
         self.stage_defs = self.stage_defs ++ .{.{
@@ -160,7 +160,12 @@ pub fn addStage(comptime self: *Self, comptime stage_name: @TypeOf(.enum_literal
 
     self.stage_defs = self.stage_defs ++ .{.{
         .name = @tagName(stage_name),
-        .def = TypeBuilder.init(true, .Auto),
+        .labels = &[_]StageLabel{.{
+            .name = "body",
+            .before = TypeBuilder{ .is_tuple = true },
+            .during = TypeBuilder{ .is_tuple = true },
+            .after = TypeBuilder{ .is_tuple = true },
+        }},
     }};
 }
 
@@ -250,15 +255,17 @@ pub fn addEvent(comptime self: *Self, comptime T: type) void {
 ///
 /// Example:
 /// ```zig
-/// wb.addSystemsToStage(.draw, .{ drawPlayer });
+/// wb.addSystemsToStage(.draw, drawPlayer);
+/// // or for multiple
+/// wb.addSystemsToStage(.draw, .{ drawPlayer, drawEnemy });
 /// ```
 pub fn addSystemsToStage(comptime self: *Self, comptime stage_tag: @TypeOf(.enum_literal), systems: anytype) void {
     self.addSystemsToStageByName(@tagName(stage_tag), systems);
 }
 
 /// Same as `addSystemsToStage` but with a string instead of an enum literal
-pub fn addSystemsToStageByName(comptime self: *Self, comptime stage_name: []const u8, systems: anytype) void {
-    if (comptime !std.meta.trait.isTuple(@TypeOf(systems))) @compileError("Expected tuple for @TypeOf(systems).");
+pub fn addSystemsToStageByName(comptime self: *Self, comptime stage_name: []const u8, _systems: anytype) void {
+    const systems = if (comptime !std.meta.trait.isTuple(@TypeOf(_systems))) .{_systems} else _systems;
 
     const stage_index = comptime blk: {
         // if stage is part of DEFAULT_STAGES, we already know the index
@@ -283,12 +290,7 @@ pub fn addSystemsToStageByName(comptime self: *Self, comptime stage_name: []cons
                     for (self.stage_defs[stage_index].labels, 0..) |label, i| {
                         if (std.mem.eql(u8, label.name, @tagName(sys.label))) break :blk i;
                     }
-                    self.stage_defs[stage_index].labels = self.stage_defs[stage_index].labels ++ &.{.{
-                        .name = sys.label,
-                        .before = TypeBuilder.init(true, .Auto),
-                        .during = TypeBuilder.init(true, .Auto),
-                        .after = TypeBuilder.init(true, .Auto),
-                    }};
+                    self.createNewLabel(stage_index, @tagName(sys.label));
                     break :blk self.stage_defs[stage_index].labels.len - 1;
                 };
 
@@ -299,7 +301,7 @@ pub fn addSystemsToStageByName(comptime self: *Self, comptime stage_name: []cons
     }
 }
 
-fn appendToStageDefsLabel(comptime self: *Self, comptime stage_index: usize, comptime label_index: usize, comptime offset: comptime_int, sys: anytype) void {
+fn createNewLabel(comptime self: *Self, comptime stage_index: usize, comptime label_name: []const u8) void {
     // Very stupid thing I'm doing here, because
     // I cant manage to get a mut pointer to the
     // stage def's TypeBuilder :(
@@ -309,9 +311,34 @@ fn appendToStageDefsLabel(comptime self: *Self, comptime stage_index: usize, com
     var stage_labels: [self.stage_defs[stage_index].labels.len]StageLabel = undefined;
     std.mem.copyForwards(StageLabel, &stage_labels, stage_defs[stage_index].labels);
 
+    var stage_labels_new = stage_labels ++ [_]StageLabel{.{
+        .name = label_name,
+        .before = TypeBuilder{ .is_tuple = true },
+        .during = TypeBuilder{ .is_tuple = true },
+        .after = TypeBuilder{ .is_tuple = true },
+    }};
+
+    stage_defs[stage_index].labels = &stage_labels_new;
+    self.stage_defs = &stage_defs;
+}
+
+fn appendToStageDefsLabel(comptime self: *Self, comptime stage_index: usize, comptime label_index: usize, comptime order: ztg.StageOrder, sys: anytype) void {
+    // Very stupid thing I'm doing here, because
+    // I cant manage to get a mut pointer to the
+    // stage def's TypeBuilder :(
+    var stage_defs: [self.stage_defs.len]StageDef = undefined;
+    std.mem.copyForwards(StageDef, &stage_defs, self.stage_defs);
+
+    var stage_labels: [self.stage_defs[stage_index].labels.len]StageLabel = undefined;
+    std.mem.copyForwards(StageLabel, &stage_labels, stage_defs[stage_index].labels);
+
+    if (order.before) |before| {
+        
+    }
+
     switch (offset) {
-        -1 => stage_labels[label_index].before.appendTupleFieldExtra(@TypeOf(sys), sys, true, 0),
-        0 => stage_labels[label_index].during.appendTupleFieldExtra(@TypeOf(sys), sys, true, 0),
+        .before => stage_labels[label_index].before.appendTupleFieldExtra(@TypeOf(sys), sys, true, 0),
+        .during => stage_labels[label_index].during.appendTupleFieldExtra(@TypeOf(sys), sys, true, 0),
         1 => stage_labels[label_index].after.appendTupleFieldExtra(@TypeOf(sys), sys, true, 0),
         else => @compileError("Unsupported offset."),
     }
@@ -355,20 +382,18 @@ pub inline fn addUpdateSystems(comptime self: *Self, systems: anytype) void {
     addSystemsToStage(self, .update, systems);
 }
 
-/// Shorthand for `addSystemsToStage(.update, ...)`
+/// Shorthand for `addSystemsToStage(.draw, ...)`
 pub inline fn addDrawSystems(comptime self: *Self, systems: anytype) void {
     addSystemsToStage(self, .draw, systems);
 }
 
-fn defaultCrash(com: ztg.Commands, r: ztg.CrashReason) anyerror!ztg.Status {
+fn defaultCrash(com: ztg.Commands, r: ztg.CrashReason) anyerror!void {
     _ = com;
     ztg.log.err("Crashed due to: {}\n", .{r});
-    return .failure;
 }
 
 /// Returns the final World type
 pub fn Build(comptime self: Self) type {
-    if (self.max_entities > 500_000) self.warn("It isn't recommended to have a max_entities count over 500,000 as it could cause unstable performance.");
     return World(self);
 }
 
@@ -376,10 +401,21 @@ fn warn(comptime self: *Self, comptime message: []const u8) void {
     self.warnings = self.warnings ++ message ++ "\n";
 }
 
-const MyWorld = Self.init(&.{
-    base,
-}).Build();
+const test_namespace = struct {
+    pub const MyWorld = Self.init(&.{
+        base,
+    }).Build();
+
+    pub const MyComponent = struct {
+        value: i32,
+    };
+
+    pub fn include(comptime wb: *Self) void {
+        wb.addComponents(&.{MyComponent});
+    }
+};
 
 test Self {
-    _ = MyWorld;
+    var w = try test_namespace.MyWorld.init(std.testing.allocator);
+    defer w.deinit();
 }
