@@ -7,7 +7,7 @@ const Options = struct {
     update_stage: struct {
         stage: @TypeOf(.enum_literal) = .update,
         label: @TypeOf(.enum_literal) = .body,
-        offset: comptime_int = 0,
+        order: ztg.SystemOrder = .during,
     } = .{},
 };
 
@@ -281,7 +281,7 @@ pub fn Input(
                 .init = .{ini_Self},
                 .deinit = .{dei_Self},
             });
-            wb.addSystemsToStage(options.update_stage.stage, .{ztg.stageLabelOffset(options.update_stage.label, update_Self, options.update_stage.offset)});
+            wb.addSystemsToStage(options.update_stage.stage, .{ztg.ordered(options.update_stage.label, update_Self, options.update_stage.order)});
         }
 
         fn ini_Self(self: *Self, alloc: std.mem.Allocator) void {

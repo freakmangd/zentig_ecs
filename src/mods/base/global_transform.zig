@@ -61,7 +61,8 @@ fn getUpdatedBasis(self: *Self, com: ztg.Commands, ent: ztg.Entity) ztg.zmath.Ma
 
 pub fn include(comptime wb: *ztg.WorldBuilder) void {
     wb.addComponents(&.{Self});
-    wb.addSystemsToStage(.post_update, .{ztg.label(.gtr_update, pou_updateGlobals)});
+    wb.addLabel(.post_update, .gtr_update, .default);
+    wb.addSystemsToStage(.post_update, ztg.during(.gtr_update, pou_updateGlobals));
 }
 
 fn pou_updateGlobals(com: ztg.Commands, q: ztg.Query(.{ ztg.Entity, Self })) void {

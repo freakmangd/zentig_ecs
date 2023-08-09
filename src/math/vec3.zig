@@ -37,6 +37,8 @@ pub const Vec3 = extern struct {
         return .{ .x = self.x, .y = self.y };
     }
 
+    /// Converts the Vector into a @Vector object of type `T`, doing
+    /// the necessary conversions.
     pub inline fn intoVectorOf(self: Vec3, comptime T: type) @Vector(3, T) {
         if (comptime std.meta.trait.isFloat(T)) {
             if (comptime T == f32) {
@@ -107,6 +109,7 @@ pub const Vec3 = extern struct {
         return .{ .x = self.x, .y = self.y };
     }
 
+    /// Calculates the cross product of two vectors
     pub inline fn cross(a: Vec3, b: Vec3) Vec3 {
         return .{
             .x = @mulAdd(f32, a.y, b.z, -a.z * b.y),

@@ -6,7 +6,7 @@ pub const EntityHandle = @import("entity_handle.zig");
 pub usingnamespace @import("events.zig");
 pub usingnamespace @import("query_modifiers.zig");
 pub usingnamespace @import("query.zig");
-pub usingnamespace @import("stage_offset.zig");
+pub usingnamespace @import("system_order.zig");
 
 pub const math = @import("math/init.zig");
 pub const zmath = @import("zmath");
@@ -28,26 +28,26 @@ pub const Commands = @import("commands.zig");
 
 pub const base = @import("mods/base/init.zig");
 pub const input = @import("mods/input.zig");
-pub const physics = @import("mods/physics.zig");
+//pub const physics = @import("mods/physics.zig");
 
 pub const log = std.log.scoped(.zentig);
 
 pub const meta = @import("meta.zig");
 pub const profiler = @import("etc/profiler.zig");
 
+pub const FrameAlloc = struct { std.mem.Allocator };
 pub const CrashReason = enum { hit_ent_limit };
 
 test {
-    _ = @import("ecs.zig");
     _ = @import("events.zig");
     _ = @import("query_modifiers.zig");
     _ = @import("query.zig");
+    _ = @import("system_order.zig");
     _ = math;
     _ = WorldBuilder;
     _ = Commands;
     _ = base;
     _ = input;
-    _ = physics;
     _ = meta;
     _ = profiler;
 }

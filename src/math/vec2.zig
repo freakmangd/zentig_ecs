@@ -29,6 +29,8 @@ pub const Vec2 = extern struct {
         return .{ .x = self.x, .y = self.y };
     }
 
+    /// Converts the Vector into a @Vector object of type `T`, doing
+    /// the necessary conversions.
     pub inline fn intoVectorOf(self: Vec2, comptime T: type) @Vector(2, T) {
         if (comptime std.meta.trait.isFloat(T)) {
             if (comptime T == f32) {
@@ -142,6 +144,7 @@ pub const Vec2 = extern struct {
         return fromDirAngle(rand.float(f32) * std.math.pi * 2);
     }
 
+    /// Returns the perpendicular of the vector
     pub inline fn perpendicular(dir: Vec2) Vec2 {
         return .{
             .x = -dir.y,

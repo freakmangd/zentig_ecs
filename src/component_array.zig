@@ -42,7 +42,6 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
             errdefer self.entities.deinit(alloc);
 
             self.ent_to_comp_idx = try alloc.alloc(Index, max_ents);
-
             @memset(self.ent_to_comp_idx, null_bit);
 
             return self;
@@ -59,7 +58,7 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
         }
 
         pub fn assign(self: *Self, ent: ztg.Entity, entry: anytype) !void {
-            assertType(@TypeOf(entry));
+            self.assertType(@TypeOf(entry));
 
             try self.appendBytes(ent, std.mem.asBytes(&entry));
         }
@@ -119,7 +118,7 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
         }
 
         pub fn getAs(self: *const Self, comptime T: type, ent: ztg.Entity) ?*T {
-            assertType(T);
+            self.assertType(T);
 
             var g = self.get(ent) orelse return null;
             return cast(T, g);
@@ -138,7 +137,7 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
             return @ptrCast(@alignCast(data));
         }
 
-        pub inline fn iterator(self: *Self) ByteArray.ByteIterator {
+        pub fn iterator(self: *Self) ByteArray.ByteIterator {
             return self.components_data.iterator();
         }
 

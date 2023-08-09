@@ -63,6 +63,8 @@ pub const Vec4 = extern struct {
         return .{ .x = self.x, .y = self.y, .z = self.z };
     }
 
+    /// Converts the Vector into a @Vector object of type `T`, doing
+    /// the necessary conversions.
     pub inline fn intoVectorOf(self: Self, comptime T: type) @Vector(4, T) {
         if (comptime std.meta.trait.isFloat(T)) {
             if (comptime T == f32) {

@@ -11,7 +11,7 @@ pub fn init(comptime Self: type) type {
 
     return struct {
         pub inline fn equals(a: Self, b: Self) bool {
-            return a.intoSimd() == b.intoSimd();
+            return @reduce(.And, a.intoSimd() == b.intoSimd());
         }
 
         /// Compares a and b using the same method as `std.math.approxEqRel` with a custom tolerance
@@ -30,8 +30,8 @@ pub fn init(comptime Self: type) type {
             const x = a.intoSimd();
             const y = b.intoSimd();
 
-            if (x == y) return true;
-            return @fabs(x - y) <= tolerance;
+            if (@reduce(.And, x == y)) return true;
+            return @reduce(.And, @fabs(x - y) <= @as(@Vector(vec_len, f32), @splat(tolerance)));
         }
 
         /// Compares a and b using the same method as `std.math.approxEqRel`
@@ -223,7 +223,7 @@ pub fn init(comptime Self: type) type {
         const Component = blk: {
             var info = @typeInfo(std.meta.FieldEnum(Self)).Enum;
             info.tag_type = i32;
-            break :blk @Type(info);
+            break :blk @Type(.{ .Enum = info });
         };
 
         /// Returns the vector with it's components ordered in the method defined in `comps`
@@ -233,7 +233,7 @@ pub fn init(comptime Self: type) type {
         /// const b = a.swizzle(.{ .y, .x });
         /// try b.expectEqual(.{ 20, 10 });
         /// ```
-        pub inline fn swizzle(self: Self, comptime comps: @Vector(vec_len, Component)) Self {
+        pub inline fn swizzle(self: Self, comptime comps: [vec_len]Component) Self {
             return fromSimd(@shuffle(f32, self.intoSimd(), undefined, @as(@Vector(vec_len, i32), @bitCast(comps))));
         }
 
@@ -302,7 +302,8 @@ pub fn init(comptime Self: type) type {
 
 pub fn convertFieldToF32(obj: anytype, comptime field_name: []const u8, default: f32) f32 {
     const O = @TypeOf(obj);
-    const FieldType = std.meta.FieldType(O, std.meta.stringToEnum(field_name)) orelse return default;
+    const field_index = std.meta.fieldIndex(O, field_name) orelse return default;
+    const FieldType = std.meta.fields(O)[field_index].type;
 
     return switch (@typeInfo(FieldType)) {
         .Int => @floatFromInt(@field(obj, field_name)),
@@ -336,7 +337,7 @@ test "getNormalized" {
 
 test "swizzle" {
     const vec = Vec2.init(10, 20);
-    try Vec2.expectEqual(init(20, 10), vec.swizzle(.y, .x));
-    try Vec2.expectEqual(init(10, 10), vec.swizzle(.x, .x));
-    try Vec2.expectEqual(init(20, 20), vec.swizzle(.y, .y));
+    try Vec2.expectEqual(Vec2.init(20, 10), vec.swizzle(.{ .y, .x }));
+    try Vec2.expectEqual(Vec2.init(10, 10), vec.swizzle(.{ .x, .x }));
+    try Vec2.expectEqual(Vec2.init(20, 20), vec.swizzle(.{ .y, .y }));
 }

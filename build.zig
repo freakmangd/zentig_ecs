@@ -14,7 +14,13 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    b.modules.put(b.dupe("zmath"), zmath_pkg.zmath) catch @panic("OOM");
+    b.modules.put(b.dupe("zmath_options"), zmath_pkg.zmath_options) catch @panic("OOM");
+
+    // LOCAL TESTING
+
     const examples = [_]struct { []const u8, []const u8, []const u8 }{
+        .{ "hello_world", "examples/hello_world.zig", "Run tutorial example" },
         .{ "example", "examples/example.zig", "Run basic example" },
         .{ "input", "examples/input_example.zig", "Run input example" },
     };
@@ -68,83 +74,81 @@ const ZentigModule = struct {
     exe: *std.build.Step.Compile,
 };
 
-pub fn addAsLocalModule(
+pub fn addAsLocalModule(settings: struct {
     name: []const u8,
     path_to_root: []const u8,
-    b: *std.Build,
+    build: *std.Build,
     exe: *std.Build.Step.Compile,
     target: std.zig.CrossTarget,
     optimize: std.builtin.OptimizeMode,
-    options: struct {
-        import_zmath_as: ?[]const u8 = null,
-        import_zmath_options_as: ?[]const u8 = null,
-    },
-) ZentigModule {
-    const zmath_pkg = zmath.package(b, target, optimize, .{});
+    import_zmath_as: ?[]const u8 = null,
+    import_zmath_options_as: ?[]const u8 = null,
+}) ZentigModule {
+    const zmath_pkg = zmath.package(settings.build, settings.target, settings.optimize, .{});
 
-    const zentig_dep = b.anonymousDependency(path_to_root, @This(), .{
-        .target = target,
-        .optimize = optimize,
+    const zentig_dep = settings.build.anonymousDependency(settings.path_to_root, @This(), .{
+        .target = settings.target,
+        .optimize = settings.optimize,
     });
 
-    exe.addModule(name, zentig_dep.module("zentig"));
+    settings.exe.addModule(settings.name, zentig_dep.module("zentig"));
 
-    if (options.import_zmath_as) |mn|
-        exe.addModule(mn, zmath_pkg.zmath);
+    if (settings.import_zmath_as) |mn|
+        settings.exe.addModule(mn, zmath_pkg.zmath);
 
-    if (options.import_zmath_options_as) |mn|
-        exe.addModule(mn, zmath_pkg.zmath_options);
+    if (settings.import_zmath_options_as) |mn|
+        settings.exe.addModule(mn, zmath_pkg.zmath_options);
 
     return .{
         .zentig_mod = zentig_dep.module("zentig"),
         .zmath_mod = zmath_pkg.zmath,
         .zmath_options_mod = zmath_pkg.zmath_options,
 
-        .target = target,
-        .optimize = optimize,
+        .target = settings.target,
+        .optimize = settings.optimize,
 
-        .b = b,
-        .exe = exe,
+        .b = settings.build,
+        .exe = settings.exe,
     };
 }
 
-pub fn addAsLocalModule2(
-    name: []const u8,
-    b: *std.Build,
-    exe: *std.build.Step.Compile,
-    target: std.zig.CrossTarget,
-    optimize: std.builtin.OptimizeMode,
-    options: struct { import_zmath_as: ?[]const u8 = null, import_zmath_options_as: ?[]const u8 = null },
-) ZentigModule {
-    const zmath_pkg = zmath.package(b, target, optimize, .{});
-
-    const mod = b.createModule(.{
-        .source_file = .{ .path = srcdir ++ "/src/init.zig" },
-        .dependencies = &.{
-            .{ .name = "zmath", .module = zmath_pkg.zmath },
-        },
-    });
-
-    if (options.import_zmath_as) |impas|
-        exe.addModule(impas, zmath_pkg.zmath);
-
-    if (options.import_zmath_options_as) |impas|
-        exe.addModule(impas, zmath_pkg.zmath_options);
-
-    exe.addModule(name, mod);
-
-    return .{
-        .zentig_mod = mod,
-        .zmath_mod = zmath_pkg.zmath,
-        .zmath_options_mod = zmath_pkg.zmath_options,
-
-        .target = target,
-        .optimize = optimize,
-
-        .b = b,
-        .exe = exe,
-    };
-}
+//pub fn addAsLocalModule2(
+//    name: []const u8,
+//    b: *std.Build,
+//    exe: *std.build.Step.Compile,
+//    target: std.zig.CrossTarget,
+//    optimize: std.builtin.OptimizeMode,
+//    options: struct { import_zmath_as: ?[]const u8 = null, import_zmath_options_as: ?[]const u8 = null },
+//) ZentigModule {
+//    const zmath_pkg = zmath.package(b, target, optimize, .{});
+//
+//    const mod = b.createModule(.{
+//        .source_file = .{ .path = srcdir ++ "/src/init.zig" },
+//        .dependencies = &.{
+//            .{ .name = "zmath", .module = zmath_pkg.zmath },
+//        },
+//    });
+//
+//    if (options.import_zmath_as) |impas|
+//        exe.addModule(impas, zmath_pkg.zmath);
+//
+//    if (options.import_zmath_options_as) |impas|
+//        exe.addModule(impas, zmath_pkg.zmath_options);
+//
+//    exe.addModule(name, mod);
+//
+//    return .{
+//        .zentig_mod = mod,
+//        .zmath_mod = zmath_pkg.zmath,
+//        .zmath_options_mod = zmath_pkg.zmath_options,
+//
+//        .target = target,
+//        .optimize = optimize,
+//
+//        .b = b,
+//        .exe = exe,
+//    };
+//}
 
 const srcdir = struct {
     fn getSrcDir() []const u8 {

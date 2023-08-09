@@ -4,23 +4,20 @@ const world = @import("world.zig");
 
 const TypeMap = ztg.meta.TypeMap;
 const TypeBuilder = ztg.meta.TypeBuilder;
-const base = ztg.base;
-const physics = ztg.physics;
-const util = ztg.util;
-
-const Entity = @import("ecs.zig").Entity;
 const World = world.World;
 
 const Self = @This();
 
-pub const StageDef = struct {
+const StageLabel = struct {
     name: []const u8,
-    stages: []const Stage,
+    before: TypeBuilder = .{ .is_tuple = true },
+    during: TypeBuilder = .{ .is_tuple = true },
+    after: TypeBuilder = .{ .is_tuple = true },
 };
 
-pub const Stage = struct {
-    inner: TypeBuilder,
-    order: usize,
+pub const StageDef = struct {
+    name: []const u8,
+    labels: ztg.meta.ComptimeList(StageLabel),
 };
 
 const default_stages = struct {
@@ -38,7 +35,7 @@ const default_stages = struct {
 warnings: []const u8 = "",
 
 max_entities: usize = 100_000,
-stage_defs: []const StageDef = &.{},
+stage_defs: ztg.meta.ComptimeList(StageDef) = .{},
 
 comp_types: TypeMap = .{},
 event_types: TypeMap = .{},
@@ -55,6 +52,7 @@ on_ent_overflow: OnEntOverflow = .crash,
 
 pub const OnCrashFn = fn (ztg.Commands, ztg.CrashReason) anyerror!void;
 
+// TODO: implement
 const OptimizeMode = enum {
     /// (DEFAULT) Pre-allocates everything with a known max. Reduces the number of allocations per frame greatly, but can use a lot of memory with large components
     low_alloc,
@@ -79,18 +77,14 @@ pub fn init(comptime includes: []const type) Self {
     var self = Self{};
 
     for (@typeInfo(default_stages).Struct.decls) |decl| {
-        self.stage_defs = self.stage_defs ++ .{.{
+        self.stage_defs.append(.{
             .name = decl.name,
-            .labels = &[_]StageLabel{.{
-                .name = "body",
-                .before = TypeBuilder{ .is_tuple = true },
-                .during = TypeBuilder{ .is_tuple = true },
-                .after = TypeBuilder{ .is_tuple = true },
-            }},
-        }};
+            .labels = ztg.meta.ComptimeList(StageLabel).fromSlice(&.{.{ .name = "body" }}),
+        });
     }
 
     self.addResource(std.mem.Allocator, undefined);
+    self.addResource(ztg.FrameAlloc, undefined);
     self.addResource(std.rand.Random, undefined);
     self.include(includes);
 
@@ -150,7 +144,7 @@ pub fn include(comptime self: *Self, comptime includes: []const type) void {
 ///   std.debug.print("Hello.\n", .{});
 /// }
 /// ```
-pub fn addStage(comptime self: *Self, comptime stage_name: @TypeOf(.enum_literal)) void {
+pub fn addStage(comptime self: *Self, comptime stage_name: ztg.meta.EnumLiteral) void {
     for (self.stage_defs) |sdef| {
         if (std.mem.eql(u8, sdef.name, @tagName(stage_name))) {
             self.warn("Tried to add stage `" ++ sdef.name ++ "` to world more than once.");
@@ -158,15 +152,63 @@ pub fn addStage(comptime self: *Self, comptime stage_name: @TypeOf(.enum_literal
         }
     }
 
-    self.stage_defs = self.stage_defs ++ .{.{
+    self.stage_defs.append(.{
         .name = @tagName(stage_name),
-        .labels = &[_]StageLabel{.{
-            .name = "body",
-            .before = TypeBuilder{ .is_tuple = true },
-            .during = TypeBuilder{ .is_tuple = true },
-            .after = TypeBuilder{ .is_tuple = true },
-        }},
-    }};
+        .labels = ztg.meta.ComptimeList(StageLabel).fromSlice(&.{.{ .name = "body" }}),
+    });
+}
+
+fn stageIndexFromName(comptime self: Self, comptime stage_name: []const u8) usize {
+    // if stage is part of DEFAULT_STAGES, we already know the index
+    if (@hasDecl(default_stages, stage_name)) return @field(default_stages, stage_name);
+
+    for (self.stage_defs, 0..) |sdef, i| {
+        if (std.mem.eql(u8, sdef.name, stage_name)) {
+            return i;
+        }
+    }
+
+    @compileError("Stage " ++ stage_name ++ " is not in world. Consider adding it with WorldBuilder.addStage");
+}
+
+fn labelIndexFromName(comptime stage: StageDef, comptime label_name: []const u8) usize {
+    for (stage.labels.items, 0..) |label, i| {
+        if (std.mem.eql(u8, label.name, label_name)) return i;
+    }
+    @compileError("Cannot find label " ++ label_name ++ " within stage. Consider adding it with WorldBuilder.addLabel");
+}
+
+/// Adds a new label named `label_name` to the system named `stage_name`.
+/// This label can then be used to order your systems.
+///
+/// Each stage has a default label of `.body` which all systems are added
+/// to by default.
+///
+/// Example:
+/// ```zig
+/// wb.addLabel(.update, .my_early_label, .{ .before = .body });
+/// wb.addLabel(.update, .my_label, .default); // default appends it to the end of the label list
+///
+/// wb.addSystemsToStage(.update, ztg.after(.my_label, mySystem));
+/// ```
+pub fn addLabel(comptime self: *Self, comptime stage_name: ztg.meta.EnumLiteral, comptime label_name: ztg.meta.EnumLiteral, comptime order: union(enum) {
+    before: ztg.meta.EnumLiteral,
+    after: ztg.meta.EnumLiteral,
+    default,
+}) void {
+    const stage_index = self.stageIndexFromName(@tagName(stage_name));
+    var stage = self.stage_defs.items[stage_index];
+
+    const index = switch (order) {
+        .before => |label| labelIndexFromName(stage, @tagName(label)),
+        .after => |label| labelIndexFromName(stage, @tagName(label)) + 1,
+        .default => stage.labels.items.len,
+    };
+
+    stage.labels.insert(index, .{
+        .name = @tagName(label_name),
+    });
+    self.stage_defs.replace(stage_index, stage);
 }
 
 /// After you add a component, you can then query for it in your systems:
@@ -266,85 +308,34 @@ pub fn addSystemsToStage(comptime self: *Self, comptime stage_tag: @TypeOf(.enum
 /// Same as `addSystemsToStage` but with a string instead of an enum literal
 pub fn addSystemsToStageByName(comptime self: *Self, comptime stage_name: []const u8, _systems: anytype) void {
     const systems = if (comptime !std.meta.trait.isTuple(@TypeOf(_systems))) .{_systems} else _systems;
-
-    const stage_index = comptime blk: {
-        // if stage is part of DEFAULT_STAGES, we already know the index
-        if (@hasDecl(default_stages, stage_name)) break :blk @field(default_stages, stage_name);
-
-        for (self.stage_defs, 0..) |sdef, i| {
-            if (std.mem.eql(u8, sdef.name, stage_name)) {
-                break :blk i;
-            }
-        }
-
-        @compileError("Stage " ++ stage_name ++ " is not in world.");
-    };
+    const stage_index = comptime self.stageIndexFromName(stage_name);
 
     for (systems) |sys| {
         switch (@typeInfo(@TypeOf(sys))) {
-            .Fn => self.appendToStageDefsLabel(stage_index, 0, 0, sys),
+            .Fn => self.appendToStageLabel(stage_index, "body", .during, sys),
             .Struct => {
-                if (!@hasField(@TypeOf(sys), "label")) @compileError("Passed unsupported struct type to addSystems, the only supported structs come from ztg.before(), ztg.label(), and ztg.after().");
-
-                const label_index = blk: {
-                    for (self.stage_defs[stage_index].labels, 0..) |label, i| {
-                        if (std.mem.eql(u8, label.name, @tagName(sys.label))) break :blk i;
-                    }
-                    self.createNewLabel(stage_index, @tagName(sys.label));
-                    break :blk self.stage_defs[stage_index].labels.len - 1;
-                };
-
-                self.appendToStageDefsLabel(stage_index, label_index, sys.offset, sys.f);
+                if (!@hasField(@TypeOf(sys), "label")) @compileError("Passed unsupported struct type to addSystems, the only supported structs come from ztg.before(), ztg.during(), and ztg.after().");
+                self.appendToStageLabel(stage_index, @tagName(sys.label), sys.offset, sys.f);
             },
-            else => @compileError("addSystems expected a tuple of functions, a member of that tuple was of type `" ++ @typeName(sys) ++ "` which is not supported."),
+            else => @compileError("addSystems expected a tuple of supported types, a member of that tuple was of type `" ++ @typeName(@TypeOf(sys)) ++ "` which is not supported."),
         }
     }
 }
 
-fn createNewLabel(comptime self: *Self, comptime stage_index: usize, comptime label_name: []const u8) void {
-    // Very stupid thing I'm doing here, because
-    // I cant manage to get a mut pointer to the
-    // stage def's TypeBuilder :(
-    var stage_defs: [self.stage_defs.len]StageDef = undefined;
-    std.mem.copyForwards(StageDef, &stage_defs, self.stage_defs);
+fn appendToStageLabel(comptime self: *Self, comptime stage_index: usize, comptime label_name: []const u8, comptime offset: ztg.SystemOrder, sys: anytype) void {
+    var stage = self.stage_defs.items[stage_index];
 
-    var stage_labels: [self.stage_defs[stage_index].labels.len]StageLabel = undefined;
-    std.mem.copyForwards(StageLabel, &stage_labels, stage_defs[stage_index].labels);
-
-    var stage_labels_new = stage_labels ++ [_]StageLabel{.{
-        .name = label_name,
-        .before = TypeBuilder{ .is_tuple = true },
-        .during = TypeBuilder{ .is_tuple = true },
-        .after = TypeBuilder{ .is_tuple = true },
-    }};
-
-    stage_defs[stage_index].labels = &stage_labels_new;
-    self.stage_defs = &stage_defs;
-}
-
-fn appendToStageDefsLabel(comptime self: *Self, comptime stage_index: usize, comptime label_index: usize, comptime order: ztg.StageOrder, sys: anytype) void {
-    // Very stupid thing I'm doing here, because
-    // I cant manage to get a mut pointer to the
-    // stage def's TypeBuilder :(
-    var stage_defs: [self.stage_defs.len]StageDef = undefined;
-    std.mem.copyForwards(StageDef, &stage_defs, self.stage_defs);
-
-    var stage_labels: [self.stage_defs[stage_index].labels.len]StageLabel = undefined;
-    std.mem.copyForwards(StageLabel, &stage_labels, stage_defs[stage_index].labels);
-
-    if (order.before) |before| {
-        
-    }
+    const label_index = labelIndexFromName(stage, label_name);
+    var label = stage.labels.items[label_index];
 
     switch (offset) {
-        .before => stage_labels[label_index].before.appendTupleFieldExtra(@TypeOf(sys), sys, true, 0),
-        .during => stage_labels[label_index].during.appendTupleFieldExtra(@TypeOf(sys), sys, true, 0),
-        1 => stage_labels[label_index].after.appendTupleFieldExtra(@TypeOf(sys), sys, true, 0),
-        else => @compileError("Unsupported offset."),
+        .before => label.before.appendTupleFieldExtra(@TypeOf(sys), sys, true, 0),
+        .during => label.during.appendTupleFieldExtra(@TypeOf(sys), sys, true, 0),
+        .after => label.after.appendTupleFieldExtra(@TypeOf(sys), sys, true, 0),
     }
 
-    stage_defs[stage_index].labels = &stage_labels;
-    self.stage_defs = &stage_defs;
+    stage.labels.replace(label_index, label);
+    self.stage_defs.replace(stage_index, stage);
 }
 
 /// Useful for adding systems to multiple stages.
@@ -365,25 +356,27 @@ pub fn addSystems(comptime self: *Self, system_lists: anytype) void {
     }
 }
 
+/// Checks whether a stage with the name `stage_name` has been added
+/// to the worldbuilder.
 pub fn hasStageName(comptime self: *const Self, comptime stage_name: []const u8) bool {
-    inline for (self.stage_defs) |sdef| {
+    inline for (self.stage_defs.items) |sdef| {
         if (std.mem.eql(u8, sdef.name, stage_name)) return true;
     }
     return false;
 }
 
 /// Shorthand for `addSystemsToStage(.load, ...)`
-pub inline fn addLoadSystems(comptime self: *Self, systems: anytype) void {
+pub fn addLoadSystems(comptime self: *Self, systems: anytype) void {
     addSystemsToStage(self, .load, systems);
 }
 
 /// Shorthand for `addSystemsToStage(.update, ...)`
-pub inline fn addUpdateSystems(comptime self: *Self, systems: anytype) void {
+pub fn addUpdateSystems(comptime self: *Self, systems: anytype) void {
     addSystemsToStage(self, .update, systems);
 }
 
 /// Shorthand for `addSystemsToStage(.draw, ...)`
-pub inline fn addDrawSystems(comptime self: *Self, systems: anytype) void {
+pub fn addDrawSystems(comptime self: *Self, systems: anytype) void {
     addSystemsToStage(self, .draw, systems);
 }
 
@@ -403,7 +396,7 @@ fn warn(comptime self: *Self, comptime message: []const u8) void {
 
 const test_namespace = struct {
     pub const MyWorld = Self.init(&.{
-        base,
+        ztg.base,
     }).Build();
 
     pub const MyComponent = struct {

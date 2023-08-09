@@ -5,28 +5,32 @@ const EntityHandle = @This();
 com: ztg.Commands,
 ent: Entity,
 
-pub inline fn give(self: EntityHandle, comp: anytype) !void {
+pub fn give(self: EntityHandle, comp: anytype) !void {
     try self.com.giveEnt(self.ent, comp);
 }
 
-pub inline fn giveMany(self: EntityHandle, comps: anytype) !void {
+pub fn giveMany(self: EntityHandle, comps: anytype) !void {
     try self.com.giveEntMany(self.ent, comps);
 }
 
-pub inline fn checkHas(self: EntityHandle, comptime Comp: type) bool {
+pub fn removeComponent(self: EntityHandle, comptime Comp: type) !void {
+    try self.com.removeComponent(self.ent, Comp);
+}
+
+pub fn checkHas(self: EntityHandle, comptime Comp: type) bool {
     return self.com.checkEntHas(self.ent, Comp);
 }
 
-pub inline fn getComponent(self: EntityHandle, comptime Comp: type) ?*Comp {
+pub fn getComponent(self: EntityHandle, comptime Comp: type) ?*Comp {
     return self.com.getComponent(self.ent, Comp);
 }
 
-pub inline fn getComponentPtr(self: EntityHandle, comptime Comp: type) ?*Comp {
+pub fn getComponentPtr(self: EntityHandle, comptime Comp: type) ?*Comp {
     return self.com.getComponentPtr(self.ent, Comp);
 }
 
-/// `parent` accepted types: ?Entity, EntityHandle, null
-pub inline fn setParent(self: EntityHandle, parent: anytype) !void {
+/// `parent` accepted types: ?Entity, EntityHandle, @TypeOf(null)
+pub fn setParent(self: EntityHandle, parent: anytype) !void {
     switch (@TypeOf(parent)) {
         Entity, ?Entity => try self.com.setEntParent(self.ent, parent),
         EntityHandle => try self.com.setEntParent(self.ent, parent.ent),
@@ -36,7 +40,7 @@ pub inline fn setParent(self: EntityHandle, parent: anytype) !void {
 }
 
 /// `child` accepted types: ?Entity, EntityHandle
-pub inline fn giveChild(self: EntityHandle, child: anytype) !void {
+pub fn giveChild(self: EntityHandle, child: anytype) !void {
     switch (@TypeOf(child)) {
         Entity, ?Entity => try self.com.giveEntChild(self.ent, child),
         EntityHandle => try self.com.giveEntChild(self.ent, child.ent),

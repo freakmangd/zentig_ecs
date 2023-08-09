@@ -2,6 +2,7 @@
 //! or are too specific to be of any use outsize zentig.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const ztg = @import("init.zig");
 
 /// Get the element type of a MultiArrayList
@@ -15,7 +16,7 @@ pub fn ArrayHashMapElem(comptime T: type) type {
 }
 
 pub fn assertOkOnAddedFunction(comptime Container: type) void {
-    const member_type = comptime ztg.meta.memberFnType(Container, Container.onAdded);
+    const member_type = comptime ztg.meta.memberFnType(Container, "onAdded");
     const fn_info = @typeInfo(@TypeOf(Container.onAdded)).Fn;
 
     const return_type_info = @typeInfo(fn_info.return_type.?);
@@ -30,16 +31,30 @@ pub fn assertOkOnAddedFunction(comptime Container: type) void {
     }
 }
 
+pub fn resetCompIds() void {
+    id_counter = 0;
+    last_reset_id += 1;
+}
+
 pub const CompId = usize;
+var last_reset_id: if (builtin.mode == .Debug) usize else void = if (builtin.mode == .Debug) 0 else void{};
 var id_counter: CompId = 0;
 pub fn compId(comptime T: type) CompId {
     _ = T;
     const static = struct {
+        var reset_id: if (builtin.mode == .Debug) usize else void = if (builtin.mode == .Debug) 0 else void{};
         var id: ?CompId = null;
     };
-    const result = static.id orelse blk: {
-        static.id = id_counter;
-        id_counter += 1;
+    const result = blk: {
+        if (static.id == null or if (comptime builtin.mode == .Debug) if_blk: {
+            break :if_blk static.reset_id != last_reset_id;
+        } else if_blk: {
+            break :if_blk false;
+        }) {
+            static.id = id_counter;
+            static.reset_id = last_reset_id;
+            id_counter += 1;
+        }
         break :blk static.id.?;
     };
     return result;

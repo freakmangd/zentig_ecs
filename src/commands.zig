@@ -21,6 +21,7 @@ pub const Vtable = struct {
     set_ent_parent: *const fn (*anyopaque, ztg.Entity, ?ztg.Entity) error{ EntityDoesntExist, ParentDoesntExist }!void,
 
     add_component: *const fn (*anyopaque, Entity, util.CompId, *const anyopaque) world.CommandsGiveEntError!void,
+    remove_component: *const fn (*anyopaque, Entity, util.CompId) ca.Error!void,
     get_component_ptr: *const fn (*anyopaque, Entity, util.CompId) world.CommandsComponentError!?*anyopaque,
     check_ent_has: *const fn (*anyopaque, Entity, util.CompId) world.CommandsComponentError!bool,
 
@@ -46,7 +47,7 @@ pub const Vtable = struct {
 /// ```zig
 /// com.runStage(.render);
 /// ```
-pub inline fn runStage(self: Self, comptime stage_id: @TypeOf(.enum_literal)) anyerror!void {
+pub fn runStage(self: Self, comptime stage_id: @TypeOf(.enum_literal)) anyerror!void {
     try self.vtable.run_stage(self.ctx, @tagName(stage_id));
 }
 
@@ -56,7 +57,7 @@ pub inline fn runStage(self: Self, comptime stage_id: @TypeOf(.enum_literal)) an
 /// ```zig
 /// com.runStageByName("render");
 /// ```
-pub inline fn runStageByName(self: Self, stage_id: []const u8) anyerror!void {
+pub fn runStageByName(self: Self, stage_id: []const u8) anyerror!void {
     try self.vtable.run_stage(self.ctx, stage_id);
 }
 
@@ -81,7 +82,7 @@ pub fn runStageNameList(self: Self, stage_ids: []const []const u8) anyerror!void
 }
 
 /// Returns an EntityHandle to a new entity
-pub inline fn newEnt(self: Self) Allocator.Error!ztg.EntityHandle {
+pub fn newEnt(self: Self) Allocator.Error!ztg.EntityHandle {
     return .{ .ent = try self.vtable.new_ent(self.ctx), .com = self };
 }
 
@@ -99,15 +100,15 @@ pub fn newEntWithMany(self: Self, components: anytype) !ztg.EntityHandle {
     return ent;
 }
 
-pub inline fn getEntParent(self: Self, ent: ztg.Entity) !?ztg.Entity {
+pub fn getEntParent(self: Self, ent: ztg.Entity) !?ztg.Entity {
     return self.vtable.get_ent_parent(self.ctx, ent);
 }
 
-pub inline fn setEntParent(self: Self, ent: ztg.Entity, parent: ?ztg.Entity) !void {
+pub fn setEntParent(self: Self, ent: ztg.Entity, parent: ?ztg.Entity) !void {
     return self.vtable.set_ent_parent(self.ctx, ent, parent);
 }
 
-pub inline fn giveEntChild(self: Self, ent: ztg.Entity, child: ztg.Entity) !void {
+pub fn giveEntChild(self: Self, ent: ztg.Entity, child: ztg.Entity) !void {
     return self.vtable.set_ent_parent(self.ctx, child, ent);
 }
 
@@ -119,7 +120,7 @@ pub fn giveEnt(self: Self, ent: Entity, component: anytype) !void {
 
     if (comptime has_onAdded) util.assertOkOnAddedFunction(Component);
 
-    const member_type: ?ztg.meta.MemberFnType = comptime if (has_onAdded) ztg.meta.memberFnType(Component, Component.onAdded) else null;
+    const member_type: ?ztg.meta.MemberFnType = comptime if (has_onAdded) ztg.meta.memberFnType(Component, "onAdded") else null;
     const needs_mut = member_type == .by_ptr;
     const can_err = comptime has_onAdded and ztg.meta.canReturnError(@TypeOf(Component.onAdded));
     var mutable_comp: if (has_onAdded and needs_mut) Component else void = if (comptime has_onAdded and needs_mut) component else void{};
@@ -150,8 +151,12 @@ pub fn giveEntMany(self: Self, ent: Entity, components: anytype) !void {
     }
 }
 
+pub fn removeComponent(self: Self, ent: Entity, comptime Component: type) ca.Error!void {
+    return self.vtable.remove_component(self.ctx, ent, util.compId(Component));
+}
+
 /// Returns true or false depending on whether ent has the component of type `Component`
-pub inline fn checkEntHas(self: Self, ent: Entity, comptime Component: type) bool {
+pub fn checkEntHas(self: Self, ent: Entity, comptime Component: type) bool {
     return self.vtable.check_ent_has(self.ctx, ent, util.compId(Component)) catch |err| switch (err) {
         error.UnregisteredComponent => std.debug.panic("Cannot check if entity {} has component of type {s} as it has not been registered.", .{ ent, @typeName(Component) }),
     };
@@ -175,7 +180,7 @@ pub fn getComponentPtr(self: Self, ent: Entity, comptime Component: type) ?*Comp
 }
 
 /// Queues the removal of all components in lists associated with `ent`
-pub inline fn removeEnt(self: Self, ent: Entity) !void {
+pub fn removeEnt(self: Self, ent: Entity) !void {
     try self.vtable.remove_ent(self.ctx, ent);
 }
 

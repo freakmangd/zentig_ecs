@@ -26,8 +26,8 @@ pub const Player = struct {
 
 A basic system:
 ```zig
-pub fn playerSpeak(q: ztg.Query(.{Player}, .{})) !void {
-  for (q.items(.a)) |plr| {
+pub fn playerSpeak(q: ztg.Query(.{Player})) !void {
+  for (q.items(0)) |plr| {
     std.debug.print("My name is {s}\n", .{self.name});
   }
 }
@@ -38,7 +38,7 @@ Registering systems/components into a world:
 const MyWorld = blk: {
   var wb = ztg.WorldBuilder.init(&.{});
   wb.addComponents(&.{Player});
-  wb.addSystemsToStage(.update, .{playerSpeak});
+  wb.addSystemsToStage(.update, playerSpeak);
   break :blk wb.Build();
 };
 ```
@@ -63,8 +63,9 @@ As well as integrate third party libraries with only one extra line!
 
 `main.zig`:
 ```zig
-// .include() looks for a `pub fn include(comptime *WorldBuilder) (!)void` def in each struct
-// if the function errors, it's a compile error. But the signature can return either `!void` or `void`
+// .include() looks for a `pub fn include(comptime *WorldBuilder) (!)void` def 
+// in each struct. If the function errors it's a compile error,
+// but the signature can return either `!void` or `void`
 wb.include(&.{
   ztg.base,
   @include("player.zig"),
@@ -84,7 +85,8 @@ pub fn include(comptime wb: *ztg.WorldBuilder) void {
 ```zig
 pub fn include(comptime wb: *ztg.WorldBuilder) void {
   wb.include(&.{
-      ztg.base, // Namespaces can be included more than once to "ensure" they are included
+      // Namespaces can be included more than once to "ensure" they are included if you depend on them
+      ztg.base, 
       //...
   });
 }

@@ -18,24 +18,24 @@ var frames_sample_i: usize = 0;
 var frames_sample_counter: f32 = 0.0;
 var frames_sample = @Vector(frames_sample_len, usize){ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
-pub inline fn writeFpsStats(self: Time, writer: anytype) !void {
+pub fn writeFpsStats(self: Time, writer: anytype) !void {
     return writer.print("FPS: {d:.0}\nAVG: {d:.1}\nMAX: {}\nMIN: {}", .{ 1.0 / if (self.real_dt == 0.0) 1.0 else self.real_dt, getAvgFps(), getMaxFps(), getMinFps() });
 }
 
-pub inline fn getFps(self: Time) usize {
+pub fn getFps(self: Time) usize {
     return 1.0 / if (self.real_dt == 0.0) 1.0 else self.real_dt;
 }
 
-pub inline fn getAvgFps() f32 {
+pub fn getAvgFps() f32 {
     const total = @reduce(.Add, frames_sample);
     return @as(f32, @floatFromInt(total)) / @as(comptime_float, frames_sample_len);
 }
 
-pub inline fn getMinFps() usize {
+pub fn getMinFps() usize {
     return @reduce(.Min, frames_sample);
 }
 
-pub inline fn getMaxFps() usize {
+pub fn getMaxFps() usize {
     return @reduce(.Max, frames_sample);
 }
 

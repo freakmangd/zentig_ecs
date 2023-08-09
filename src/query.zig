@@ -9,6 +9,11 @@ const TypeMap = ztg.meta.TypeMap;
 /// an object that can be used to iterate through entities that have
 /// all of those components. If one of the types is `Entity` (`usize`)
 /// then it will also have the entity those components are attatched to.
+///
+/// Used in systems like so:
+/// ```zig
+/// pub fn mySystem(q: Query(.{ Player, Transform, Score })) void {}
+/// ```
 pub fn Query(comptime query_types: anytype) type {
     return QueryOpts(query_types, .{});
 }
@@ -20,6 +25,11 @@ pub fn Query(comptime query_types: anytype) type {
 ///
 /// Also allows options which restrict the query without actually collecting the entities
 /// that fit the restriction, such as `.{ Transform }, .{ With(Player) }`
+///
+/// Used in systems like so:
+/// ```zig
+/// pub fn mySystem(q: QueryOpts(.{ Transform, Speed }, .{ Without(Enemy) })) void {}
+/// ```
 pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type {
     //comptime assertOkQuery(query_types_raw, _options);
 

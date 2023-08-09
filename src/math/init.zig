@@ -15,8 +15,8 @@ pub inline fn mulAsFloat(comptime T: type, a: anytype, b: anytype) T {
 }
 
 test mulAsFloat {
-    try expectEqual(@as(f32, 7.0), try mulAsFloat(f32, 14, 0.5));
-    try expectEqual(@as(f32, 20.5), try divAsFloat(f32, @as(u1, 1), @as(f32, 20.5)));
+    try expectEqual(@as(f32, 7.0), mulAsFloat(f32, 14, 0.5));
+    try expectEqual(@as(f32, 20.5), mulAsFloat(f32, @as(u1, 1), @as(f32, 20.5)));
 }
 
 /// Converts a and b to floats (if neeeded) and divides them, returning a float of type T
@@ -31,6 +31,7 @@ test divAsFloat {
     try std.testing.expectError(error.DivideByZero, divAsFloat(f32, 1_000, 0));
 }
 
+/// Clamps v between 0 and 1
 pub inline fn clamp01(v: anytype) @TypeOf(v) {
     return @call(.always_inline, std.math.clamp, .{ v, 0, 1 });
 }
@@ -41,6 +42,7 @@ test clamp01 {
     try expectEqual(@as(f32, 0.0), clamp01(@as(f32, -20.0)));
 }
 
+/// Returns the length of a @Vector object
 pub inline fn lengthVec(vec: anytype) f32 {
     return @sqrt(@reduce(.Add, vec * vec));
 }
@@ -51,19 +53,23 @@ test lengthVec {
     try expectEqual(@as(f32, 5.0), lengthVec(@Vector(2, f32){ 3, 4 }));
 }
 
+/// Returns the square length of a @Vector object
 pub inline fn sqrLengthVec(vec: anytype) f32 {
     return @reduce(.Add, vec * vec);
 }
 
+/// Lerps between two @Vector objects by a scalar t clamped between 0 and 1
 pub inline fn lerpVec(a: anytype, b: anytype, t: f32) @TypeOf(a, b) {
     const t_clamped = clamp01(t);
     return @mulAdd(@TypeOf(a, b), b - a, @splat(t_clamped), a);
 }
 
+/// Lerps between two @Vector objects by a scalar t
 pub inline fn lerpUnclampedVec(a: anytype, b: anytype, t: f32) @TypeOf(a, b) {
     return @mulAdd(@TypeOf(a, b), b - a, @splat(t), a);
 }
 
+/// Normalizes a @Vector object
 pub fn normalizeVec(vec: anytype) @TypeOf(vec) {
     const len = lengthVec(vec);
     if (len == 0) return vec;
@@ -76,6 +82,7 @@ test normalizeVec {
     try expectEqual(@Vector(2, f32){ 0, 0 }, normalizeVec(@Vector(2, f32){ 0, 0 }));
 }
 
+/// Returns the dot product of two @Vector objects
 pub inline fn dotVec(vec0: anytype, vec1: @TypeOf(vec0)) f32 {
     return @reduce(.Add, vec0 * vec1);
 }
@@ -86,6 +93,14 @@ test dotVec {
     try expectEqual(@as(f32, -3.0), dotVec(@Vector(3, f32){ 1, 1, 1 }, .{ -1, -1, -1 }));
 }
 
+/// Swizzles a @Vector object by a comptime mask
+///
+/// Example:
+/// ```zig
+/// try expectEqual(@Vector(2, f32){ 1, 1 }, swizzleVec(@Vector(2, f32){ 1, 2 }, .{ 0, 0 }));
+/// try expectEqual(@Vector(2, f32){ 2, 2 }, swizzleVec(@Vector(2, f32){ 1, 2 }, .{ 1, 1 }));
+/// try expectEqual(@Vector(2, f32){ 2, 1 }, swizzleVec(@Vector(2, f32){ 1, 2 }, .{ 1, 0 }));
+/// ```
 pub inline fn swizzleVec(vec: anytype, comptime mask: @TypeOf(vec)) @TypeOf(vec) {
     const Vector = @typeInfo(@TypeOf(vec)).Vector;
     comptime for (@as([Vector.len]Vector.child, mask)) |m| if (m < 0) @compileError(std.fmt.comptimePrint("Swizzle mask must be all positive, found {}.", .{m}));

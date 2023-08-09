@@ -11,6 +11,12 @@ __data: struct {
     basis_isdirty: bool = true,
 },
 
+pub const InitOptions = struct {
+    pos: ztg.Vec3 = ztg.Vec3.zero(),
+    rot: ztg.Vec4 = ztg.Vec4.identity(),
+    scale: ztg.Vec3 = ztg.Vec3.one(),
+};
+
 pub fn init(_pos: ztg.Vec3, _rot: ztg.Vec4, _scale: ztg.Vec3) Self {
     return .{
         .basis = zmath.translationV(_pos.intoZMath()),
@@ -21,31 +27,27 @@ pub fn init(_pos: ztg.Vec3, _rot: ztg.Vec4, _scale: ztg.Vec3) Self {
     };
 }
 
-pub inline fn initWith(with: struct {
-    pos: ztg.Vec3 = ztg.Vec3.zero(),
-    rot: ztg.Vec4 = ztg.Vec4.identity(),
-    scale: ztg.Vec3 = ztg.Vec3.one(),
-}) Self {
+pub fn initWith(with: InitOptions) Self {
     return init(with.pos, with.rot, with.scale);
 }
 
-pub inline fn fromPos(pos: ztg.Vec3) Self {
+pub fn fromPos(pos: ztg.Vec3) Self {
     return init(pos, ztg.Vec4.identity(), ztg.Vec3.one());
 }
 
-pub inline fn fromRot(rot: ztg.Vec3) Self {
+pub fn fromRot(rot: ztg.Vec3) Self {
     return init(ztg.Vec3.zero(), rot, ztg.Vec3.one());
 }
 
-pub inline fn fromScale(_scale: ztg.Vec3) Self {
+pub fn fromScale(_scale: ztg.Vec3) Self {
     return init(ztg.Vec3.zero(), ztg.Vec4.identity(), _scale);
 }
 
-pub inline fn identity() Self {
+pub fn identity() Self {
     return init(ztg.Vec3.zero(), ztg.Vec4.identity(), ztg.Vec3.one());
 }
 
-pub inline fn getPos(self: Self) ztg.Vec3 {
+pub fn getPos(self: Self) ztg.Vec3 {
     return ztg.Vec3.fromZMath(self.basis[3]);
 }
 
@@ -112,7 +114,7 @@ pub fn getUpdatedBasis(self: *Self) zmath.Mat {
     return self.basis;
 }
 
-pub inline fn onAdded(ent: ztg.Entity, com: ztg.Commands) !void {
+pub fn onAdded(ent: ztg.Entity, com: ztg.Commands) !void {
     if (!com.checkEntHas(ent, ztg.base.GlobalTransform)) try com.giveEnt(ent, ztg.base.GlobalTransform.identity());
 }
 

@@ -1,33 +1,38 @@
 const std = @import("std");
 const ztg = @import("init.zig");
 
-/// Use `before`, `label`, `after`, or `systemOrder` to define the order of
-/// execution for systems when adding them to stages
-pub const SystemOrder = struct {
-    before: ?ztg.meta.EnumLiteral = null,
-    during: ?ztg.meta.EnumLiteral = null,
-    after: ?ztg.meta.EnumLiteral = null,
-
-    fn Bind(comptime f: anytype, comptime offset: SystemOrder) type {
-        return struct {
-            comptime f: @TypeOf(f) = f,
-            comptime offset: SystemOrder = offset,
-        };
-    }
+/// An enum describing the three possible orderings for
+/// a system within a label.
+pub const SystemOrder = enum {
+    before,
+    during,
+    after,
 };
 
-pub fn systemOrder(comptime f: anytype, comptime offset: SystemOrder) SystemOrder.Bind(f, offset) {
+fn Bind(comptime _label: ztg.meta.EnumLiteral, comptime f: anytype, comptime offset: SystemOrder) type {
+    return struct {
+        comptime label: ztg.meta.EnumLiteral = _label,
+        comptime f: @TypeOf(f) = f,
+        comptime offset: SystemOrder = offset,
+    };
+}
+
+/// Equivelent to calling `before`, `during`, or `after` depending on the `offset` parameter
+pub fn ordered(comptime _label: ztg.meta.EnumLiteral, comptime f: anytype, comptime offset: SystemOrder) Bind(_label, f, offset) {
     return .{};
 }
 
-pub fn before(comptime _label: ztg.meta.EnumLiteral, comptime f: anytype) SystemOrder.Bind(f, .{ .before = _label }) {
+/// Makes the system `f` invoke _before_ the specified label
+pub fn before(comptime _label: ztg.meta.EnumLiteral, comptime f: anytype) Bind(_label, f, .before) {
     return .{};
 }
 
-pub fn label(comptime _label: ztg.meta.EnumLiteral, comptime f: anytype) SystemOrder.Bind(f, .{ .during = _label }) {
+/// Makes the system `f` invoke _during_ the specified label
+pub fn during(comptime _label: ztg.meta.EnumLiteral, comptime f: anytype) Bind(_label, f, .during) {
     return .{};
 }
 
-pub fn after(comptime _label: ztg.meta.EnumLiteral, comptime f: anytype) SystemOrder.Bind(f, .{ .after = _label }) {
+/// Makes the system `f` invoke _after_ the specified label
+pub fn after(comptime _label: ztg.meta.EnumLiteral, comptime f: anytype) Bind(_label, f, .after) {
     return .{};
 }

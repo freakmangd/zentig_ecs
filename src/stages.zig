@@ -42,7 +42,8 @@ pub fn Init(comptime stage_defs: []const StageDef, comptime World: type) type {
         inline fn runSystemTuple(systems: anytype, world: *World, comptime catch_errs: bool, comptime errCallback: if (catch_errs) fn (anyerror) void else void) !void {
             inline for (systems) |sys| {
                 const System = @TypeOf(sys);
-                var args = try world.initParamsForSystem(world.frame_alloc, @typeInfo(System).Fn.params);
+                const params = @typeInfo(System).Fn.params;
+                const args = if (comptime params.len == 0) .{} else try world.initParamsForSystem(world.frame_alloc, params);
 
                 if (comptime ztg.meta.canReturnError(System)) {
                     if (comptime catch_errs) {
@@ -75,7 +76,7 @@ fn CompileStagesList(comptime stage_defs: []const StageDef) type {
     var stages_list = TypeBuilder{};
     inline for (stage_defs) |sdef| {
         var stage = TypeBuilder{};
-        inline for (sdef.labels) |label| {
+        inline for (sdef.labels.items) |label| {
             const Label = struct {
                 const before = label.before.Build(){};
                 const during = label.during.Build(){};

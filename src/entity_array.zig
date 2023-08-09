@@ -24,10 +24,6 @@ pub fn EntityArray(comptime size: usize) type {
             return self;
         }
 
-        pub fn deinit(self: *const Self, alloc: std.mem.Allocator) void {
-            alloc.free(self.parent_lookup);
-        }
-
         pub fn getIndexOf(self: *const Self, ent: ztg.Entity) ?usize {
             if (self.idx_lookup[ent] == Index.NULL) return null;
             return @intFromEnum(self.idx_lookup[ent]);
@@ -105,8 +101,7 @@ pub fn EntityArray(comptime size: usize) type {
 }
 
 test EntityArray {
-    var arr = try EntityArray(10).init(std.testing.allocator);
-    defer arr.deinit(std.testing.allocator);
+    var arr = EntityArray(10).init();
 
     arr.append(0);
     arr.append(1);
