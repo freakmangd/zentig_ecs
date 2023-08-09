@@ -13,12 +13,12 @@ pub const Collider = struct {
 
 pub fn include(comptime wb: *ztg.WorldBuilder) void {
     wb.addComponents(&.{PhysBody});
-    wb.addSystemsToStage(.post_update, .{pou_physbodies});
+    wb.addSystemsToStage(.update, .{ztg.after(.body, pou_physbodies)});
 }
 
 fn pou_physbodies(q: ztg.Query(&.{ ztg.base.Transform, PhysBody })) void {
     for (q.items(0), q.items(1)) |tr, pb| {
-        const delta = ztg.Vec3.multiply(pb.vel, 0.0);
-        tr.pos = tr.pos.add(delta);
+        const delta = ztg.Vec3.mul(pb.vel, 0.0);
+        tr.translate(delta);
     }
 }

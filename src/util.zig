@@ -1,16 +1,9 @@
+//! Functions used internally by zentig that either shouldnt be exposed
+//! or are too specific to be of any use outsize zentig.
+
 const std = @import("std");
-
-pub const TypeBuilder = @import("type_builder.zig");
-pub const TypeMap = @import("type_map.zig");
-
-pub fn canReturnError(comptime Fn: type) bool {
-    return comptime std.meta.trait.is(.ErrorUnion)(@typeInfo(Fn).Fn.return_type.?);
-}
-
-pub fn DerefType(comptime T: type) type {
-    if (comptime std.meta.trait.isSingleItemPtr(T)) return std.meta.Child(T);
-    return T;
-}
+const builtin = @import("builtin");
+const ztg = @import("init.zig");
 
 /// Get the element type of a MultiArrayList
 pub fn MultiArrayListElem(comptime T: type) type {
@@ -22,43 +15,58 @@ pub fn ArrayHashMapElem(comptime T: type) type {
     return @typeInfo(T.KV).Struct.fields[1].type;
 }
 
-pub fn MinEntInt(comptime max: usize) type {
-    return std.meta.Int(.unsigned, @typeInfo(std.math.IntFittingRange(0, max)).Int.bits + 1);
+pub fn assertOkOnAddedFunction(comptime Container: type) void {
+    const member_type = comptime ztg.meta.memberFnType(Container, "onAdded");
+    const fn_info = @typeInfo(@TypeOf(Container.onAdded)).Fn;
+
+    const return_type_info = @typeInfo(fn_info.return_type.?);
+    if (!(return_type_info == .Void or (return_type_info == .ErrorUnion and return_type_info.ErrorUnion.payload == void))) {
+        @compileError("onAdded functions must return void or !void");
+    }
+
+    if (comptime member_type == .non_member and (fn_info.params[0].type.? != ztg.Entity or fn_info.params[1].type.? != ztg.Commands)) {
+        @compileError("non-member onAdded function from type " ++ @typeName(Container) ++ " does not follow the form fn (Entity, Commands) (!)void");
+    } else if (comptime member_type != .non_member and (fn_info.params[1].type.? != ztg.Entity or fn_info.params[2].type.? != ztg.Commands)) {
+        @compileError("member onAdded function from type " ++ @typeName(Container) ++ " does not follow the form fn (Self|*const Self|*Self, Entity, Commands) (!)void");
+    }
 }
 
-const MemberFnType = enum {
-    by_value,
-    by_ptr,
-    by_const_ptr,
-    non_member,
-};
+pub fn resetCompIds() void {
+    id_counter = 0;
+    last_reset_id += 1;
+}
 
-pub fn isMemberFn(comptime Container: type, comptime Fn: anytype) MemberFnType {
-    const params = @typeInfo(@TypeOf(Fn)).Fn.params;
-    if (comptime params.len == 0) return false;
-
-    const Param0 = params[0].type orelse return false;
-
-    if (DerefType(Param0) == Container) {
-        if (std.meta.trait.isConstPtr(Param0)) {
-            return .by_const_ptr;
-        } else if (std.meta.trait.isSingleItemPtr(Param0)) {
-            return .by_ptr;
-        } else {
-            return .by_value;
+pub const CompId = usize;
+var last_reset_id: if (builtin.mode == .Debug) usize else void = if (builtin.mode == .Debug) 0 else void{};
+var id_counter: CompId = 0;
+pub fn compId(comptime T: type) CompId {
+    _ = T;
+    const static = struct {
+        var reset_id: if (builtin.mode == .Debug) usize else void = if (builtin.mode == .Debug) 0 else void{};
+        var id: ?CompId = null;
+    };
+    const result = blk: {
+        if (static.id == null or if (comptime builtin.mode == .Debug) if_blk: {
+            break :if_blk static.reset_id != last_reset_id;
+        } else if_blk: {
+            break :if_blk false;
+        }) {
+            static.id = id_counter;
+            static.reset_id = last_reset_id;
+            id_counter += 1;
         }
-    }
-    return .non_member;
+        break :blk static.id.?;
+    };
+    return result;
 }
 
-pub fn convertFieldToF32(obj: anytype, comptime field_name: []const u8, default: f32) f32 {
-    const O = @TypeOf(obj);
-    const fi = std.meta.fieldIndex(O, field_name) orelse return default;
-
-    const FieldType = std.meta.fields(O)[fi].type;
-    switch (@typeInfo(FieldType)) {
-        .Int => return @floatFromInt(@field(obj, field_name)),
-        .Float => return @floatCast(@field(obj, field_name)),
-        else => @compileError("Cannot convert type " ++ @typeName(FieldType) ++ " to f32."),
-    }
+pub fn idsFromTypes(comptime types: []const type) [types.len]CompId {
+    var out: [types.len]CompId = undefined;
+    inline for (types, &out) |T, *o| o.* = compId(T);
+    return out;
 }
+
+pub const CompIdList = struct {
+    ids: []const CompId,
+    is_required: bool,
+};

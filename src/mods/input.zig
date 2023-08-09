@@ -1,9 +1,14 @@
 const std = @import("std");
 const ztg = @import("../init.zig");
+const log = std.log.scoped(.zentig_input);
 
 const Options = struct {
     max_controllers: usize = 4,
-    update_stage: @TypeOf(.enum_literal) = .pre_update,
+    update_stage: struct {
+        stage: @TypeOf(.enum_literal) = .update,
+        label: @TypeOf(.enum_literal) = .body,
+        order: ztg.SystemOrder = .during,
+    } = .{},
 };
 
 pub fn Input(
@@ -13,7 +18,7 @@ pub fn Input(
     comptime options: Options,
 ) type {
     const ButtonBindings = blk: {
-        var buttons_tb = ztg.util.TypeBuilder.init(false, .Auto);
+        var buttons_tb = ztg.meta.TypeBuilder{};
         inline for (button_literals) |b| {
             buttons_tb.addField(@tagName(b), []const Wrapper.ButtonType, @ptrCast(&@as([]const Wrapper.ButtonType, &.{})));
         }
@@ -21,7 +26,7 @@ pub fn Input(
     };
 
     const AxesBindings = blk: {
-        var axes_tb = ztg.util.TypeBuilder.init(false, .Auto);
+        var axes_tb = ztg.meta.TypeBuilder{};
         inline for (axis_literals) |a| {
             axes_tb.addField(@tagName(a), []const Wrapper.AxisType, @ptrCast(&@as([]const Wrapper.AxisType, &.{})));
         }
@@ -96,15 +101,15 @@ pub fn Input(
         }
 
         pub inline fn isDown(self: Self, controller: usize, button: Buttons) bool {
-            return self.controllers[controller].buttons.isSet(@intFromEnum(button) * 3);
+            return self.controllers[controller].buttons.isSet(@as(usize, @intCast(@intFromEnum(button))) * 3);
         }
 
         pub inline fn isPressed(self: Self, controller: usize, button: Buttons) bool {
-            return self.controllers[controller].buttons.isSet((@intFromEnum(button) * 3) + 1);
+            return self.controllers[controller].buttons.isSet((@as(usize, @intCast(@intFromEnum(button))) * 3) + 1);
         }
 
         pub inline fn isReleased(self: Self, controller: usize, button: Buttons) bool {
-            return self.controllers[controller].buttons.isSet((@intFromEnum(button) * 3) + 2);
+            return self.controllers[controller].buttons.isSet((@as(usize, @intCast(@intFromEnum(button))) * 3) + 2);
         }
 
         pub inline fn getAxis(self: Self, controller: usize, axis: Axes) f32 {
@@ -115,38 +120,24 @@ pub fn Input(
         pub fn exportBindings(self: Self, file_name: []const u8) !void {
             var file = try std.fs.cwd().createFile(file_name, .{ .truncate = true });
             defer file.close();
+
             try self.writeBindings(file.writer());
         }
 
         pub fn writeBindings(self: Self, writer: anytype) !void {
             for (self.controllers, 0..) |contr, i| {
-                const controller_header = try std.fmt.allocPrint(self.alloc, "controller {}:\n", .{i});
-                defer self.alloc.free(controller_header);
-
-                _ = try writer.write(controller_header);
-
+                try writer.print("controller {}:\n", .{i});
                 for (contr.button_bindings.items) |bb| {
-                    const index_fmt = try std.fmt.allocPrint(self.alloc, "{}=", .{bb.index});
-                    defer self.alloc.free(index_fmt);
-
-                    const bb_fmt = try Wrapper.exportButtonBinding(self.alloc, bb.binding);
-                    defer self.alloc.free(bb_fmt);
-
-                    _ = try writer.write(index_fmt);
-                    _ = try writer.write(bb_fmt);
-                    _ = try writer.write("\n");
+                    try writer.print("{}=", .{bb.index});
+                    try Wrapper.exportButtonBinding(writer, bb.binding);
+                    try writer.print("\n", .{});
                 }
-                _ = try writer.write("axes:\n");
+
+                try writer.print("axes:\n", .{});
                 for (contr.axis_bindings.items) |ab| {
-                    const index_fmt = try std.fmt.allocPrint(self.alloc, "{}=", .{ab.index});
-                    defer self.alloc.free(index_fmt);
-
-                    const ab_fmt = try Wrapper.exportAxisBinding(self.alloc, ab.binding);
-                    defer self.alloc.free(ab_fmt);
-
-                    _ = try writer.write(index_fmt);
-                    _ = try writer.write(ab_fmt);
-                    _ = try writer.write("\n");
+                    try writer.print("{}=", .{ab.index});
+                    try Wrapper.exportAxisBinding(writer, ab.binding);
+                    try writer.print("\n", .{});
                 }
             }
         }
@@ -156,16 +147,20 @@ pub fn Input(
         pub fn importBindings(self: *Self, file_name: []const u8) bool {
             var file = std.fs.cwd().openFile(file_name, .{}) catch |err| switch (err) {
                 error.FileNotFound => {
-                    std.log.info("Could not find bindings file.", .{});
+                    log.info("Could not find bindings file.", .{});
                     return false;
                 },
                 else => {
-                    std.log.err("Could not open bindings file due to: {}", .{err});
+                    log.err("Could not open bindings file due to: {}", .{err});
                     return false;
                 },
             };
             defer file.close();
 
+            defer for (self.controllers) |c| {
+                if (c.button_bindings.items.len + c.axis_bindings.items.len == 0)
+                    log.warn("Found 0 bindings for controller {} after importing file.", .{c});
+            };
             return self.readBindings(file.reader());
         }
 
@@ -191,7 +186,7 @@ pub fn Input(
 
             while (reader.streamUntilDelimiter(file_bufferstream.writer(), '\n', max_line_size)) : (safety += 1) {
                 if (safety > 1_000) {
-                    std.log.err("Hit loop limit for import of 1000 iterations", .{});
+                    log.err("Hit loop limit for import of 1000 iterations", .{});
                     return false;
                 }
 
@@ -200,11 +195,11 @@ pub fn Input(
 
                 if (std.mem.startsWith(u8, line, "controller")) {
                     const end_idx = std.mem.indexOf(u8, line, ":") orelse {
-                        std.log.err("Bad formatted bindings file, no `:` character after controller index.", .{});
+                        log.err("Bad formatted bindings file, no `:` character after controller index.", .{});
                         return false;
                     };
                     current_controller = std.fmt.parseInt(usize, line[11..end_idx], 10) catch |err| {
-                        std.log.err("Could not parse controller index integer due to {}", .{err});
+                        log.err("Could not parse controller index integer due to {}", .{err});
                         return false;
                     };
                     read_mode = .buttons;
@@ -224,30 +219,30 @@ pub fn Input(
                         .buttons => {
                             self.controllers[current_controller].button_bindings.append(self.alloc, .{
                                 .index = std.math.cast(ButtonIndex, binding_index) orelse {
-                                    std.log.err("Index of button binding exceeded max range. Max: {}, Found {}", .{ button_literals.len, binding_index });
+                                    log.err("Index of button binding exceeded max range. Max: {}, Found {}", .{ button_literals.len, binding_index });
                                     return false;
                                 },
                                 .binding = Wrapper.importButtonBinding(binding_text) catch |err| {
-                                    std.log.err("Could not import button binding due to {}", .{err});
+                                    log.err("Could not import button binding due to {}", .{err});
                                     return false;
                                 },
                             }) catch |err| {
-                                std.log.err("Could not append to button bindings due to {}", .{err});
+                                log.err("Could not append to button bindings due to {}", .{err});
                                 return false;
                             };
                         },
                         .axes => {
                             self.controllers[current_controller].axis_bindings.append(self.alloc, .{
                                 .index = std.math.cast(AxisIndex, binding_index) orelse {
-                                    std.log.err("Index of axis binding exceeded max range. Max: {}, Found: {}", .{ axis_literals.len, binding_index });
+                                    log.err("Index of axis binding exceeded max range. Max: {}, Found: {}", .{ axis_literals.len, binding_index });
                                     return false;
                                 },
                                 .binding = Wrapper.importAxisBinding(binding_text) catch |err| {
-                                    std.log.err("Could not import axis binding due to {}", .{err});
+                                    log.err("Could not import axis binding due to {}", .{err});
                                     return false;
                                 },
                             }) catch |err| {
-                                std.log.err("Could not append to button bindings due to {}", .{err});
+                                log.err("Could not append to button bindings due to {}", .{err});
                                 return false;
                             };
                         },
@@ -255,25 +250,25 @@ pub fn Input(
                 }
             } else |err| switch (err) {
                 error.EndOfStream => {
-                    std.log.info("importing bindings: Hit end of stream", .{});
+                    log.info("importing bindings: Hit end of stream", .{});
                 },
                 else => {
-                    std.log.err("Cound not import bindings due to {}", .{err});
+                    log.err("Cound not import bindings due to {}", .{err});
                     return false;
                 },
             }
 
-            std.log.info("importing bindings: Finished successfully", .{});
+            log.info("importing bindings: Finished successfully", .{});
             return true;
         }
 
         fn getBindingIndexAndEqlsIndex(line: []const u8) !struct { usize, usize } {
             const eqls_idx = std.mem.indexOf(u8, line, "=") orelse {
-                std.log.err("Bad formatted bindings file, no `=` character on binding line.", .{});
+                log.err("Bad formatted bindings file, no `=` character on binding line.", .{});
                 return error.BadFormat;
             };
             const binding_index = std.fmt.parseInt(usize, line[0..eqls_idx], 10) catch |err| {
-                std.log.err("Could not parse controller binding index due to {}", .{err});
+                log.err("Could not parse controller binding index due to {}", .{err});
                 return error.BadFormat;
             };
 
@@ -282,12 +277,14 @@ pub fn Input(
 
         pub fn include(comptime wb: *ztg.WorldBuilder) void {
             wb.addResource(Self, .{});
-            wb.addSystemsToStage(.setup, .{setup});
-            wb.addSystemsToStage(options.update_stage, .{update_Self});
-            wb.addSystemsToStage(.cleanup, .{cleanup});
+            wb.addSystems(.{
+                .init = .{ini_Self},
+                .deinit = .{dei_Self},
+            });
+            wb.addSystemsToStage(options.update_stage.stage, .{ztg.ordered(options.update_stage.label, update_Self, options.update_stage.order)});
         }
 
-        fn setup(self: *Self, alloc: std.mem.Allocator) void {
+        fn ini_Self(self: *Self, alloc: std.mem.Allocator) void {
             for (&self.controllers) |*c| {
                 c.* = Controller.init();
             }
@@ -297,25 +294,29 @@ pub fn Input(
 
         fn update_Self(self: *Self) void {
             for (&self.controllers) |*ct| {
-                for (ct.button_bindings.items) |bb| {
-                    const is_down = Wrapper.isButtonDown(bb.binding);
-                    const is_pres = Wrapper.isButtonPressed(bb.binding);
-                    const is_rel = Wrapper.isButtonReleased(bb.binding);
-                    ct.buttons.setValue(@as(usize, bb.index) * 3, is_down);
-                    ct.buttons.setValue(@as(usize, bb.index) * 3 + 1, is_pres);
-                    ct.buttons.setValue(@as(usize, bb.index) * 3 + 2, is_rel);
+                if (comptime button_literals.len > 0) {
+                    for (ct.button_bindings.items) |bb| {
+                        const is_down = Wrapper.isButtonDown(bb.binding);
+                        const is_pres = Wrapper.isButtonPressed(bb.binding);
+                        const is_rel = Wrapper.isButtonReleased(bb.binding);
+                        ct.buttons.setValue(@as(usize, bb.index) * 3, is_down);
+                        ct.buttons.setValue(@as(usize, bb.index) * 3 + 1, is_pres);
+                        ct.buttons.setValue(@as(usize, bb.index) * 3 + 2, is_rel);
+                    }
                 }
-                for (ct.axis_bindings.items) |ab| {
-                    const value = Wrapper.getAxis(ab.binding);
-                    ct.axes[ab.index] = value;
+                if (comptime axis_literals.len > 0) {
+                    for (ct.axis_bindings.items) |ab| {
+                        const value = Wrapper.getAxis(ab.binding);
+                        ct.axes[ab.index] = value;
+                    }
                 }
             }
         }
 
-        fn cleanup(self: *Self) void {
+        fn dei_Self(self: *Self) void {
             for (&self.controllers) |*con| {
-                con.button_bindings.deinit(self.alloc);
-                con.axis_bindings.deinit(self.alloc);
+                if (comptime button_literals.len > 0) con.button_bindings.deinit(self.alloc);
+                if (comptime axis_literals.len > 0) con.axis_bindings.deinit(self.alloc);
             }
         }
     };

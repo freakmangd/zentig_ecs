@@ -1,10 +1,11 @@
+//! This file can be run with `zig build test_example`
+
 const std = @import("std");
 const ztg = @import("zentig");
 const testing = std.testing;
 
 test "ztg.World" {
-    var wi = ztg.worldInfo();
-    var world = try game_file.MyWorld.init(&wi);
+    var world = try game_file.MyWorld.init(std.testing.allocator);
     defer world.deinit();
 
     try world.runStageList(&.{ .init, .update });
@@ -29,10 +30,10 @@ const game_file = struct {
 const player_file = struct {
     pub fn include(comptime world: *ztg.WorldBuilder) void {
         world.addComponents(&.{ Player, Jetpack, Backpack });
-        world.addSystemsToStage(.init, .{playerSpawn});
-        world.addUpdateSystems(.{playerSpeach});
-        world.addStage(.player_update);
-        world.addSystemsToStage(.player_update, .{playerSpecial});
+        world.addSystems(.{
+            .load = .{playerSpawn},
+            .update = .{ playerSpeach, playerSpecial },
+        });
     }
 
     pub const Player = struct {
@@ -58,12 +59,12 @@ const player_file = struct {
         // all the types. (PlayerBundle)
         const plr = try com.newEntWithMany(PlayerBundle{
             .{ .name = "Player" },
-            .{ .pos = ztg.Vec3.init(10, 10, 0) },
+            ztg.base.Transform.initWith(.{ .pos = ztg.vec3(10, 10, 0) }),
             .{ .img = 0 },
         });
 
         // Or an anonymous tuple.
-        try plr.giveEntMany(.{
+        try plr.giveMany(.{
             Jetpack{ .thrust = 100 },
             Backpack{ .space = 20 },
         });
@@ -72,17 +73,15 @@ const player_file = struct {
         // try com.giveEntMany(plr.ent, .{ ... });
     }
 
-    fn playerSpeach(com: ztg.Commands, q: ztg.Query(.{ Player, ztg.base.Transform })) !void {
+    fn playerSpeach(q: ztg.Query(.{ Player, ztg.base.Transform })) !void {
         for (q.items(0), q.items(1)) |player, trn| {
             try std.testing.expectEqualStrings("Player", player.name);
-            try std.testing.expect(trn.pos.equals(.{ .x = 10, .y = 10 }));
+            try std.testing.expect(trn.getPos().equals(.{ .x = 10, .y = 10 }));
         }
-
-        try com.runStage(.player_update);
     }
 
-    fn playerSpecial(q: ztg.Query(.{ Player, game_file.Sprite })) !void {
-        for (q.items(1)) |spr| {
+    fn playerSpecial(q: ztg.QueryOpts(.{game_file.Sprite}, .{ztg.With(Player)})) !void {
+        for (q.items(0)) |spr| {
             try std.testing.expectEqual(@as(usize, 0), spr.img);
         }
     }

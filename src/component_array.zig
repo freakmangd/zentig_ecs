@@ -1,9 +1,8 @@
 const std = @import("std");
-const ecs = @import("ecs.zig");
-const ByteArray = @import("byte_array.zig").ByteArray;
+const builtin = @import("builtin");
+const ztg = @import("init.zig");
 const util = @import("util.zig");
-const TypeMap = @import("type_map.zig");
-const print = std.debug.print;
+const ByteArray = @import("etc/byte_array.zig");
 const Allocator = std.mem.Allocator;
 
 pub const Error = error{ OutOfMemory, Overflow };
@@ -16,11 +15,11 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
 
         alloc: std.mem.Allocator,
 
-        component_utp: TypeMap.UniqueTypePtr,
-        component_name: []const u8,
+        component_id: util.CompId,
+        component_name: if (builtin.mode == .Debug) []const u8 else void,
 
         components_data: ByteArray = undefined,
-        entities: std.ArrayListUnmanaged(ecs.Entity) = undefined,
+        entities: std.ArrayListUnmanaged(ztg.Entity) = undefined,
         ent_to_comp_idx: []Index = undefined,
 
         pub fn init(alloc: Allocator, comptime T: type) !Self {
@@ -32,21 +31,18 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
 
             var self = Self{
                 .alloc = alloc,
-                .component_utp = TypeMap.uniqueTypePtr(T),
-                .component_name = @typeName(T),
+                .component_id = util.compId(T),
+                .component_name = if (builtin.mode == .Debug) @typeName(T) else void{},
             };
 
             self.components_data = ByteArray.init(T);
             errdefer self.components_data.deinit(alloc);
 
-            self.entities = std.ArrayListUnmanaged(ecs.Entity){};
+            self.entities = std.ArrayListUnmanaged(ztg.Entity){};
             errdefer self.entities.deinit(alloc);
 
             self.ent_to_comp_idx = try alloc.alloc(Index, max_ents);
-
-            for (self.ent_to_comp_idx) |*etc| {
-                etc.* = null_bit;
-            }
+            @memset(self.ent_to_comp_idx, null_bit);
 
             return self;
         }
@@ -61,20 +57,17 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
             self.alloc.free(self.ent_to_comp_idx);
         }
 
-        pub fn assign(self: *Self, ent: ecs.Entity, entry: anytype) !void {
-            if (TypeMap.uniqueTypePtr(@TypeOf(entry)) != self.component_utp) std.debug.panic("Incorrect type. Expected UTP {}, found UTP {} (Type: {s}).", .{
-                self.component_utp,
-                TypeMap.uniqueTypePtr(@TypeOf(entry)),
-                @typeName(@TypeOf(entry)),
-            });
+        pub fn assign(self: *Self, ent: ztg.Entity, entry: anytype) !void {
+            self.assertType(@TypeOf(entry));
+
             try self.appendBytes(ent, std.mem.asBytes(&entry));
         }
 
-        pub fn assignData(self: *Self, ent: ecs.Entity, data: *const anyopaque) !void {
+        pub fn assignData(self: *Self, ent: ztg.Entity, data: *const anyopaque) !void {
             try self.appendBytes(ent, data);
         }
 
-        fn appendBytes(self: *Self, ent: ecs.Entity, bytes_start: *const anyopaque) !void {
+        fn appendBytes(self: *Self, ent: ztg.Entity, bytes_start: *const anyopaque) !void {
             try self.entities.append(self.alloc, ent);
             self.ent_to_comp_idx[ent] = @as(Index, @intCast(self.components_data.len()));
             try self.components_data.appendPtr(self.alloc, bytes_start);
@@ -84,14 +77,14 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
             return self.entities.items.len >= self.components_data.getCapacity();
         }
 
-        pub fn reassign(self: *Self, old: ecs.Entity, new: ecs.Entity) void {
+        pub fn reassign(self: *Self, old: ztg.Entity, new: ztg.Entity) void {
             const old_ent_idx = self.indexOfEntityInEnts(old);
             self.entities.items[old_ent_idx] = new;
             self.ent_to_comp_idx[new] = self.ent_to_comp_idx[old];
             self.ent_to_comp_idx[old] |= null_bit;
         }
 
-        pub fn swapRemove(self: *Self, ent: ecs.Entity) void {
+        pub fn swapRemove(self: *Self, ent: ztg.Entity) void {
             const last_ent = self.entities.items[self.entities.items.len - 1];
 
             // here because the entities array mirrors the components array,
@@ -110,7 +103,7 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
             self.ent_to_comp_idx[last_ent] = @as(Index, @intCast(index_of_rem));
         }
 
-        fn indexOfEntityInEnts(self: *const Self, ent: ecs.Entity) usize {
+        fn indexOfEntityInEnts(self: *const Self, ent: ztg.Entity) usize {
             // since entities and components are always added in pairs,
             // ent_to_comp_idx also functions as an ent_to_ent_idx
             const index = self.ent_to_comp_idx[ent];
@@ -118,19 +111,20 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
             return index;
         }
 
-        pub fn get(self: *const Self, ent: ecs.Entity) ?*anyopaque {
+        pub fn get(self: *const Self, ent: ztg.Entity) ?*anyopaque {
             const index = self.ent_to_comp_idx[ent];
             if (index & null_bit != 0) return null;
             return self.components_data.get(index);
         }
 
-        pub fn getAs(self: *const Self, comptime T: type, ent: ecs.Entity) ?*T {
-            if (TypeMap.uniqueTypePtr(T) != self.component_utp) std.debug.panic("Incorrect type.", .{});
+        pub fn getAs(self: *const Self, comptime T: type, ent: ztg.Entity) ?*T {
+            self.assertType(T);
+
             var g = self.get(ent) orelse return null;
             return cast(T, g);
         }
 
-        pub inline fn contains(self: *const Self, ent: ecs.Entity) bool {
+        pub inline fn contains(self: *const Self, ent: ztg.Entity) bool {
             return self.ent_to_comp_idx[ent] & null_bit == 0;
         }
 
@@ -143,8 +137,20 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
             return @ptrCast(@alignCast(data));
         }
 
-        pub inline fn iterator(self: *Self) ByteArray.ByteIterator {
+        pub fn iterator(self: *Self) ByteArray.ByteIterator {
             return self.components_data.iterator();
+        }
+
+        fn assertType(self: Self, comptime T: type) void {
+            if (util.compId(T) != self.component_id) switch (builtin.mode) {
+                .Debug => std.debug.panic("Incorrect type. Expected Type: {s} (ID {}), found Type {s} (ID: {}).", .{
+                    self.component_name,
+                    self.component_id,
+                    @typeName(T),
+                    util.compId(T),
+                }),
+                else => std.debug.panic("Type {s} is not correct for component array.", .{@typeName(T)}),
+            };
         }
     };
 }
@@ -152,7 +158,7 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
 const CAT = ComponentArray(usize, 10);
 
 const Data = struct {
-    lmao: u32,
+    val: u32,
     uhh: bool = false,
     xd: f32 = 100.0,
     ugh: enum { ok, bad } = .ok,
@@ -177,11 +183,11 @@ test "data" {
     var arr = try CAT.initForTests(Data);
     defer arr.deinit();
 
-    try arr.assign(2, Data{ .lmao = 100_000 });
-    try arr.assignData(5, &Data{ .lmao = 20_000 });
+    try arr.assign(2, Data{ .val = 100_000 });
+    try arr.assignData(5, &Data{ .val = 20_000 });
 
-    try std.testing.expectEqual(@as(u32, 100_000), arr.getAs(Data, 2).?.lmao);
-    try std.testing.expectEqual(@as(u32, 20_000), arr.getAs(Data, 5).?.lmao);
+    try std.testing.expectEqual(@as(u32, 100_000), arr.getAs(Data, 2).?.val);
+    try std.testing.expectEqual(@as(u32, 20_000), arr.getAs(Data, 5).?.val);
 
     try std.testing.expect(arr.contains(2));
     arr.swapRemove(2);

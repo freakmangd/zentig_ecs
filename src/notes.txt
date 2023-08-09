@@ -1,2 +1,0 @@
-benchmark using comptime query / runtime query
-make one of the examples the actual game thingy please... its super annoying to benchmark as is

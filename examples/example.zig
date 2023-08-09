@@ -1,3 +1,5 @@
+//! This file can be run with `zig build example`
+
 const std = @import("std");
 const ztg = @import("zentig");
 
@@ -6,6 +8,7 @@ const ztg = @import("zentig");
 const MyWorld = ztg.WorldBuilder.init(&.{
     ztg.base,
     player,
+    Mover,
 }).Build();
 
 // This would most likely be a player.zig file instead
@@ -14,13 +17,13 @@ const player = struct {
     pub fn include(comptime wb: *ztg.WorldBuilder) void {
         // All components used in the world must be added at comptime
         wb.addComponents(&.{Player});
-        // Adds a system to the .init stage of the world, systems can only be added during comptime
-        wb.addInitSystems(.{spawn});
-        // Adds a system to the .update stage of the world
-        wb.addUpdateSystems(.{speak});
+        // Adds a system to the .load and .update stage of the world, systems can only be added during comptime
+        wb.addSystems(.{
+            .load = .{spawn},
+            .update = .{speak},
+        });
         // You can add to any stage defined in default_stages or you own custom stages
-        // (using wb.addStage)
-        wb.addSystemsToStage(.post_init, .{speak});
+        // ex: wb.addStage(.player_speak);
     }
 
     // A basic component
@@ -40,11 +43,11 @@ const player = struct {
         // Use the PlayerBundle struct as a blueprint
         const plr_ent = try com.newEntWithMany(player.PlayerBundle{
             .{ .name = "Player" },
-            .{ .pos = ztg.Vec3.init(10, 10, 10) },
+            ztg.base.Transform.initWith(.{ .pos = ztg.vec3(10, 10, 0) }),
         });
 
-        try Mover.giveToEnt(plr_ent, .{
-            .speed = 100,
+        try plr_ent.give(Mover{
+            .speed = 5,
             .dir = ztg.Vec3.right(),
         });
     }
@@ -58,7 +61,7 @@ const player = struct {
         // The number in items() represents the position of the Type in the Query type.
         // 0 for Player, 1 for Transform, etc.
         for (q.items(0), q.items(1)) |plr, tr| {
-            std.debug.print("My name is {s}, and I'm located at {d} {d}.\n", .{ plr.name, tr.pos.x, tr.pos.y });
+            std.debug.print("My name is {s}, and I'm located at {d} {d}.\n", .{ plr.name, tr.getPos().x, tr.getPos().y });
             std.debug.print("The current frame is {}\n", .{time.frame_count});
         }
     }
@@ -69,44 +72,46 @@ const Mover = struct {
     speed: f32,
     dir: ztg.Vec3,
 
-    pub fn giveToEnt(ent: ztg.EntityHandle, mover: Mover) !void {
+    pub fn onAdded(ent: ztg.Entity, com: ztg.Commands) !void {
         // A default transform is provided in case the entity doesnt have one.
         // The defaults of a transform place it at { 0, 0, 0 } with a scale of
         // { 1, 1, 1 } and a rotation of 0.
-        try ent.ensureEntHas(ztg.base.Transform, .{});
-        try ent.giveEnt(mover);
+        if (!com.checkEntHas(ent, ztg.base.Transform)) try com.giveEnt(ent, ztg.base.Transform.identity());
     }
 
     pub fn include(comptime wb: *ztg.WorldBuilder) void {
         // Mods can be included multiple times without any effect.
         // Here we want to ensure the ztg.base.Transform component
         // has been added to the world.
-        wb.include(ztg.base);
+        wb.include(&.{ztg.base});
 
         wb.addComponents(&.{Mover});
-        wb.addUpdateSystems(.{update});
+        wb.addSystemsToStage(.update, .{update});
     }
 
     fn update(q: ztg.Query(.{ Mover, ztg.base.Transform })) void {
         for (q.items(0), q.items(1)) |m, tr| {
-            tr.pos.plusEql(m.dir.multiply(m.speed));
+            tr.translate(m.dir.mul(m.speed));
         }
     }
 };
 
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const alloc = gpa.allocator();
+
     // Init the world
-    var wi = ztg.worldInfo();
-    var world = try MyWorld.init(&wi);
+    var world = try MyWorld.init(alloc);
     defer world.deinit();
 
-    // runs the .pre_init, .init, and .post_init stages.
-    try world.runInitStages();
+    // runs the .load stage
+    try world.runStage(.load);
 
-    // runs the .pre_update, .update, and .post_update stages.
-    try world.runUpdateStages();
+    // runs the .update stage
+    try world.runStage(.update);
 
     std.debug.print("Next frame!\n", .{});
 
-    try world.runUpdateStages();
+    // ditto
+    try world.runStage(.update);
 }
