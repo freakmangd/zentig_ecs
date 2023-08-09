@@ -49,7 +49,7 @@ test "running systems" {
   var world = MyWorld.init(testing.allocator);
 
   world.runStage(.load);
-  world.runStage(.update);
+  world.runUpdateStages();
   world.runStage(.draw);
   
   // Support for user defined stages
