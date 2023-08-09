@@ -11,7 +11,7 @@ const Options = struct {
     } = .{},
 };
 
-pub fn Input(
+pub fn Build(
     comptime Wrapper: type,
     comptime button_literals: anytype,
     comptime axis_literals: anytype,
@@ -34,8 +34,8 @@ pub fn Input(
     };
 
     const AddBindings = struct {
-        buttons: ButtonBindings,
-        axes: AxesBindings,
+        buttons: ButtonBindings = &.{},
+        axes: AxesBindings = &.{},
     };
 
     return struct {
