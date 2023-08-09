@@ -9,9 +9,27 @@ pub const Radians = f32;
 /// functions that take angles in degrees
 pub const Degrees = f32;
 
+inline fn toFloat(comptime T: type, x: anytype) T {
+    if (T == @TypeOf(x)) return x;
+
+    return switch (@typeInfo(@TypeOf(x))) {
+        .Int => @floatFromInt(x),
+        .Float => @floatCast(x),
+        .ComptimeFloat, .ComptimeInt => x,
+        else => |X| @compileError("Cannot convert " ++ @typeName(X) ++ " to a float."),
+    };
+}
+
+test toFloat {
+    try expectEqual(@as(f32, 1.0), toFloat(f32, 1));
+    try expectEqual(@as(f32, 1.0), toFloat(f32, 1.0));
+    try expectEqual(@as(f32, 1.0), toFloat(f32, @as(i32, 1)));
+    try expectEqual(@as(f32, 1.0), toFloat(f32, @as(f32, 1.0)));
+}
+
 /// Converts a and b to floats (if neeeded) and multiplies them, returning a float of type T
 pub inline fn mulAsFloat(comptime T: type, a: anytype, b: anytype) T {
-    return (if (comptime std.meta.trait.isIntegral(@TypeOf(a))) @as(T, @floatFromInt(a)) else a) * (if (comptime std.meta.trait.isIntegral(@TypeOf(b))) @as(T, @floatFromInt(b)) else b);
+    return toFloat(T, a) * toFloat(T, b);
 }
 
 test mulAsFloat {
@@ -22,7 +40,7 @@ test mulAsFloat {
 /// Converts a and b to floats (if neeeded) and divides them, returning a float of type T
 pub inline fn divAsFloat(comptime T: type, a: anytype, b: anytype) error{DivideByZero}!T {
     if (b == 0) return error.DivideByZero;
-    return (if (comptime std.meta.trait.isIntegral(@TypeOf(a))) @as(T, @floatFromInt(a)) else a) / (if (comptime std.meta.trait.isIntegral(@TypeOf(b))) @as(T, @floatFromInt(b)) else b);
+    return toFloat(T, a) / toFloat(T, b);
 }
 
 test divAsFloat {
