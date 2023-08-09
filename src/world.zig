@@ -1016,7 +1016,7 @@ const my_file = struct {
 };
 
 const MyWorld = WorldBuilder.init(&.{
-    ztg.base, ztg.physics, my_file,
+    ztg.base, my_file,
 }).Build();
 
 test "creation" {
@@ -1077,7 +1077,7 @@ test "adding/removing components" {
     try testing.expect(!ent.checkHas(my_file.MyComponent));
 }
 
-test "overriding components" {
+test "overwriting components" {
     var world = try MyWorld.init(std.testing.allocator);
     defer world.deinit();
 

@@ -1,3 +1,5 @@
+//! This file can be run with `zig build example`
+
 const std = @import("std");
 const ztg = @import("zentig");
 
@@ -44,7 +46,7 @@ const player = struct {
             ztg.base.Transform.initWith(.{ .pos = ztg.vec3(10, 10, 0) }),
         });
 
-        try plr_ent.giveEnt(Mover{
+        try plr_ent.give(Mover{
             .speed = 5,
             .dir = ztg.Vec3.right(),
         });
@@ -74,7 +76,7 @@ const Mover = struct {
         // A default transform is provided in case the entity doesnt have one.
         // The defaults of a transform place it at { 0, 0, 0 } with a scale of
         // { 1, 1, 1 } and a rotation of 0.
-        if (!com.checkEntHas(ent, ztg.base.Transform)) try ent.giveEnt(ztg.base.Transform{});
+        if (!com.checkEntHas(ent, ztg.base.Transform)) try com.giveEnt(ent, ztg.base.Transform.identity());
     }
 
     pub fn include(comptime wb: *ztg.WorldBuilder) void {

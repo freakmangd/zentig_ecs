@@ -1,3 +1,5 @@
+//! This test can be run with `zig build example_input`
+
 const std = @import("std");
 const ztg = @import("zentig");
 

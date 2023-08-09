@@ -95,8 +95,11 @@ pub fn include(comptime wb: *ztg.WorldBuilder) void {
 ## Installation
 See the page on installing [here](https://github.com/freakmangd/zentig_ecs/tree/main/docs/installation.md)
 
+## Getting Started
+See this short tutorial on creating systems and components [here](https://github.com/freakmangd/zentig_ecs/tree/main/docs/hello_world.md)
+
 ## Full Examples
-See full examples in the [examples folder](https://github.com/freakmangd/zentig_ecs/tree/main/examples).
+See full examples in the [examples folder](https://github.com/freakmangd/zentig_ecs/tree/main/examples)
 
 ## Raylib Support
 While it is easy to get started with a raylib with just zentig_ecs, I've created a library that

@@ -21,8 +21,9 @@ pub fn build(b: *std.Build) void {
 
     const examples = [_]struct { []const u8, []const u8, []const u8 }{
         .{ "hello_world", "examples/hello_world.zig", "Run tutorial example" },
+
         .{ "example", "examples/example.zig", "Run basic example" },
-        .{ "input", "examples/input_example.zig", "Run input example" },
+        .{ "example_input", "examples/input_example.zig", "Run input example" },
     };
 
     for (examples) |ex_info| {
@@ -42,7 +43,7 @@ pub fn build(b: *std.Build) void {
     }
 
     const tests = [_]struct { []const u8, []const u8, []const u8 }{
-        .{ "example_test", "examples/test_example.zig", "Run testing example" },
+        .{ "test_example", "examples/test_example.zig", "Run testing example" },
         .{ "test", "src/init.zig", "Run all tests" },
     };
 

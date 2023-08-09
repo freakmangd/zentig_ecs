@@ -1,3 +1,6 @@
+//! This file is part of a tutorial in docs/hello_world.md
+//! It can be run with `zig build hello_world`
+
 const std = @import("std");
 const ztg = @import("zentig");
 

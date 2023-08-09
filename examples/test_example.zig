@@ -1,3 +1,5 @@
+//! This file can be run with `zig build test_example`
+
 const std = @import("std");
 const ztg = @import("zentig");
 const testing = std.testing;
@@ -62,7 +64,7 @@ const player_file = struct {
         });
 
         // Or an anonymous tuple.
-        try plr.giveEntMany(.{
+        try plr.giveMany(.{
             Jetpack{ .thrust = 100 },
             Backpack{ .space = 20 },
         });

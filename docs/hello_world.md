@@ -67,6 +67,13 @@ Starting at line 6:
 10: pub fn main() !void {
 ```
 
+Then you must include the file into the `WorldBuilder` by changing line 4 to:
+```zig
+const World = ztg.WorldBuilder.init(&.{@This()}).Build();
+```
+
+The `@This()` makes the `WorldBuilder` run the `include` function we just defined.
+
 Now we can start adding components and systems to our world.
 
 #### Systems
