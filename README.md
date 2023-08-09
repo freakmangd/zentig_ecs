@@ -47,6 +47,7 @@ Calling systems is easily integratable into your game framework:
 ```zig
 test "running systems" {
   var world = MyWorld.init(testing.allocator);
+  defer world.deinit();
 
   world.runStage(.load);
   world.runUpdateStages();
