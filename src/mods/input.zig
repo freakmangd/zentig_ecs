@@ -34,8 +34,8 @@ pub fn Build(
     };
 
     const AddBindings = struct {
-        buttons: ButtonBindings = &.{},
-        axes: AxesBindings = &.{},
+        buttons: ButtonBindings = .{},
+        axes: AxesBindings = .{},
     };
 
     return struct {
