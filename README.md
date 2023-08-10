@@ -107,3 +107,7 @@ While it is easy to get started with a raylib with just zentig_ecs, I've created
 wraps common components and provides systems that act on those components [here](https://github.com/freakmangd/zentig_raylib).
 
 That page provides installation instructions and usage examples.
+
+## Other Frameworks
+I encourage you to make your own wrappers for your favorite framework and send it in!
+I will link any below.
