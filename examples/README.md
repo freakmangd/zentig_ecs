@@ -5,6 +5,6 @@ Examples:
 Example name | Description
 ---|---
 example | basic example of creating entities, giving them components, and running systems
-input | example of setting up a custom input wrapper
-example_test | runs a test which creates an entity, runs some systems, and checks the state of the world
+test_example | runs a test which creates an entity, runs some systems, and checks the state of the world.<br>Use `--summary all` to see the result.
+example_input | example of setting up a custom input wrapper
 hello_world | runs the hello world example from the tutorial file
