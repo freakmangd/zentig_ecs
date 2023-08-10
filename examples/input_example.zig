@@ -38,7 +38,7 @@ const InputWrapper = struct {
     }
 };
 
-const Input = ztg.input.Input(InputWrapper, &.{.jump}, &.{}, .{});
+const Input = ztg.input.Build(InputWrapper, &.{.jump}, &.{}, .{});
 
 const World = blk: {
     var wb = ztg.WorldBuilder.init(&.{
