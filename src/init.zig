@@ -1,3 +1,13 @@
+//!zig-autodoc-guide: docs/README.md
+//!zig-autodoc-guide: docs/installation.md
+//!zig-autodoc-guide: docs/hello_world.md
+//!zig-autodoc-guide: docs/queries.md
+//!zig-autodoc-guide: docs/resources.md
+//!zig-autodoc-guide: docs/stages.md
+//!zig-autodoc-guide: docs/system_ordering.md
+//!zig-autodoc-guide: docs/events.md
+//!zig-autodoc-guide: docs/builtin_mods.md
+
 const std = @import("std");
 
 pub const Entity = usize;
