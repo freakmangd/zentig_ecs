@@ -1,3 +1,5 @@
+//! This is the common functionality of all vectors
+//!
 //! A lot of functions here are based on the Unity implementations: https://github.com/Unity-Technologies/UnityCsReference/blob/master/Runtime/Export/Math/Vector2.cs
 
 const std = @import("std");
@@ -20,8 +22,8 @@ pub fn init(comptime Self: type) type {
             const x = a.intoSimd();
             const y = b.intoSimd();
 
-            if (x == y) return true;
-            return @fabs(x - y) <= @max(@fabs(x), @fabs(y)) * tolerance;
+            if (@reduce(.And, x == y)) return true;
+            return @reduce(.And, @fabs(x - y) <= @max(@fabs(x), @fabs(y)) * @as(@Vector(vec_len, f32), @splat(tolerance)));
         }
 
         /// Compares a and b using the same method as `std.math.approxEqAbs` with a custom tolerance

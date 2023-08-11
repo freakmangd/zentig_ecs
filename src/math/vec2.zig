@@ -1,4 +1,5 @@
 const std = @import("std");
+const ztg_maybe = @import("root");
 const testing = std.testing;
 
 const ztg = @import("../init.zig");
@@ -159,6 +160,10 @@ pub const Vec2 = extern struct {
             .x = @mulAdd(f32, std.math.cos(angle), self.x, -std.math.sin(angle) * self.y),
             .y = @mulAdd(f32, std.math.sin(angle), self.x, std.math.cos(angle) * self.y),
         };
+    }
+
+    test getRotated {
+        try init(0, 1).expectApproxEqAbs(init(1, 0).getRotated(std.math.pi / 2.0));
     }
 
     /// Rotates the vector ccw in place by `angle` radians
