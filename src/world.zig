@@ -340,7 +340,7 @@ pub fn World(comptime wb: WorldBuilder) type {
         pub fn cleanForNextFrame(self: *Self) void {
             self.changes_list.clearAndFree();
             self.event_pools.clear();
-            if (!self.frame_arena.reset(.{ .retain_with_limit = 1000 })) ztg.log.err("Failed to reset frame arena.", .{});
+            if (!self.frame_arena.reset(.{ .retain_with_limit = 10_000 })) ztg.log.err("Failed to reset frame arena.", .{});
         }
 
         /// Returns the next free index for components. Invalidated after hitting the entity limit,
@@ -501,7 +501,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             }
         }
 
-        fn commands_giveEnt(ptr: *anyopaque, ent: ztg.Entity, component_id: util.CompId, data: *const anyopaque) CommandsGiveEntError!void {
+        fn commands_giveEnt(ptr: *anyopaque, ent: ztg.Entity, component_id: util.CompId, alignment: u29, data: *const anyopaque) CommandsGiveEntError!void {
             if (comptime wb.comp_types.types.len == 0) @compileError("World has no registered components and cannot add components");
             var self = commandsCast(ptr);
 
@@ -510,12 +510,15 @@ pub fn World(comptime wb: WorldBuilder) type {
             if (arr.willResize()) {
                 // we cant add the component right now, because then the pointers in the calling system will become invalid,
                 // so we place the data on the heap and queue for its addition.
-                var alloced_data = try self.frame_alloc.alloc(u8, arr.components_data.entry_size);
+                //
+                // also, extremely unsafe :)
+                // only because we have an alignment at runtime instead of comptime :,(
+                var alloced_data = self.frame_alloc.rawAlloc(arr.components_data.entry_size, std.math.log2_int(u29, alignment), @returnAddress()) orelse return error.OutOfMemory;
                 @memcpy(alloced_data, @as([*]const u8, @ptrCast(data))[0..arr.components_data.entry_size]);
                 try self.changes_queue.append(.{ .added_component = .{
                     .ent = ent,
                     .component_id = component_id,
-                    .data = alloced_data.ptr,
+                    .data = alloced_data,
                 } });
             } else {
                 try arr.assignData(ent, data);

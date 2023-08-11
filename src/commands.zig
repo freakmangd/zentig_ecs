@@ -22,7 +22,7 @@ pub const Vtable = struct {
     get_ent_parent: *const fn (*const anyopaque, ztg.Entity) error{EntityDoesntExist}!?ztg.Entity,
     set_ent_parent: *const fn (*anyopaque, ztg.Entity, ?ztg.Entity) error{ EntityDoesntExist, ParentDoesntExist }!void,
 
-    add_component: *const fn (*anyopaque, Entity, util.CompId, *const anyopaque) world.CommandsGiveEntError!void,
+    add_component: *const fn (*anyopaque, Entity, util.CompId, u29, *const anyopaque) world.CommandsGiveEntError!void,
     remove_component: *const fn (*anyopaque, Entity, util.CompId) ca.Error!void,
     get_component_ptr: *const fn (*anyopaque, Entity, util.CompId) world.CommandsComponentError!?*anyopaque,
     check_ent_has: *const fn (*anyopaque, Entity, util.CompId) world.CommandsComponentError!bool,
@@ -136,7 +136,7 @@ pub fn giveEnt(self: Self, ent: Entity, component: anytype) !void {
         }
     }
 
-    self.vtable.add_component(self.ctx, ent, util.compId(Component), if (has_onAdded and needs_mut) &mutable_comp else &component) catch |err| switch (err) {
+    self.vtable.add_component(self.ctx, ent, util.compId(Component), @alignOf(Component), if (has_onAdded and needs_mut) &mutable_comp else &component) catch |err| switch (err) {
         error.UnregisteredComponent => std.debug.panic("Cannot give ent {} a component of type {s} as it has not been registered.", .{ ent, @typeName(Component) }),
         else => return err,
     };
@@ -167,7 +167,7 @@ pub fn checkEntHas(self: Self, ent: Entity, comptime Component: type) bool {
 /// Returns a pointer to the component data associated with `ent`
 pub fn getComponent(self: Self, ent: Entity, comptime Component: type) ?Component {
     const ptr = self.vtable.get_component_ptr(self.ctx, ent, util.compId(Component)) catch |err| switch (err) {
-        error.UnregisteredComponent => std.debug.panic("Cannot get pointer to component of type {s} as it has not been registered.", .{@typeName(Component)}),
+        error.UnregisteredComponent => panicOnUnregistered(Component),
     };
     if (comptime @sizeOf(Component) == 0) return if (ptr) |_| Component{} else null;
     return if (ptr) |p| @as(*Component, @ptrCast(@alignCast(p))).* else null;
@@ -176,8 +176,9 @@ pub fn getComponent(self: Self, ent: Entity, comptime Component: type) ?Componen
 /// Returns a pointer to the component data associated with `ent`
 pub fn getComponentPtr(self: Self, ent: Entity, comptime Component: type) ?*Component {
     const ptr = self.vtable.get_component_ptr(self.ctx, ent, util.compId(Component)) catch |err| switch (err) {
-        error.UnregisteredComponent => std.debug.panic("Cannot get pointer to component of type {s} as it has not been registered.", .{@typeName(Component)}),
+        error.UnregisteredComponent => panicOnUnregistered(Component),
     };
+    //if (ptr != null and @intFromPtr(ptr.?) % @alignOf(Component) != 0) std.debug.panic("Incorrect alignment of {s} in getComponentPtr. Expected {}, found {}", .{ @typeName(Component), @alignOf(Component), @intFromPtr(ptr.?) });
     return if (ptr) |p| @ptrCast(@alignCast(p)) else null;
 }
 
@@ -189,13 +190,17 @@ pub fn removeEnt(self: Self, ent: Entity) !void {
 /// Returns a pointer to the world resource T
 pub fn getResPtr(self: Self, comptime T: type) *T {
     const ptr = self.vtable.get_res(self.ctx, ztg.meta.utpOf(T)) catch |err| switch (err) {
-        error.UnregisteredResource => std.debug.panic("Cannot access a pointer to resource of type {s} because it was not registered.", .{@typeName(T)}),
+        error.UnregisteredResource => panicOnUnregistered(T),
     };
     return @ptrCast(@alignCast(ptr));
 }
 
 pub fn hasIncluded(self: Self, comptime Namespace: type) bool {
     return self.vtable.has_included(ztg.meta.utpOf(Namespace));
+}
+
+fn panicOnUnregistered(comptime T: type) noreturn {
+    std.debug.panic("Cannot access a pointer to resource of type {s} because it was not registered.", .{@typeName(T)});
 }
 
 pub const RuntimeQuery = struct {
