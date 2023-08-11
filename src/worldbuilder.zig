@@ -1,3 +1,5 @@
+//! A comptime only class for constructing World types
+
 const std = @import("std");
 const ztg = @import("init.zig");
 const world = @import("world.zig");
@@ -145,7 +147,7 @@ pub fn include(comptime self: *Self, comptime includes: []const type) void {
 /// }
 /// ```
 pub fn addStage(comptime self: *Self, comptime stage_name: ztg.meta.EnumLiteral) void {
-    for (self.stage_defs) |sdef| {
+    for (self.stage_defs.items) |sdef| {
         if (std.mem.eql(u8, sdef.name, @tagName(stage_name))) {
             self.warn("Tried to add stage `" ++ sdef.name ++ "` to world more than once.");
             return;
@@ -162,7 +164,7 @@ fn stageIndexFromName(comptime self: Self, comptime stage_name: []const u8) usiz
     // if stage is part of DEFAULT_STAGES, we already know the index
     if (@hasDecl(default_stages, stage_name)) return @field(default_stages, stage_name);
 
-    for (self.stage_defs, 0..) |sdef, i| {
+    for (self.stage_defs.items, 0..) |sdef, i| {
         if (std.mem.eql(u8, sdef.name, stage_name)) {
             return i;
         }
@@ -394,21 +396,201 @@ fn warn(comptime self: *Self, comptime message: []const u8) void {
     self.warnings = self.warnings ++ message ++ "\n";
 }
 
-const test_namespace = struct {
-    pub const MyWorld = Self.init(&.{
-        ztg.base,
-    }).Build();
+fn TestWorld(comptime namespace: type) type {
+    return Self.init(&.{namespace}).Build();
+}
 
-    pub const MyComponent = struct {
-        value: i32,
-    };
-
-    pub fn include(comptime wb: *Self) void {
-        wb.addComponents(&.{MyComponent});
-    }
-};
+fn testWorld(comptime namespace: type) !*TestWorld(namespace) {
+    return TestWorld(namespace).init(std.testing.allocator);
+}
 
 test Self {
-    var w = try test_namespace.MyWorld.init(std.testing.allocator);
+    var w = try testWorld(ztg.base);
     defer w.deinit();
+}
+
+test addComponents {
+    var w = try testWorld(struct {
+        pub fn include(comptime wb: *Self) void {
+            wb.addComponents(&.{ MyComponent, MyEmpty, MyEnum, MyUnion });
+        }
+
+        const MyComponent = struct {
+            value: i32,
+        };
+
+        const MyEmpty = struct {};
+
+        const MyEnum = enum {
+            a,
+            b,
+        };
+
+        const MyUnion = union(enum) {
+            a: i32,
+            b: bool,
+        };
+    });
+    defer w.deinit();
+}
+
+test addStage {
+    const namespace = struct {
+        var stage_was_run: bool = false;
+
+        pub fn include(comptime wb: *Self) void {
+            wb.addStage(.my_stage);
+            wb.addSystemsToStage(.my_stage, mySystem);
+            try std.testing.expect(wb.hasStageName("my_stage"));
+        }
+
+        fn mySystem() void {
+            stage_was_run = true;
+        }
+    };
+
+    var w = try testWorld(namespace);
+    defer w.deinit();
+
+    try w.runStage(.my_stage);
+    try std.testing.expect(namespace.stage_was_run);
+}
+
+test "adding systems" {
+    const namespace = struct {
+        var stages_were_run: [6]bool = .{false} ** 6;
+
+        pub fn include(comptime wb: *Self) void {
+            wb.addSystemsToStage(.load, sys0);
+            wb.addSystemsToStageByName("load", sys1);
+            wb.addSystems(.{ .load = sys2 });
+            wb.addLoadSystems(load);
+            wb.addUpdateSystems(update);
+            wb.addDrawSystems(draw);
+        }
+
+        fn sys0() void {
+            stages_were_run[0] = true;
+        }
+
+        fn sys1() void {
+            stages_were_run[1] = true;
+        }
+
+        fn sys2() void {
+            stages_were_run[2] = true;
+        }
+
+        fn load() void {
+            stages_were_run[3] = true;
+        }
+
+        fn update() void {
+            stages_were_run[4] = true;
+        }
+
+        fn draw() void {
+            stages_were_run[5] = true;
+        }
+    };
+
+    var w = try testWorld(namespace);
+    defer w.deinit();
+
+    try w.runStage(.load);
+    try w.runUpdateStages();
+    try w.runStage(.draw);
+
+    try std.testing.expect(namespace.stages_were_run[0]);
+    try std.testing.expect(namespace.stages_were_run[1]);
+    try std.testing.expect(namespace.stages_were_run[2]);
+    try std.testing.expect(namespace.stages_were_run[3]);
+    try std.testing.expect(namespace.stages_were_run[4]);
+    try std.testing.expect(namespace.stages_were_run[5]);
+}
+
+test addLabel {
+    const namespace = struct {
+        var counter: usize = 0;
+
+        pub fn include(comptime wb: *Self) void {
+            wb.addLabel(.load, .my_label, .{ .before = .body });
+            wb.addSystems(.{
+                .load = .{
+                    load_body_during,
+                    ztg.before(.my_label, load_my_label_before),
+                    ztg.during(.my_label, load_my_label_during),
+                    ztg.after(.my_label, load_my_label_after),
+                },
+            });
+        }
+
+        fn load_my_label_before() !void {
+            try std.testing.expectEqual(@as(usize, 0), counter);
+            counter += 1;
+        }
+
+        fn load_my_label_during() !void {
+            try std.testing.expectEqual(@as(usize, 1), counter);
+            counter += 1;
+        }
+
+        fn load_my_label_after() !void {
+            try std.testing.expectEqual(@as(usize, 2), counter);
+            counter += 1;
+        }
+
+        fn load_body_during() !void {
+            try std.testing.expectEqual(@as(usize, 3), counter);
+            counter += 1;
+        }
+    };
+
+    var w = try testWorld(namespace);
+    defer w.deinit();
+
+    try w.runStage(.load);
+    try std.testing.expectEqual(@as(usize, 4), namespace.counter);
+}
+
+test addResource {
+    const MyResource = struct { data: i32 = 0 };
+
+    var w = try testWorld(struct {
+        pub fn include(comptime wb: *Self) void {
+            wb.addResource(MyResource, .{ .data = 10 });
+        }
+    });
+    defer w.deinit();
+
+    try std.testing.expectEqual(@as(i32, 10), w.getRes(MyResource).data);
+}
+
+test addEvent {
+    const MyEvent = struct { data: i32 };
+    const namespace = struct {
+        var system_was_run = false;
+
+        pub fn include(comptime wb: *Self) void {
+            wb.addEvent(MyEvent);
+            wb.addSystems(.{
+                .load = .{ sendEvent, ztg.after(.body, recvEvent) },
+            });
+        }
+
+        fn sendEvent(send: ztg.EventSender(MyEvent)) !void {
+            try send.send(.{ .data = 20 });
+        }
+
+        fn recvEvent(recv: ztg.EventReceiver(MyEvent)) !void {
+            for (recv.items) |it| try std.testing.expectEqual(@as(i32, 20), it.data);
+            system_was_run = true;
+        }
+    };
+
+    var w = try testWorld(namespace);
+    defer w.deinit();
+
+    try w.runStage(.load);
+    try std.testing.expect(namespace.system_was_run);
 }

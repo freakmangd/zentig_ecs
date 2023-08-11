@@ -1,0 +1,1261 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <title>world.zig - source view</title>
+    <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAPNJREFUeNpi/P//PwMlgOXHUjly9E0G4hwgZmQiQZMqEK8H4v9QzUEgQSaoADK+zhH9iAGL+C0gDoAaNg9mGLoLfgA1awK9hS9gzgJxA9RQBmQDrgMxJzRMGKE4HYj/Ial5A8QmQLwCJoBsgBYW2+TR1ChDaWt4LOBxKsi/VUh8XiD+gq4IVyzwQAMJBoKwacZlAB8Qf0bi96IZhtOAe1D6LpqaEiz6rmEzQAeIzwGxCJpieFqApo/vQKyJboAaEBsAsSEupwI1MwKjGBTVHOhegMX5UajYRqiBjMgYmj400cVh0XgTiKdC0zhJgJHS7AwQYABm9EAdCKrEfAAAAABJRU5ErkJggg=="/>
+    <style>
+      body{
+        font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
+        margin: 0;
+        line-height: 1.5;
+      }
+
+      pre > code {
+        display: block;
+        overflow: auto;
+        line-height: normal;
+        margin: 0em;
+      }
+      .tok-kw {
+          color: #333;
+          font-weight: bold;
+      }
+      .tok-str {
+          color: #d14;
+      }
+      .tok-builtin {
+          color: #005C7A;
+      }
+      .tok-comment {
+          color: #545454;
+          font-style: italic;
+      }
+      .tok-fn {
+          color: #900;
+          font-weight: bold;
+      }
+      .tok-null {
+          color: #005C5C;
+      }
+      .tok-number {
+          color: #005C5C;
+      }
+      .tok-type {
+          color: #458;
+          font-weight: bold;
+      }
+      pre {
+        counter-reset: line;
+      }
+      pre .line:before {
+        counter-increment: line;
+        content: counter(line);
+        display: inline-block;
+        padding-right: 1em;
+        width: 2em;
+        text-align: right;
+        color: #999;
+      }
+      
+      .line {
+        width: 100%;
+        display: inline-block;
+      }
+      .line:target {
+        border-top: 1px solid #ccc;
+        border-bottom: 1px solid #ccc;
+        background: #fafafa;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body{
+            background:#222;
+            color: #ccc;
+        }
+        pre > code {
+            color: #ccc;
+            background: #222;
+            border: unset;
+        }
+        .line:target {
+            border-top: 1px solid #444;
+            border-bottom: 1px solid #444;
+            background: #333;
+        }
+        .tok-kw {
+            color: #eee;
+        }
+        .tok-str {
+            color: #2e5;
+        }
+        .tok-builtin {
+            color: #ff894c;
+        }
+        .tok-comment {
+            color: #aa7;
+        }
+        .tok-fn {
+            color: #B1A0F8;
+        }
+        .tok-null {
+            color: #ff8080;
+        }
+        .tok-number {
+            color: #ff8080;
+        }
+        .tok-type {
+            color: #68f;
+        }
+      }
+    </style>
+</head>
+<body>
+<pre><code><span class="line" id="L1"><span class="tok-kw">const</span> std = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;std&quot;</span>);</span>
+<span class="line" id="L2"><span class="tok-kw">const</span> builtin = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;builtin&quot;</span>);</span>
+<span class="line" id="L3"><span class="tok-kw">const</span> util = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;util.zig&quot;</span>);</span>
+<span class="line" id="L4"><span class="tok-kw">const</span> ztg = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;init.zig&quot;</span>);</span>
+<span class="line" id="L5"><span class="tok-kw">const</span> ea = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;entity_array.zig&quot;</span>);</span>
+<span class="line" id="L6"><span class="tok-kw">const</span> ca = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;component_array.zig&quot;</span>);</span>
+<span class="line" id="L7"><span class="tok-kw">const</span> EventPools = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;event_pools.zig&quot;</span>).EventPools;</span>
+<span class="line" id="L8"><span class="tok-kw">const</span> WorldBuilder = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;worldbuilder.zig&quot;</span>);</span>
+<span class="line" id="L9"></span>
+<span class="line" id="L10"><span class="tok-kw">const</span> Allocator = std.mem.Allocator;</span>
+<span class="line" id="L11"><span class="tok-kw">const</span> TypeMap = ztg.meta.TypeMap;</span>
+<span class="line" id="L12"><span class="tok-kw">const</span> TypeBuilder = ztg.meta.TypeBuilder;</span>
+<span class="line" id="L13"></span>
+<span class="line" id="L14"><span class="tok-kw">pub</span> <span class="tok-kw">const</span> CommandsComponentError = <span class="tok-kw">error</span>{UnregisteredComponent};</span>
+<span class="line" id="L15"><span class="tok-kw">pub</span> <span class="tok-kw">const</span> CommandsGiveEntError = CommandsComponentError || ca.Error;</span>
+<span class="line" id="L16"></span>
+<span class="line" id="L17"><span class="tok-kw">const</span> WorldInfo = <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L18">    <span class="tok-kw">const</span> use_c_alloc = <span class="tok-null">false</span>; <span class="tok-comment">// once bug is fixed set to &quot;builtin.mode != .Debug&quot;</span>
+</span>
+<span class="line" id="L19"></span>
+<span class="line" id="L20">    alloc: std.mem.Allocator,</span>
+<span class="line" id="L21">    frame_arena: std.heap.ArenaAllocator = <span class="tok-null">undefined</span>,</span>
+<span class="line" id="L22">    rng: std.rand.DefaultPrng,</span>
+<span class="line" id="L23"></span>
+<span class="line" id="L24">    <span class="tok-kw">fn</span> <span class="tok-fn">init</span>(alloc: std.mem.Allocator) !*WorldInfo {</span>
+<span class="line" id="L25">        <span class="tok-kw">var</span> self = <span class="tok-kw">try</span> alloc.create(WorldInfo);</span>
+<span class="line" id="L26">        self.* = .{</span>
+<span class="line" id="L27">            .alloc = alloc,</span>
+<span class="line" id="L28">            .rng = std.rand.DefaultPrng.init(<span class="tok-builtin">@bitCast</span>(std.time.milliTimestamp())),</span>
+<span class="line" id="L29">        };</span>
+<span class="line" id="L30">        self.frame_arena = std.heap.ArenaAllocator.init(self.allocator());</span>
+<span class="line" id="L31">        <span class="tok-kw">return</span> self;</span>
+<span class="line" id="L32">    }</span>
+<span class="line" id="L33"></span>
+<span class="line" id="L34">    <span class="tok-kw">fn</span> <span class="tok-fn">deinit</span>(self: *WorldInfo) <span class="tok-type">void</span> {</span>
+<span class="line" id="L35">        self.frame_arena.deinit();</span>
+<span class="line" id="L36">        self.alloc.destroy(self);</span>
+<span class="line" id="L37">    }</span>
+<span class="line" id="L38"></span>
+<span class="line" id="L39">    <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">allocator</span>(self: *WorldInfo) std.mem.Allocator {</span>
+<span class="line" id="L40">        <span class="tok-kw">return</span> <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> use_c_alloc) std.heap.c_allocator <span class="tok-kw">else</span> self.alloc;</span>
+<span class="line" id="L41">    }</span>
+<span class="line" id="L42">};</span>
+<span class="line" id="L43"></span>
+<span class="line" id="L44"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">World</span>(<span class="tok-kw">comptime</span> wb: WorldBuilder) <span class="tok-type">type</span> {</span>
+<span class="line" id="L45">    <span class="tok-kw">if</span> (wb.max_entities == <span class="tok-number">0</span>) <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;Cannot have max_ents == 0.&quot;</span>);</span>
+<span class="line" id="L46"></span>
+<span class="line" id="L47">    <span class="tok-kw">const</span> Resources = wb.resources.Build();</span>
+<span class="line" id="L48">    <span class="tok-kw">const</span> MinEntityIndex = std.meta.Int(.unsigned, <span class="tok-builtin">@typeInfo</span>(std.math.IntFittingRange(<span class="tok-number">0</span>, wb.max_entities)).Int.bits + <span class="tok-number">1</span>);</span>
+<span class="line" id="L49">    <span class="tok-kw">const</span> comp_types_len = wb.comp_types.types.len;</span>
+<span class="line" id="L50"></span>
+<span class="line" id="L51">    <span class="tok-kw">return</span> <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L52">        <span class="tok-kw">const</span> Self = <span class="tok-builtin">@This</span>();</span>
+<span class="line" id="L53"></span>
+<span class="line" id="L54">        <span class="tok-kw">const</span> StagesList = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;stages.zig&quot;</span>).Init(wb.stage_defs.items, Self);</span>
+<span class="line" id="L55"></span>
+<span class="line" id="L56">        <span class="tok-kw">const</span> ComponentArray = ca.ComponentArray(MinEntityIndex, wb.max_entities);</span>
+<span class="line" id="L57">        <span class="tok-kw">const</span> EntityArray = ea.EntityArray(wb.max_entities);</span>
+<span class="line" id="L58"></span>
+<span class="line" id="L59">        info: *WorldInfo,</span>
+<span class="line" id="L60"></span>
+<span class="line" id="L61">        alloc: Allocator,</span>
+<span class="line" id="L62">        frame_arena: *std.heap.ArenaAllocator,</span>
+<span class="line" id="L63">        frame_alloc: Allocator,</span>
+<span class="line" id="L64">        rand: std.rand.Random,</span>
+<span class="line" id="L65"></span>
+<span class="line" id="L66">        next_ent: ztg.Entity = <span class="tok-number">0</span>,</span>
+<span class="line" id="L67">        entities: EntityArray = <span class="tok-null">undefined</span>,</span>
+<span class="line" id="L68"></span>
+<span class="line" id="L69">        comp_arrays: [comp_types_len]ComponentArray = <span class="tok-null">undefined</span>,</span>
+<span class="line" id="L70">        resources: Resources = .{},</span>
+<span class="line" id="L71"></span>
+<span class="line" id="L72">        event_pools: EventPools(wb.event_types),</span>
+<span class="line" id="L73">        changes_list: ChangesList,</span>
+<span class="line" id="L74">        changes_queue: ChangeQueue,</span>
+<span class="line" id="L75"></span>
+<span class="line" id="L76">        <span class="tok-comment">/// User must call `.deinit()` once the world is to be descoped. (in a defer block preferrably)</span></span>
+<span class="line" id="L77">        <span class="tok-comment">/// All systems that request an `Allocator` will get the one passed here.</span></span>
+<span class="line" id="L78">        <span class="tok-comment">///</span></span>
+<span class="line" id="L79">        <span class="tok-comment">/// Also runs the `.init` stage, useful for things that will only run once and need to be done before</span></span>
+<span class="line" id="L80">        <span class="tok-comment">/// anything else, without relying on most anything else (Allocator and Random are available).</span></span>
+<span class="line" id="L81">        <span class="tok-comment">///</span></span>
+<span class="line" id="L82">        <span class="tok-comment">/// Example:</span></span>
+<span class="line" id="L83">        <span class="tok-comment">/// ```zig</span></span>
+<span class="line" id="L84">        <span class="tok-comment">/// var world = MyWorld.init(alloc);</span></span>
+<span class="line" id="L85">        <span class="tok-comment">/// defer world.deinit();</span></span>
+<span class="line" id="L86">        <span class="tok-comment">/// ```</span></span>
+<span class="line" id="L87">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">init</span>(user_allocator: std.mem.Allocator) !*Self {</span>
+<span class="line" id="L88">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> builtin.mode == .Debug) {</span>
+<span class="line" id="L89">                <span class="tok-comment">//std.debug.print(&quot;Entity has utp {}\n&quot;, .{util.compId(ztg.Entity)});</span>
+</span>
+<span class="line" id="L90">                <span class="tok-comment">//inline for (wb.comp_types.types) |T| {</span>
+</span>
+<span class="line" id="L91">                <span class="tok-comment">//    @setEvalBranchQuota(20_000);</span>
+</span>
+<span class="line" id="L92">                <span class="tok-comment">//    std.debug.print(&quot;{s} has utp {}\n&quot;, .{ @typeName(T), util.compId(T) });</span>
+</span>
+<span class="line" id="L93">                <span class="tok-comment">//}</span>
+</span>
+<span class="line" id="L94"></span>
+<span class="line" id="L95">                <span class="tok-kw">if</span> (wb.warnings.len &gt; <span class="tok-number">0</span>)</span>
+<span class="line" id="L96">                    ztg.log.warn(<span class="tok-str">&quot;\n====== World was constructed with warnings: ======\n&quot;</span> ++ wb.warnings, .{});</span>
+<span class="line" id="L97"></span>
+<span class="line" id="L98">                <span class="tok-kw">if</span> (wb.max_entities &gt; <span class="tok-number">500_000</span>) ztg.log.warn(<span class="tok-str">&quot;It isn't recommended to have a max_entities count over 500,000 as it could cause unstable performance.&quot;</span>);</span>
+<span class="line" id="L99">            }</span>
+<span class="line" id="L100"></span>
+<span class="line" id="L101">            <span class="tok-kw">var</span> info = <span class="tok-kw">try</span> WorldInfo.init(user_allocator);</span>
+<span class="line" id="L102">            <span class="tok-kw">errdefer</span> info.deinit();</span>
+<span class="line" id="L103"></span>
+<span class="line" id="L104">            <span class="tok-kw">const</span> alloc = info.allocator();</span>
+<span class="line" id="L105">            <span class="tok-kw">const</span> frame_alloc = info.frame_arena.allocator();</span>
+<span class="line" id="L106"></span>
+<span class="line" id="L107">            <span class="tok-kw">var</span> self = <span class="tok-kw">try</span> alloc.create(Self);</span>
+<span class="line" id="L108">            self.* = .{</span>
+<span class="line" id="L109">                .alloc = alloc,</span>
+<span class="line" id="L110">                .info = info,</span>
+<span class="line" id="L111">                .frame_arena = &amp;info.frame_arena,</span>
+<span class="line" id="L112">                .frame_alloc = frame_alloc,</span>
+<span class="line" id="L113">                .rand = info.rng.random(),</span>
+<span class="line" id="L114"></span>
+<span class="line" id="L115">                .entities = EntityArray.init(),</span>
+<span class="line" id="L116"></span>
+<span class="line" id="L117">                .event_pools = EventPools(wb.event_types).init(),</span>
+<span class="line" id="L118">                .changes_list = ChangesList.init(frame_alloc),</span>
+<span class="line" id="L119">                .changes_queue = ChangeQueue.init(frame_alloc),</span>
+<span class="line" id="L120">            };</span>
+<span class="line" id="L121"></span>
+<span class="line" id="L122">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> wb.comp_types.types.len &gt; <span class="tok-number">0</span>) {</span>
+<span class="line" id="L123">                <span class="tok-kw">var</span> last_successful_init_loop: <span class="tok-type">usize</span> = <span class="tok-number">0</span>;</span>
+<span class="line" id="L124">                <span class="tok-kw">errdefer</span> <span class="tok-kw">for</span> (self.comp_arrays[<span class="tok-number">0</span>..last_successful_init_loop]) |*arr| {</span>
+<span class="line" id="L125">                    arr.deinit();</span>
+<span class="line" id="L126">                };</span>
+<span class="line" id="L127"></span>
+<span class="line" id="L128">                util.resetCompIds();</span>
+<span class="line" id="L129">                <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (wb.comp_types.types, <span class="tok-number">0</span>..) |CT, i| {</span>
+<span class="line" id="L130">                    <span class="tok-builtin">@setEvalBranchQuota</span>(<span class="tok-number">20_000</span>);</span>
+<span class="line" id="L131">                    self.comp_arrays[util.compId(CT)] = <span class="tok-kw">try</span> ComponentArray.init(alloc, CT);</span>
+<span class="line" id="L132">                    last_successful_init_loop = i;</span>
+<span class="line" id="L133">                }</span>
+<span class="line" id="L134">            }</span>
+<span class="line" id="L135"></span>
+<span class="line" id="L136">            self.getResPtr(Allocator).* = user_allocator;</span>
+<span class="line" id="L137">            self.getResPtr(ztg.FrameAlloc).* = .{frame_alloc};</span>
+<span class="line" id="L138">            self.getResPtr(std.rand.Random).* = info.rng.random();</span>
+<span class="line" id="L139"></span>
+<span class="line" id="L140">            ztg.profiler.init(user_allocator);</span>
+<span class="line" id="L141"></span>
+<span class="line" id="L142">            <span class="tok-kw">try</span> self.runStage(.init);</span>
+<span class="line" id="L143"></span>
+<span class="line" id="L144">            <span class="tok-kw">return</span> self;</span>
+<span class="line" id="L145">        }</span>
+<span class="line" id="L146"></span>
+<span class="line" id="L147">        <span class="tok-kw">fn</span> <span class="tok-fn">deinit_errCallback</span>(<span class="tok-kw">comptime</span> msg: []<span class="tok-kw">const</span> <span class="tok-type">u8</span>) <span class="tok-kw">fn</span> (<span class="tok-type">anyerror</span>) <span class="tok-type">void</span> {</span>
+<span class="line" id="L148">            <span class="tok-kw">return</span> <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L149">                <span class="tok-kw">fn</span> <span class="tok-fn">f</span>(err: <span class="tok-type">anyerror</span>) <span class="tok-type">void</span> {</span>
+<span class="line" id="L150">                    ztg.log.err(msg, .{err});</span>
+<span class="line" id="L151">                }</span>
+<span class="line" id="L152">            }.f;</span>
+<span class="line" id="L153">        }</span>
+<span class="line" id="L154"></span>
+<span class="line" id="L155">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">deinit</span>(self: *Self) <span class="tok-type">void</span> {</span>
+<span class="line" id="L156">            ztg.profiler.deinit();</span>
+<span class="line" id="L157"></span>
+<span class="line" id="L158">            self.postSystemUpdate() <span class="tok-kw">catch</span> |err| {</span>
+<span class="line" id="L159">                ztg.log.err(<span class="tok-str">&quot;Found error {} while trying to clean up world for deinit.&quot;</span>, .{err});</span>
+<span class="line" id="L160">            };</span>
+<span class="line" id="L161"></span>
+<span class="line" id="L162">            self.runStageCatchErrors(.deinit, deinit_errCallback(<span class="tok-str">&quot;Encountered error {} in cleanup stage&quot;</span>)) <span class="tok-kw">catch</span> |err| <span class="tok-kw">switch</span> (err) {</span>
+<span class="line" id="L163">                <span class="tok-kw">error</span>.OutOfMemory =&gt; {</span>
+<span class="line" id="L164">                    ztg.log.err(<span class="tok-str">&quot;Encountered OOM error in deinit stage. Some systems may not have been run!&quot;</span>, .{});</span>
+<span class="line" id="L165">                },</span>
+<span class="line" id="L166">                <span class="tok-kw">else</span> =&gt; {},</span>
+<span class="line" id="L167">            };</span>
+<span class="line" id="L168"></span>
+<span class="line" id="L169">            self.event_pools.deinit(self.frame_alloc);</span>
+<span class="line" id="L170">            self.changes_queue.deinit();</span>
+<span class="line" id="L171">            self.changes_list.deinit();</span>
+<span class="line" id="L172"></span>
+<span class="line" id="L173">            <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (wb.comp_types.types, &amp;self.comp_arrays) |CT, *comp_arr| {</span>
+<span class="line" id="L174">                <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> <span class="tok-builtin">@hasDecl</span>(CT, <span class="tok-str">&quot;onRemoved&quot;</span>)) {</span>
+<span class="line" id="L175">                    <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> <span class="tok-builtin">@sizeOf</span>(CT) &gt; <span class="tok-number">0</span>) {</span>
+<span class="line" id="L176">                        <span class="tok-kw">var</span> comp_iter = comp_arr.iterator();</span>
+<span class="line" id="L177">                        <span class="tok-kw">while</span> (comp_iter.nextAs(CT)) |comp| self.invokeOnRemoveForComponent(CT, comp) <span class="tok-kw">catch</span> |err| {</span>
+<span class="line" id="L178">                            std.log.err(<span class="tok-str">&quot;Caught error {} while deinit'ing component list of type {s}&quot;</span>, .{ err, <span class="tok-builtin">@typeName</span>(CT) });</span>
+<span class="line" id="L179">                        };</span>
+<span class="line" id="L180">                    } <span class="tok-kw">else</span> {</span>
+<span class="line" id="L181">                        <span class="tok-kw">for</span> (<span class="tok-number">0</span>..comp_arr.len()) |_| self.invokeOnRemoveForComponent(CT, &amp;CT{}) <span class="tok-kw">catch</span> |err| {</span>
+<span class="line" id="L182">                            std.log.err(<span class="tok-str">&quot;Caught error {} while deinit'ing component list of type {s}&quot;</span>, .{ err, <span class="tok-builtin">@typeName</span>(CT) });</span>
+<span class="line" id="L183">                        };</span>
+<span class="line" id="L184">                    }</span>
+<span class="line" id="L185">                }</span>
+<span class="line" id="L186">                comp_arr.deinit();</span>
+<span class="line" id="L187">            }</span>
+<span class="line" id="L188"></span>
+<span class="line" id="L189">            self.info.deinit();</span>
+<span class="line" id="L190">            self.alloc.destroy(self);</span>
+<span class="line" id="L191">        }</span>
+<span class="line" id="L192"></span>
+<span class="line" id="L193">        <span class="tok-comment">/// If you are going to run multiple stages in a row, consider `.runStageList()`</span></span>
+<span class="line" id="L194">        <span class="tok-comment">///</span></span>
+<span class="line" id="L195">        <span class="tok-comment">/// Example:</span></span>
+<span class="line" id="L196">        <span class="tok-comment">/// ```zig</span></span>
+<span class="line" id="L197">        <span class="tok-comment">/// try world.runStage(.render);</span></span>
+<span class="line" id="L198">        <span class="tok-comment">/// ```</span></span>
+<span class="line" id="L199">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">runStage</span>(self: *Self, <span class="tok-kw">comptime</span> stage_id: StagesList.StageField) <span class="tok-type">anyerror</span>!<span class="tok-type">void</span> {</span>
+<span class="line" id="L200">            <span class="tok-kw">try</span> StagesList.runStage(self, stage_id, <span class="tok-null">false</span>, <span class="tok-type">void</span>{});</span>
+<span class="line" id="L201">        }</span>
+<span class="line" id="L202"></span>
+<span class="line" id="L203">        <span class="tok-comment">/// For discarding errors in systems so that every system runs. Useful for stages</span></span>
+<span class="line" id="L204">        <span class="tok-comment">/// that are run at the end to free resources.</span></span>
+<span class="line" id="L205">        <span class="tok-comment">/// Calls errCallback whenever an error occurs and passes it the error.</span></span>
+<span class="line" id="L206">        <span class="tok-comment">///</span></span>
+<span class="line" id="L207">        <span class="tok-comment">/// Example:</span></span>
+<span class="line" id="L208">        <span class="tok-comment">/// ```zig</span></span>
+<span class="line" id="L209">        <span class="tok-comment">/// try world.runStage(.render);</span></span>
+<span class="line" id="L210">        <span class="tok-comment">/// ```</span></span>
+<span class="line" id="L211">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">runStageCatchErrors</span>(self: *Self, <span class="tok-kw">comptime</span> stage_id: StagesList.StageField, <span class="tok-kw">comptime</span> errCallback: <span class="tok-kw">fn</span> (<span class="tok-type">anyerror</span>) <span class="tok-type">void</span>) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L212">            <span class="tok-kw">return</span> StagesList.runStage(self, stage_id, <span class="tok-null">true</span>, errCallback);</span>
+<span class="line" id="L213">        }</span>
+<span class="line" id="L214"></span>
+<span class="line" id="L215">        <span class="tok-comment">/// If you are going to run multiple stages in a row, consider `.runStageNameList()`</span></span>
+<span class="line" id="L216">        <span class="tok-comment">///</span></span>
+<span class="line" id="L217">        <span class="tok-comment">/// Example:</span></span>
+<span class="line" id="L218">        <span class="tok-comment">/// ```zig</span></span>
+<span class="line" id="L219">        <span class="tok-comment">/// world.runStageByName(&quot;render&quot;);</span></span>
+<span class="line" id="L220">        <span class="tok-comment">/// ```</span></span>
+<span class="line" id="L221">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">runStageByName</span>(self: *Self, stage_name: []<span class="tok-kw">const</span> <span class="tok-type">u8</span>) <span class="tok-type">anyerror</span>!<span class="tok-type">void</span> {</span>
+<span class="line" id="L222">            StagesList.runStageByName(self, stage_name) <span class="tok-kw">catch</span> |err| <span class="tok-kw">switch</span> (err) {</span>
+<span class="line" id="L223">                <span class="tok-kw">error</span>.UnknownStage =&gt; std.debug.panic(<span class="tok-str">&quot;Cannot find stage {s} in stage list.&quot;</span>, .{stage_name}),</span>
+<span class="line" id="L224">                <span class="tok-kw">else</span> =&gt; <span class="tok-kw">return</span> err,</span>
+<span class="line" id="L225">            };</span>
+<span class="line" id="L226">        }</span>
+<span class="line" id="L227"></span>
+<span class="line" id="L228">        <span class="tok-kw">fn</span> <span class="tok-fn">commands_runStageFn</span>(ptr: *<span class="tok-type">anyopaque</span>, stage_name: []<span class="tok-kw">const</span> <span class="tok-type">u8</span>) <span class="tok-type">anyerror</span>!<span class="tok-type">void</span> {</span>
+<span class="line" id="L229">            <span class="tok-kw">try</span> commandsCast(ptr).runStageByName(stage_name);</span>
+<span class="line" id="L230">        }</span>
+<span class="line" id="L231"></span>
+<span class="line" id="L232">        <span class="tok-comment">/// Example:</span></span>
+<span class="line" id="L233">        <span class="tok-comment">/// ```zig</span></span>
+<span class="line" id="L234">        <span class="tok-comment">/// try world.runStageList(&amp;.{ .ping_send, .ping_receive, .ping_read });</span></span>
+<span class="line" id="L235">        <span class="tok-comment">/// ```</span></span>
+<span class="line" id="L236">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">runStageList</span>(self: *Self, <span class="tok-kw">comptime</span> stage_ids: []<span class="tok-kw">const</span> StagesList.StageField) <span class="tok-type">anyerror</span>!<span class="tok-type">void</span> {</span>
+<span class="line" id="L237">            <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (stage_ids) |sid| {</span>
+<span class="line" id="L238">                <span class="tok-kw">try</span> runStage(self, sid);</span>
+<span class="line" id="L239">            }</span>
+<span class="line" id="L240">        }</span>
+<span class="line" id="L241"></span>
+<span class="line" id="L242">        <span class="tok-comment">/// Example:</span></span>
+<span class="line" id="L243">        <span class="tok-comment">/// ```zig</span></span>
+<span class="line" id="L244">        <span class="tok-comment">/// try world.runStageList(&amp;.{ &quot;ping_send&quot;, &quot;ping_receive&quot;, &quot;ping_read&quot; });</span></span>
+<span class="line" id="L245">        <span class="tok-comment">/// ```</span></span>
+<span class="line" id="L246">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">runStageNameList</span>(self: *Self, stage_ids: []<span class="tok-kw">const</span> []<span class="tok-kw">const</span> <span class="tok-type">u8</span>) <span class="tok-type">anyerror</span>!<span class="tok-type">void</span> {</span>
+<span class="line" id="L247">            <span class="tok-kw">for</span> (stage_ids) |sid| {</span>
+<span class="line" id="L248">                <span class="tok-kw">try</span> runStageByName(self, sid);</span>
+<span class="line" id="L249">            }</span>
+<span class="line" id="L250">        }</span>
+<span class="line" id="L251"></span>
+<span class="line" id="L252">        <span class="tok-comment">/// Runs the .pre_update, .update, and .post_update systems</span></span>
+<span class="line" id="L253">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">runUpdateStages</span>(self: *Self) <span class="tok-type">anyerror</span>!<span class="tok-type">void</span> {</span>
+<span class="line" id="L254">            <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (&amp;.{ .pre_update, .update, .post_update }) |stage| {</span>
+<span class="line" id="L255">                <span class="tok-kw">try</span> runStage(self, stage);</span>
+<span class="line" id="L256">            }</span>
+<span class="line" id="L257">        }</span>
+<span class="line" id="L258"></span>
+<span class="line" id="L259">        <span class="tok-comment">/// For forcing the evaluation of the change queue,</span></span>
+<span class="line" id="L260">        <span class="tok-comment">/// you shouldn't have to call this.</span></span>
+<span class="line" id="L261">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">postSystemUpdate</span>(self: *Self) <span class="tok-type">anyerror</span>!<span class="tok-type">void</span> {</span>
+<span class="line" id="L262">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> comp_types_len == <span class="tok-number">0</span>) <span class="tok-kw">return</span>;</span>
+<span class="line" id="L263"></span>
+<span class="line" id="L264">            <span class="tok-kw">for</span> (self.changes_queue.items) |rem| {</span>
+<span class="line" id="L265">                <span class="tok-kw">switch</span> (rem) {</span>
+<span class="line" id="L266">                    .added_component =&gt; |comp| {</span>
+<span class="line" id="L267">                        <span class="tok-kw">var</span> arr = &amp;self.comp_arrays[comp.component_id];</span>
+<span class="line" id="L268">                        <span class="tok-kw">try</span> arr.assignData(comp.ent, comp.data);</span>
+<span class="line" id="L269">                    },</span>
+<span class="line" id="L270">                    .removed_ent =&gt; |ent| <span class="tok-kw">try</span> self.removeEntAndAssociatedComponents(ent),</span>
+<span class="line" id="L271">                    .removed_component =&gt; |rem_comp| {</span>
+<span class="line" id="L272">                        <span class="tok-kw">const</span> id = self.comp_arrays[rem_comp.component_id].component_id;</span>
+<span class="line" id="L273">                        <span class="tok-kw">const</span> comp = self.comp_arrays[rem_comp.component_id].get(rem_comp.ent) <span class="tok-kw">orelse</span> {</span>
+<span class="line" id="L274">                            ztg.log.err(<span class="tok-str">&quot;Trying to remove a component of type {s} from ent {} when ent does not have that component&quot;</span>, .{ wb.comp_types.nameFromIndex(id), rem_comp.ent });</span>
+<span class="line" id="L275">                            <span class="tok-kw">continue</span>;</span>
+<span class="line" id="L276">                        };</span>
+<span class="line" id="L277">                        <span class="tok-kw">try</span> self.invokeOnRemoveForComponentById(comp, id);</span>
+<span class="line" id="L278">                        self.comp_arrays[rem_comp.component_id].swapRemove(rem_comp.ent);</span>
+<span class="line" id="L279">                    },</span>
+<span class="line" id="L280">                }</span>
+<span class="line" id="L281">            }</span>
+<span class="line" id="L282"></span>
+<span class="line" id="L283">            self.changes_queue.clearAndFree();</span>
+<span class="line" id="L284">        }</span>
+<span class="line" id="L285"></span>
+<span class="line" id="L286">        <span class="tok-kw">fn</span> <span class="tok-fn">removeEntAndAssociatedComponents</span>(self: *Self, ent: ztg.Entity) <span class="tok-type">anyerror</span>!<span class="tok-type">void</span> {</span>
+<span class="line" id="L287">            <span class="tok-kw">if</span> (!self.entities.hasEntity(ent)) <span class="tok-kw">return</span>;</span>
+<span class="line" id="L288"></span>
+<span class="line" id="L289">            <span class="tok-kw">const</span> children = <span class="tok-kw">try</span> self.getEntChildren(self.frame_alloc, ent);</span>
+<span class="line" id="L290">            <span class="tok-kw">defer</span> self.frame_alloc.free(children);</span>
+<span class="line" id="L291"></span>
+<span class="line" id="L292">            <span class="tok-kw">for</span> (children) |c| <span class="tok-kw">try</span> self.removeEntAndAssociatedComponents(c);</span>
+<span class="line" id="L293"></span>
+<span class="line" id="L294">            _ = self.entities.swapRemoveEnt(ent);</span>
+<span class="line" id="L295"></span>
+<span class="line" id="L296">            <span class="tok-kw">for</span> (&amp;self.comp_arrays) |*list| {</span>
+<span class="line" id="L297">                <span class="tok-kw">if</span> (list.get(ent)) |comp| {</span>
+<span class="line" id="L298">                    <span class="tok-kw">try</span> self.invokeOnRemoveForComponentById(comp, list.component_id);</span>
+<span class="line" id="L299">                    _ = list.swapRemove(ent);</span>
+<span class="line" id="L300">                }</span>
+<span class="line" id="L301">            }</span>
+<span class="line" id="L302">        }</span>
+<span class="line" id="L303"></span>
+<span class="line" id="L304">        <span class="tok-kw">fn</span> <span class="tok-fn">invokeOnRemoveForComponent</span>(self: *Self, <span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>, comp: *T) <span class="tok-type">anyerror</span>!<span class="tok-type">void</span> {</span>
+<span class="line" id="L305">            <span class="tok-kw">const</span> member_fn_type = <span class="tok-kw">comptime</span> ztg.meta.memberFnType(T, <span class="tok-str">&quot;onRemoved&quot;</span>);</span>
+<span class="line" id="L306">            <span class="tok-kw">const</span> fn_params = <span class="tok-builtin">@typeInfo</span>(<span class="tok-builtin">@TypeOf</span>(T.onRemoved)).Fn.params;</span>
+<span class="line" id="L307">            <span class="tok-kw">const</span> params = self.initParamsForSystem(self.frame_alloc, <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> member_fn_type != .non_member) fn_params[<span class="tok-number">1</span>..] <span class="tok-kw">else</span> fn_params) <span class="tok-kw">catch</span> {</span>
+<span class="line" id="L308">                <span class="tok-builtin">@panic</span>(<span class="tok-str">&quot;Failed to get args for deinit system for type `&quot;</span> ++ <span class="tok-builtin">@typeName</span>(T) ++ <span class="tok-str">&quot;`.&quot;</span>);</span>
+<span class="line" id="L309">            };</span>
+<span class="line" id="L310"></span>
+<span class="line" id="L311">            <span class="tok-kw">const</span> member_params = <span class="tok-kw">switch</span> (member_fn_type) {</span>
+<span class="line" id="L312">                .non_member =&gt; .{},</span>
+<span class="line" id="L313">                .by_value =&gt; .{comp.*},</span>
+<span class="line" id="L314">                .by_ptr =&gt; .{comp},</span>
+<span class="line" id="L315">                .by_const_ptr =&gt; .{comp},</span>
+<span class="line" id="L316">            };</span>
+<span class="line" id="L317"></span>
+<span class="line" id="L318">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> ztg.meta.canReturnError(<span class="tok-builtin">@TypeOf</span>(T.onRemoved))) {</span>
+<span class="line" id="L319">                <span class="tok-kw">try</span> <span class="tok-builtin">@call</span>(.auto, T.onRemoved, member_params ++ params);</span>
+<span class="line" id="L320">            } <span class="tok-kw">else</span> {</span>
+<span class="line" id="L321">                <span class="tok-builtin">@call</span>(.auto, T.onRemoved, member_params ++ params);</span>
+<span class="line" id="L322">            }</span>
+<span class="line" id="L323">        }</span>
+<span class="line" id="L324"></span>
+<span class="line" id="L325">        <span class="tok-kw">fn</span> <span class="tok-fn">invokeOnRemoveForComponentById</span>(self: *Self, comp: *<span class="tok-type">anyopaque</span>, comp_id: util.CompId) <span class="tok-type">anyerror</span>!<span class="tok-type">void</span> {</span>
+<span class="line" id="L326">            <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (wb.comp_types.types, <span class="tok-number">0</span>..) |CT, i| {</span>
+<span class="line" id="L327">                <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> <span class="tok-builtin">@hasDecl</span>(CT, <span class="tok-str">&quot;onRemoved&quot;</span>)) <span class="tok-kw">if</span> (i == comp_id) {</span>
+<span class="line" id="L328">                    <span class="tok-kw">try</span> invokeOnRemoveForComponent(self, CT, <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> <span class="tok-builtin">@sizeOf</span>(CT) == <span class="tok-number">0</span>) &amp;CT{} <span class="tok-kw">else</span> <span class="tok-builtin">@as</span>(*CT, <span class="tok-builtin">@ptrCast</span>(<span class="tok-builtin">@alignCast</span>(comp))));</span>
+<span class="line" id="L329">                };</span>
+<span class="line" id="L330">            }</span>
+<span class="line" id="L331">        }</span>
+<span class="line" id="L332"></span>
+<span class="line" id="L333">        <span class="tok-comment">/// Call when a &quot;frame&quot; of your game loop has completed, most commonly after the draw call</span></span>
+<span class="line" id="L334">        <span class="tok-comment">///</span></span>
+<span class="line" id="L335">        <span class="tok-comment">/// Example:</span></span>
+<span class="line" id="L336">        <span class="tok-comment">///</span></span>
+<span class="line" id="L337">        <span class="tok-comment">/// ```zig</span></span>
+<span class="line" id="L338">        <span class="tok-comment">/// try world.runLoadStages();</span></span>
+<span class="line" id="L339">        <span class="tok-comment">///</span></span>
+<span class="line" id="L340">        <span class="tok-comment">/// while(game.isRunning) {</span></span>
+<span class="line" id="L341">        <span class="tok-comment">///   try world.runUpdateStages();</span></span>
+<span class="line" id="L342">        <span class="tok-comment">///   try world.runDrawStages();</span></span>
+<span class="line" id="L343">        <span class="tok-comment">///   world.cleanForNextFrame();</span></span>
+<span class="line" id="L344">        <span class="tok-comment">/// }</span></span>
+<span class="line" id="L345">        <span class="tok-comment">/// ```</span></span>
+<span class="line" id="L346">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">cleanForNextFrame</span>(self: *Self) <span class="tok-type">void</span> {</span>
+<span class="line" id="L347">            self.changes_list.clearAndFree();</span>
+<span class="line" id="L348">            self.event_pools.clear();</span>
+<span class="line" id="L349">            <span class="tok-kw">if</span> (!self.frame_arena.reset(.{ .retain_with_limit = <span class="tok-number">1000</span> })) ztg.log.err(<span class="tok-str">&quot;Failed to reset frame arena.&quot;</span>, .{});</span>
+<span class="line" id="L350">        }</span>
+<span class="line" id="L351"></span>
+<span class="line" id="L352">        <span class="tok-comment">/// Returns the next free index for components. Invalidated after hitting the entity limit,</span></span>
+<span class="line" id="L353">        <span class="tok-comment">/// in which all entity ID's are reassigned and condensed. You shouldnt need to store this.</span></span>
+<span class="line" id="L354">        <span class="tok-comment">///</span></span>
+<span class="line" id="L355">        <span class="tok-comment">/// If the entity limit is exceeded and no open spaces can be found, there are a few outcomes</span></span>
+<span class="line" id="L356">        <span class="tok-comment">/// depending on your `WorldBuilder.on_ent_overflow` option:</span></span>
+<span class="line" id="L357">        <span class="tok-comment">///</span></span>
+<span class="line" id="L358">        <span class="tok-comment">/// `.crash` =&gt; (default) invokes the crash function, which will most likely panic.</span></span>
+<span class="line" id="L359">        <span class="tok-comment">/// `.overwrite_last` =&gt; returns the last entity in the entity list, after removing all of its components.</span></span>
+<span class="line" id="L360">        <span class="tok-comment">/// `.overwrite_first` =&gt; returns the first entity in the entity list, after removing all of its components</span></span>
+<span class="line" id="L361">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">newEnt</span>(self: *Self) Allocator.Error!ztg.Entity {</span>
+<span class="line" id="L362">            <span class="tok-kw">const</span> ent = blk: {</span>
+<span class="line" id="L363">                <span class="tok-kw">if</span> (self.next_ent &gt;= wb.max_entities) {</span>
+<span class="line" id="L364">                    <span class="tok-kw">break</span> :blk getOpenEntityId(&amp;self.entities, <span class="tok-number">0</span>) <span class="tok-kw">orelse</span> self.handleEntOverflow();</span>
+<span class="line" id="L365">                } <span class="tok-kw">else</span> <span class="tok-kw">if</span> (!self.entities.hasEntity(self.next_ent)) {</span>
+<span class="line" id="L366">                    <span class="tok-kw">break</span> :blk self.next_ent;</span>
+<span class="line" id="L367">                } <span class="tok-kw">else</span> {</span>
+<span class="line" id="L368">                    <span class="tok-kw">break</span> :blk getOpenEntityId(&amp;self.entities, self.next_ent + <span class="tok-number">1</span>) <span class="tok-kw">orelse</span> self.handleEntOverflow();</span>
+<span class="line" id="L369">                }</span>
+<span class="line" id="L370">            };</span>
+<span class="line" id="L371"></span>
+<span class="line" id="L372">            <span class="tok-kw">try</span> self.changes_list.append(.{ .added_ent = ent });</span>
+<span class="line" id="L373">            self.entities.append(ent);</span>
+<span class="line" id="L374">            self.entities.setParent(ent, <span class="tok-null">null</span>) <span class="tok-kw">catch</span> <span class="tok-kw">unreachable</span>;</span>
+<span class="line" id="L375">            self.next_ent += <span class="tok-number">1</span>;</span>
+<span class="line" id="L376"></span>
+<span class="line" id="L377">            <span class="tok-kw">return</span> ent;</span>
+<span class="line" id="L378">        }</span>
+<span class="line" id="L379"></span>
+<span class="line" id="L380">        <span class="tok-comment">/// Creates a new entity and gives it `component`</span></span>
+<span class="line" id="L381">        <span class="tok-kw">fn</span> <span class="tok-fn">newEntWith</span>(self: *Self, component: <span class="tok-kw">anytype</span>) !ztg.Entity {</span>
+<span class="line" id="L382">            <span class="tok-kw">const</span> ent = <span class="tok-kw">try</span> self.newEnt();</span>
+<span class="line" id="L383">            <span class="tok-kw">try</span> self.giveEnt(ent, component);</span>
+<span class="line" id="L384">            <span class="tok-kw">return</span> ent;</span>
+<span class="line" id="L385">        }</span>
+<span class="line" id="L386"></span>
+<span class="line" id="L387">        <span class="tok-comment">/// Creates a new entity and gives it all of the components in `components`</span></span>
+<span class="line" id="L388">        <span class="tok-kw">fn</span> <span class="tok-fn">newEntWithMany</span>(self: *Self, components: <span class="tok-kw">anytype</span>) !ztg.Entity {</span>
+<span class="line" id="L389">            <span class="tok-kw">const</span> ent = <span class="tok-kw">try</span> self.newEnt();</span>
+<span class="line" id="L390">            <span class="tok-kw">try</span> self.giveEntMany(ent, components);</span>
+<span class="line" id="L391">            <span class="tok-kw">return</span> ent;</span>
+<span class="line" id="L392">        }</span>
+<span class="line" id="L393"></span>
+<span class="line" id="L394">        <span class="tok-kw">fn</span> <span class="tok-fn">getOpenEntityId</span>(entities: *<span class="tok-kw">const</span> EntityArray, from: ztg.Entity) ?ztg.Entity {</span>
+<span class="line" id="L395">            <span class="tok-kw">for</span> (from..wb.max_entities) |e| <span class="tok-kw">if</span> (!entities.hasEntity(e)) <span class="tok-kw">return</span> <span class="tok-builtin">@intCast</span>(e);</span>
+<span class="line" id="L396">            <span class="tok-kw">for</span> (<span class="tok-number">0</span>..from) |e| <span class="tok-kw">if</span> (!entities.hasEntity(e)) <span class="tok-kw">return</span> <span class="tok-builtin">@intCast</span>(e);</span>
+<span class="line" id="L397">            <span class="tok-kw">return</span> <span class="tok-null">null</span>;</span>
+<span class="line" id="L398">        }</span>
+<span class="line" id="L399"></span>
+<span class="line" id="L400">        <span class="tok-kw">fn</span> <span class="tok-fn">handleEntOverflow</span>(self: *Self) ztg.Entity {</span>
+<span class="line" id="L401">            <span class="tok-kw">return</span> <span class="tok-kw">switch</span> (wb.on_ent_overflow) {</span>
+<span class="line" id="L402">                .crash =&gt; self.crash(std.fmt.comptimePrint(<span class="tok-str">&quot;Exceeded entity limit of {}.&quot;</span>, .{wb.max_entities}), .hit_ent_limit),</span>
+<span class="line" id="L403">                .overwrite_last =&gt; blk: {</span>
+<span class="line" id="L404">                    <span class="tok-kw">const</span> ent = self.entities.getEntityAt(self.entities.len - <span class="tok-number">1</span>);</span>
+<span class="line" id="L405">                    <span class="tok-kw">try</span> self.reuseEntity(ent);</span>
+<span class="line" id="L406">                    <span class="tok-kw">break</span> :blk ent;</span>
+<span class="line" id="L407">                },</span>
+<span class="line" id="L408">                .overwrite_first =&gt; blk: {</span>
+<span class="line" id="L409">                    <span class="tok-kw">const</span> ent = self.entities.getEntityAt(<span class="tok-number">0</span>);</span>
+<span class="line" id="L410">                    <span class="tok-kw">try</span> self.reuseEntity(ent);</span>
+<span class="line" id="L411">                    <span class="tok-kw">break</span> :blk ent;</span>
+<span class="line" id="L412">                },</span>
+<span class="line" id="L413">            };</span>
+<span class="line" id="L414">        }</span>
+<span class="line" id="L415"></span>
+<span class="line" id="L416">        <span class="tok-kw">fn</span> <span class="tok-fn">reuseEntity</span>(self: *Self, ent: ztg.Entity) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L417">            self.removeEntAndAssociatedComponents(ent);</span>
+<span class="line" id="L418">            <span class="tok-kw">try</span> self.changes_list.append(.{ .added_ent = self.next_ent });</span>
+<span class="line" id="L419">            self.entities.append(ent);</span>
+<span class="line" id="L420">        }</span>
+<span class="line" id="L421"></span>
+<span class="line" id="L422">        <span class="tok-kw">fn</span> <span class="tok-fn">commands_newEnt</span>(ptr: *<span class="tok-type">anyopaque</span>) Allocator.Error!ztg.Entity {</span>
+<span class="line" id="L423">            <span class="tok-kw">return</span> commandsCast(ptr).newEnt();</span>
+<span class="line" id="L424">        }</span>
+<span class="line" id="L425"></span>
+<span class="line" id="L426">        <span class="tok-comment">/// Set the entity's parent. If null, the entity will no longer have a parent.</span></span>
+<span class="line" id="L427">        <span class="tok-comment">/// Can error if either the entity or parent don't exist.</span></span>
+<span class="line" id="L428">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">setEntParent</span>(self: *Self, ent: ztg.Entity, parent: ?ztg.Entity) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L429">            <span class="tok-kw">return</span> self.entities.setParent(ent, parent);</span>
+<span class="line" id="L430">        }</span>
+<span class="line" id="L431"></span>
+<span class="line" id="L432">        <span class="tok-kw">fn</span> <span class="tok-fn">commands_setEntParent</span>(ptr: *<span class="tok-type">anyopaque</span>, ent: ztg.Entity, parent: ?ztg.Entity) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L433">            <span class="tok-kw">return</span> commandsCast(ptr).setEntParent(ent, parent);</span>
+<span class="line" id="L434">        }</span>
+<span class="line" id="L435"></span>
+<span class="line" id="L436">        <span class="tok-comment">/// Get the entity's parent. Can error if the entity associated with `ent`</span></span>
+<span class="line" id="L437">        <span class="tok-comment">/// doesn't exist.</span></span>
+<span class="line" id="L438">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">getEntParent</span>(self: *<span class="tok-kw">const</span> Self, ent: ztg.Entity) !?ztg.Entity {</span>
+<span class="line" id="L439">            <span class="tok-kw">return</span> self.entities.getParent(ent);</span>
+<span class="line" id="L440">        }</span>
+<span class="line" id="L441"></span>
+<span class="line" id="L442">        <span class="tok-kw">fn</span> <span class="tok-fn">commands_getEntParent</span>(ptr: *<span class="tok-kw">const</span> <span class="tok-type">anyopaque</span>, ent: ztg.Entity) !?ztg.Entity {</span>
+<span class="line" id="L443">            <span class="tok-kw">return</span> commandsCastConst(ptr).getEntParent(ent);</span>
+<span class="line" id="L444">        }</span>
+<span class="line" id="L445"></span>
+<span class="line" id="L446">        <span class="tok-comment">/// Returns a caller-owned slice of the entity's children.</span></span>
+<span class="line" id="L447">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">getEntChildren</span>(self: *<span class="tok-kw">const</span> Self, alloc: std.mem.Allocator, ent: ztg.Entity) ![]<span class="tok-kw">const</span> ztg.Entity {</span>
+<span class="line" id="L448">            <span class="tok-kw">return</span> self.entities.getChildren(alloc, ent);</span>
+<span class="line" id="L449">        }</span>
+<span class="line" id="L450"></span>
+<span class="line" id="L451">        <span class="tok-kw">fn</span> <span class="tok-fn">commands_getEntChildren</span>(ptr: *<span class="tok-kw">const</span> <span class="tok-type">anyopaque</span>, ent: ztg.Entity) ![]<span class="tok-kw">const</span> ztg.Entity {</span>
+<span class="line" id="L452">            <span class="tok-kw">const</span> self = commandsCastConst(ptr);</span>
+<span class="line" id="L453">            <span class="tok-kw">return</span> self.getEntChildren(self.frame_alloc, ent);</span>
+<span class="line" id="L454">        }</span>
+<span class="line" id="L455"></span>
+<span class="line" id="L456">        <span class="tok-comment">/// Set's the entity `child`'s parent to `ent`</span></span>
+<span class="line" id="L457">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">giveEntChild</span>(self: *Self, ent: ztg.Entity, child: ztg.Entity) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L458">            <span class="tok-kw">return</span> self.setEntParent(child, ent);</span>
+<span class="line" id="L459">        }</span>
+<span class="line" id="L460"></span>
+<span class="line" id="L461">        <span class="tok-comment">/// Queues the removal of all components in lists correlated with `ent` and `ent` itself</span></span>
+<span class="line" id="L462">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">removeEnt</span>(self: *Self, ent: ztg.Entity) Allocator.Error!<span class="tok-type">void</span> {</span>
+<span class="line" id="L463">            <span class="tok-kw">try</span> self.changes_queue.append(.{ .removed_ent = ent });</span>
+<span class="line" id="L464">            <span class="tok-kw">try</span> self.changes_list.append(.{ .removed_ent = ent });</span>
+<span class="line" id="L465">        }</span>
+<span class="line" id="L466"></span>
+<span class="line" id="L467">        <span class="tok-kw">fn</span> <span class="tok-fn">commands_removeEnt</span>(ptr: *<span class="tok-type">anyopaque</span>, ent: ztg.Entity) Allocator.Error!<span class="tok-type">void</span> {</span>
+<span class="line" id="L468">            <span class="tok-kw">try</span> commandsCast(ptr).removeEnt(ent);</span>
+<span class="line" id="L469">        }</span>
+<span class="line" id="L470"></span>
+<span class="line" id="L471">        <span class="tok-comment">/// Registers a component to the entity `ent`</span></span>
+<span class="line" id="L472">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">giveEnt</span>(self: *Self, ent: ztg.Entity, comp: <span class="tok-kw">anytype</span>) <span class="tok-type">anyerror</span>!<span class="tok-type">void</span> {</span>
+<span class="line" id="L473">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> wb.comp_types.types.len == <span class="tok-number">0</span>) <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;World has no registered components and cannot add components&quot;</span>);</span>
+<span class="line" id="L474">            <span class="tok-kw">const</span> Component = <span class="tok-builtin">@TypeOf</span>(comp);</span>
+<span class="line" id="L475">            <span class="tok-kw">const</span> idx = <span class="tok-kw">comptime</span> wb.comp_types.indexOf(Component) <span class="tok-kw">orelse</span> <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;Tried to add Component &quot;</span> ++ <span class="tok-builtin">@typeName</span>(Component) ++ <span class="tok-str">&quot;, which was not registred.&quot;</span>);</span>
+<span class="line" id="L476"></span>
+<span class="line" id="L477">            <span class="tok-kw">const</span> has_onAdded = <span class="tok-kw">comptime</span> <span class="tok-builtin">@hasDecl</span>(Component, <span class="tok-str">&quot;onAdded&quot;</span>);</span>
+<span class="line" id="L478"></span>
+<span class="line" id="L479">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> has_onAdded) util.assertOkOnAddedFunction(Component);</span>
+<span class="line" id="L480"></span>
+<span class="line" id="L481">            <span class="tok-kw">const</span> member_type: <span class="tok-kw">if</span> (has_onAdded) ztg.meta.MemberFnType <span class="tok-kw">else</span> <span class="tok-type">void</span> = <span class="tok-kw">comptime</span> <span class="tok-kw">if</span> (has_onAdded) ztg.meta.memberFnType(Component, Component.onAdded) <span class="tok-kw">else</span> <span class="tok-type">void</span>{};</span>
+<span class="line" id="L482">            <span class="tok-kw">const</span> needs_mut: <span class="tok-type">bool</span> = <span class="tok-kw">comptime</span> <span class="tok-kw">if</span> (has_onAdded) member_type == .by_ptr <span class="tok-kw">else</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L483">            <span class="tok-kw">const</span> can_err = <span class="tok-kw">comptime</span> has_onAdded <span class="tok-kw">and</span> ztg.meta.canReturnError(<span class="tok-builtin">@TypeOf</span>(Component.onAdded));</span>
+<span class="line" id="L484">            <span class="tok-kw">var</span> mutable_comp: <span class="tok-kw">if</span> (has_onAdded <span class="tok-kw">and</span> needs_mut) Component <span class="tok-kw">else</span> <span class="tok-type">void</span> = <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> has_onAdded <span class="tok-kw">and</span> needs_mut) comp <span class="tok-kw">else</span> <span class="tok-type">void</span>{};</span>
+<span class="line" id="L485"></span>
+<span class="line" id="L486">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> has_onAdded) {</span>
+<span class="line" id="L487">                <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> member_type == .non_member) {</span>
+<span class="line" id="L488">                    <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> can_err) <span class="tok-kw">try</span> Component.onAdded(ent, self) <span class="tok-kw">else</span> Component.onAdded(ent, self);</span>
+<span class="line" id="L489">                } <span class="tok-kw">else</span> {</span>
+<span class="line" id="L490">                    <span class="tok-kw">var</span> c = <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> needs_mut) mutable_comp <span class="tok-kw">else</span> comp;</span>
+<span class="line" id="L491">                    <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> can_err) <span class="tok-kw">try</span> c.onAdded(ent, self) <span class="tok-kw">else</span> c.onAdded(ent, self);</span>
+<span class="line" id="L492">                }</span>
+<span class="line" id="L493">            }</span>
+<span class="line" id="L494"></span>
+<span class="line" id="L495">            <span class="tok-kw">try</span> self.comp_arrays[idx].assign(ent, <span class="tok-kw">if</span> (has_onAdded <span class="tok-kw">and</span> needs_mut) mutable_comp <span class="tok-kw">else</span> comp);</span>
+<span class="line" id="L496">            <span class="tok-kw">try</span> self.changes_list.append(.{ .added_component = .{</span>
+<span class="line" id="L497">                .ent = ent,</span>
+<span class="line" id="L498">                .component_id = util.compId(Component),</span>
+<span class="line" id="L499">            } });</span>
+<span class="line" id="L500">        }</span>
+<span class="line" id="L501"></span>
+<span class="line" id="L502">        <span class="tok-comment">/// Adds every field in the components object to its component list at the Entity index</span></span>
+<span class="line" id="L503">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">giveEntMany</span>(self: *Self, ent: ztg.Entity, components: <span class="tok-kw">anytype</span>) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L504">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> wb.comp_types.types.len == <span class="tok-number">0</span>) <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;World has no registered components and cannot add components&quot;</span>);</span>
+<span class="line" id="L505">            <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (std.meta.fields(<span class="tok-builtin">@TypeOf</span>(components))) |field| {</span>
+<span class="line" id="L506">                <span class="tok-kw">try</span> self.giveEnt(ent, <span class="tok-builtin">@field</span>(components, field.name));</span>
+<span class="line" id="L507">            }</span>
+<span class="line" id="L508">        }</span>
+<span class="line" id="L509"></span>
+<span class="line" id="L510">        <span class="tok-kw">fn</span> <span class="tok-fn">commands_giveEnt</span>(ptr: *<span class="tok-type">anyopaque</span>, ent: ztg.Entity, component_id: util.CompId, data: *<span class="tok-kw">const</span> <span class="tok-type">anyopaque</span>) CommandsGiveEntError!<span class="tok-type">void</span> {</span>
+<span class="line" id="L511">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> wb.comp_types.types.len == <span class="tok-number">0</span>) <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;World has no registered components and cannot add components&quot;</span>);</span>
+<span class="line" id="L512">            <span class="tok-kw">var</span> self = commandsCast(ptr);</span>
+<span class="line" id="L513"></span>
+<span class="line" id="L514">            <span class="tok-kw">var</span> arr = <span class="tok-kw">try</span> self.getListById(component_id);</span>
+<span class="line" id="L515"></span>
+<span class="line" id="L516">            <span class="tok-kw">if</span> (arr.willResize()) {</span>
+<span class="line" id="L517">                <span class="tok-comment">// we cant add the component right now, because then the pointers in the calling system will become invalid,</span>
+</span>
+<span class="line" id="L518">                <span class="tok-comment">// so we place the data on the heap and queue for its addition.</span>
+</span>
+<span class="line" id="L519">                <span class="tok-kw">var</span> alloced_data = <span class="tok-kw">try</span> self.frame_alloc.alloc(<span class="tok-type">u8</span>, arr.components_data.entry_size);</span>
+<span class="line" id="L520">                <span class="tok-builtin">@memcpy</span>(alloced_data, <span class="tok-builtin">@as</span>([*]<span class="tok-kw">const</span> <span class="tok-type">u8</span>, <span class="tok-builtin">@ptrCast</span>(data))[<span class="tok-number">0</span>..arr.components_data.entry_size]);</span>
+<span class="line" id="L521">                <span class="tok-kw">try</span> self.changes_queue.append(.{ .added_component = .{</span>
+<span class="line" id="L522">                    .ent = ent,</span>
+<span class="line" id="L523">                    .component_id = component_id,</span>
+<span class="line" id="L524">                    .data = alloced_data.ptr,</span>
+<span class="line" id="L525">                } });</span>
+<span class="line" id="L526">            } <span class="tok-kw">else</span> {</span>
+<span class="line" id="L527">                <span class="tok-kw">try</span> arr.assignData(ent, data);</span>
+<span class="line" id="L528">            }</span>
+<span class="line" id="L529"></span>
+<span class="line" id="L530">            <span class="tok-kw">try</span> self.changes_list.append(.{ .added_component = .{</span>
+<span class="line" id="L531">                .ent = ent,</span>
+<span class="line" id="L532">                .component_id = component_id,</span>
+<span class="line" id="L533">            } });</span>
+<span class="line" id="L534">        }</span>
+<span class="line" id="L535"></span>
+<span class="line" id="L536">        <span class="tok-comment">/// Returns true or false depending on whether `ent` has been assigned a component of type `Component`</span></span>
+<span class="line" id="L537">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">checkEntHas</span>(self: *Self, ent: ztg.Entity, <span class="tok-kw">comptime</span> Component: <span class="tok-type">type</span>) <span class="tok-type">bool</span> {</span>
+<span class="line" id="L538">            <span class="tok-kw">return</span> self.getEntsComponent(ent, Component) != <span class="tok-null">null</span>;</span>
+<span class="line" id="L539">        }</span>
+<span class="line" id="L540"></span>
+<span class="line" id="L541">        <span class="tok-kw">fn</span> <span class="tok-fn">commands_checkEntHas</span>(ptr: *<span class="tok-type">anyopaque</span>, ent: ztg.Entity, component_id: util.CompId) CommandsComponentError!<span class="tok-type">bool</span> {</span>
+<span class="line" id="L542">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> wb.comp_types.types.len == <span class="tok-number">0</span>) <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;World has no registered components to check for.&quot;</span>);</span>
+<span class="line" id="L543">            <span class="tok-kw">return</span> commandsCast(ptr).comp_arrays[component_id].contains(ent);</span>
+<span class="line" id="L544">        }</span>
+<span class="line" id="L545"></span>
+<span class="line" id="L546">        <span class="tok-comment">/// Returns an optional pointer to the component assigned to `ent`</span></span>
+<span class="line" id="L547">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">getComponentPtr</span>(self: *Self, ent: ztg.Entity, <span class="tok-kw">comptime</span> Component: <span class="tok-type">type</span>) ?*<span class="tok-type">anyopaque</span> {</span>
+<span class="line" id="L548">            <span class="tok-kw">return</span> self.getComponentPtr_fromCompId(</span>
+<span class="line" id="L549">                ent,</span>
+<span class="line" id="L550">                <span class="tok-kw">comptime</span> wb.comp_types.indexOf(Component) <span class="tok-kw">orelse</span> <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;Component of type &quot;</span> ++ <span class="tok-builtin">@typeName</span>(Component) ++ <span class="tok-str">&quot; was not registered and no pointer can be obtained.&quot;</span>),</span>
+<span class="line" id="L551">            );</span>
+<span class="line" id="L552">        }</span>
+<span class="line" id="L553"></span>
+<span class="line" id="L554">        <span class="tok-kw">fn</span> <span class="tok-fn">commands_getComponentPtr</span>(ptr: *<span class="tok-type">anyopaque</span>, ent: ztg.Entity, comp_id: util.CompId) CommandsComponentError!?*<span class="tok-type">anyopaque</span> {</span>
+<span class="line" id="L555">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> wb.comp_types.types.len == <span class="tok-number">0</span>) <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;World has no registered components to get the pointer of.&quot;</span>);</span>
+<span class="line" id="L556">            <span class="tok-kw">return</span> commandsCast(ptr).getComponentPtr_fromCompId(ent, comp_id);</span>
+<span class="line" id="L557">        }</span>
+<span class="line" id="L558"></span>
+<span class="line" id="L559">        <span class="tok-kw">fn</span> <span class="tok-fn">getComponentPtr_fromCompId</span>(self: *Self, ent: ztg.Entity, comp_id: util.CompId) ?*<span class="tok-type">anyopaque</span> {</span>
+<span class="line" id="L560">            <span class="tok-kw">for</span> (self.changes_queue.items) |ch| <span class="tok-kw">switch</span> (ch) {</span>
+<span class="line" id="L561">                .added_component =&gt; |added| <span class="tok-kw">if</span> (added.ent == ent <span class="tok-kw">and</span> added.component_id == comp_id) <span class="tok-kw">return</span> added.data,</span>
+<span class="line" id="L562">                <span class="tok-kw">else</span> =&gt; {},</span>
+<span class="line" id="L563">            };</span>
+<span class="line" id="L564">            <span class="tok-kw">return</span> self.comp_arrays[comp_id].get(ent);</span>
+<span class="line" id="L565">        }</span>
+<span class="line" id="L566"></span>
+<span class="line" id="L567">        <span class="tok-comment">/// Removes component of type `Component` from entity `ent`</span></span>
+<span class="line" id="L568">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">removeComponent</span>(self: *Self, ent: ztg.Entity, <span class="tok-kw">comptime</span> Component: <span class="tok-type">type</span>) ca.Error!<span class="tok-type">void</span> {</span>
+<span class="line" id="L569">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> wb.comp_types.types.len == <span class="tok-number">0</span>) <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;World has no registered components to remove.&quot;</span>);</span>
+<span class="line" id="L570"></span>
+<span class="line" id="L571">            <span class="tok-kw">try</span> self.changes_queue.append(.{ .removed_component = .{</span>
+<span class="line" id="L572">                .ent = ent,</span>
+<span class="line" id="L573">                .component_id = (<span class="tok-kw">comptime</span> wb.comp_types.indexOf(Component) <span class="tok-kw">orelse</span> <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;Component of type &quot;</span> ++ <span class="tok-builtin">@typeName</span>(Component) ++ <span class="tok-str">&quot; was not registered and cannot be removed&quot;</span>)),</span>
+<span class="line" id="L574">            } });</span>
+<span class="line" id="L575">        }</span>
+<span class="line" id="L576"></span>
+<span class="line" id="L577">        <span class="tok-kw">fn</span> <span class="tok-fn">commands_removeComponent</span>(ptr: *<span class="tok-type">anyopaque</span>, ent: ztg.Entity, comp_id: util.CompId) ca.Error!<span class="tok-type">void</span> {</span>
+<span class="line" id="L578">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> wb.comp_types.types.len == <span class="tok-number">0</span>) <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;World has no registered components to remove.&quot;</span>);</span>
+<span class="line" id="L579"></span>
+<span class="line" id="L580">            <span class="tok-kw">try</span> commandsCast(ptr).changes_queue.append(.{ .removed_component = .{</span>
+<span class="line" id="L581">                .ent = ent,</span>
+<span class="line" id="L582">                .component_id = comp_id,</span>
+<span class="line" id="L583">            } });</span>
+<span class="line" id="L584">        }</span>
+<span class="line" id="L585"></span>
+<span class="line" id="L586">        <span class="tok-comment">/// Returns a copy of the resource T in this world</span></span>
+<span class="line" id="L587">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">getRes</span>(self: Self, <span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>) T {</span>
+<span class="line" id="L588">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> !wb.added_resources.has(T)) <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;World does not have resource of type &quot;</span> ++ <span class="tok-builtin">@typeName</span>(T));</span>
+<span class="line" id="L589">            <span class="tok-kw">return</span> <span class="tok-builtin">@field</span>(self.resources, std.fmt.comptimePrint(<span class="tok-str">&quot;{}&quot;</span>, .{wb.added_resources.indexOf(T).?}));</span>
+<span class="line" id="L590">        }</span>
+<span class="line" id="L591"></span>
+<span class="line" id="L592">        <span class="tok-comment">/// Returns a pointer to the resource T in this world</span></span>
+<span class="line" id="L593">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">getResPtr</span>(self: *Self, <span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>) *T {</span>
+<span class="line" id="L594">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> !wb.added_resources.has(T)) <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;World does not have resource of type &quot;</span> ++ <span class="tok-builtin">@typeName</span>(T));</span>
+<span class="line" id="L595">            <span class="tok-kw">return</span> &amp;<span class="tok-builtin">@field</span>(self.resources, std.fmt.comptimePrint(<span class="tok-str">&quot;{}&quot;</span>, .{wb.added_resources.indexOf(T).?}));</span>
+<span class="line" id="L596">        }</span>
+<span class="line" id="L597"></span>
+<span class="line" id="L598">        <span class="tok-kw">fn</span> <span class="tok-fn">commands_getResPtr</span>(ptr: *<span class="tok-type">anyopaque</span>, utp: ztg.meta.Utp) <span class="tok-kw">error</span>{UnregisteredResource}!*<span class="tok-type">anyopaque</span> {</span>
+<span class="line" id="L599">            <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (wb.added_resources.types, <span class="tok-number">0</span>..) |T, i| {</span>
+<span class="line" id="L600">                <span class="tok-kw">if</span> (ztg.meta.utpOf(T) == utp) <span class="tok-kw">return</span> &amp;<span class="tok-builtin">@field</span>(commandsCast(ptr).resources, std.fmt.comptimePrint(<span class="tok-str">&quot;{}&quot;</span>, .{i}));</span>
+<span class="line" id="L601">            }</span>
+<span class="line" id="L602">            <span class="tok-kw">return</span> <span class="tok-kw">error</span>.UnregisteredResource;</span>
+<span class="line" id="L603">        }</span>
+<span class="line" id="L604"></span>
+<span class="line" id="L605">        <span class="tok-comment">/// Returns a commands object binded to this world instance</span></span>
+<span class="line" id="L606">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">commands</span>(self: *Self) ztg.Commands {</span>
+<span class="line" id="L607">            <span class="tok-kw">return</span> .{</span>
+<span class="line" id="L608">                .ctx = self,</span>
+<span class="line" id="L609">                .vtable = &amp;.{</span>
+<span class="line" id="L610">                    .add_component = Self.commands_giveEnt,</span>
+<span class="line" id="L611">                    .remove_component = Self.commands_removeComponent,</span>
+<span class="line" id="L612">                    .get_component_ptr = Self.commands_getComponentPtr,</span>
+<span class="line" id="L613">                    .remove_ent = Self.commands_removeEnt,</span>
+<span class="line" id="L614">                    .new_ent = Self.commands_newEnt,</span>
+<span class="line" id="L615">                    .get_ent_parent = Self.commands_getEntParent,</span>
+<span class="line" id="L616">                    .set_ent_parent = Self.commands_setEntParent,</span>
+<span class="line" id="L617">                    .run_stage = Self.commands_runStageFn,</span>
+<span class="line" id="L618">                    .get_res = Self.commands_getResPtr,</span>
+<span class="line" id="L619">                    .check_ent_has = Self.commands_checkEntHas,</span>
+<span class="line" id="L620">                    .query = Self.commands_query,</span>
+<span class="line" id="L621">                    .has_included = Self.commands_hasIncluded,</span>
+<span class="line" id="L622">                },</span>
+<span class="line" id="L623">            };</span>
+<span class="line" id="L624">        }</span>
+<span class="line" id="L625"></span>
+<span class="line" id="L626">        <span class="tok-comment">/// The method used for generating queries for systems</span></span>
+<span class="line" id="L627">        <span class="tok-comment">///</span></span>
+<span class="line" id="L628">        <span class="tok-comment">/// Example:</span></span>
+<span class="line" id="L629">        <span class="tok-comment">/// ```zig</span></span>
+<span class="line" id="L630">        <span class="tok-comment">/// const q = try world.query(ztg.Query(.{ztg.base.Transform});</span></span>
+<span class="line" id="L631">        <span class="tok-comment">/// for (q.items(0)) |tr| std.debug.print(&quot;{d:0.1}\n&quot;, .{tr.pos.x});</span></span>
+<span class="line" id="L632">        <span class="tok-comment">/// ```</span></span>
+<span class="line" id="L633">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">query</span>(self: *Self, alloc: std.mem.Allocator, <span class="tok-kw">comptime</span> QT: <span class="tok-type">type</span>) !QT {</span>
+<span class="line" id="L634">            <span class="tok-kw">if</span> (QT.has_entities <span class="tok-kw">and</span> QT.req_types.types.len == <span class="tok-number">0</span>) <span class="tok-kw">return</span> self.queryJustEntities(alloc, QT);</span>
+<span class="line" id="L635"></span>
+<span class="line" id="L636">            <span class="tok-kw">var</span> ents_qlists = <span class="tok-kw">try</span> self.initQueryLists(</span>
+<span class="line" id="L637">                alloc,</span>
+<span class="line" id="L638">                &amp;util.idsFromTypes(QT.req_types.types),</span>
+<span class="line" id="L639">                &amp;util.idsFromTypes(QT.opt_types.types),</span>
+<span class="line" id="L640">                &amp;util.idsFromTypes(QT.with_types.types),</span>
+<span class="line" id="L641">                &amp;util.idsFromTypes(QT.without_types.types),</span>
+<span class="line" id="L642">            );</span>
+<span class="line" id="L643"></span>
+<span class="line" id="L644">            <span class="tok-kw">const</span> ents = ents_qlists[<span class="tok-number">0</span>];</span>
+<span class="line" id="L645"></span>
+<span class="line" id="L646">            <span class="tok-kw">var</span> qlists = ents_qlists[<span class="tok-number">1</span>];</span>
+<span class="line" id="L647">            <span class="tok-kw">defer</span> alloc.free(qlists);</span>
+<span class="line" id="L648"></span>
+<span class="line" id="L649">            <span class="tok-kw">var</span> out = <span class="tok-kw">try</span> QT.init(alloc, ents.len);</span>
+<span class="line" id="L650"></span>
+<span class="line" id="L651">            <span class="tok-comment">// Link qlists and the result query</span>
+</span>
+<span class="line" id="L652">            <span class="tok-kw">for</span> (qlists) |*list| {</span>
+<span class="line" id="L653">                <span class="tok-kw">switch</span> (list.*) {</span>
+<span class="line" id="L654">                    .required =&gt; list.required.out = out.comp_ptrs[list.required.out_idx],</span>
+<span class="line" id="L655">                    .optional =&gt; list.optional.out = <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> QT.opt_types.types.len &gt; <span class="tok-number">0</span>) out.opt_ptrs[list.optional.out_idx] <span class="tok-kw">else</span> <span class="tok-kw">unreachable</span>,</span>
+<span class="line" id="L656">                    <span class="tok-kw">else</span> =&gt; {},</span>
+<span class="line" id="L657">                }</span>
+<span class="line" id="L658">            }</span>
+<span class="line" id="L659"></span>
+<span class="line" id="L660">            out.len = fillQuery(</span>
+<span class="line" id="L661">                ents,</span>
+<span class="line" id="L662">                qlists,</span>
+<span class="line" id="L663">                <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> QT.has_entities) out.entities <span class="tok-kw">else</span> <span class="tok-null">null</span>,</span>
+<span class="line" id="L664">            );</span>
+<span class="line" id="L665"></span>
+<span class="line" id="L666">            <span class="tok-kw">return</span> out;</span>
+<span class="line" id="L667">        }</span>
+<span class="line" id="L668"></span>
+<span class="line" id="L669">        <span class="tok-comment">// For queries which the only required type is Entity</span>
+</span>
+<span class="line" id="L670">        <span class="tok-kw">fn</span> <span class="tok-fn">queryJustEntities</span>(self: *Self, alloc: std.mem.Allocator, <span class="tok-kw">comptime</span> QT: <span class="tok-type">type</span>) !QT {</span>
+<span class="line" id="L671">            <span class="tok-kw">var</span> len: <span class="tok-type">usize</span> = <span class="tok-number">0</span>;</span>
+<span class="line" id="L672">            <span class="tok-kw">var</span> out = <span class="tok-kw">try</span> QT.init(alloc, self.entities.len);</span>
+<span class="line" id="L673"></span>
+<span class="line" id="L674">            ent_loop: <span class="tok-kw">for</span> (self.entities.constSlice(), <span class="tok-number">0</span>..) |ent, i| {</span>
+<span class="line" id="L675">                <span class="tok-kw">const</span> cont = blk: {</span>
+<span class="line" id="L676">                    <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (QT.options) |OT| {</span>
+<span class="line" id="L677">                        <span class="tok-kw">if</span> (<span class="tok-builtin">@hasDecl</span>(OT, <span class="tok-str">&quot;QueryWith&quot;</span>)) {</span>
+<span class="line" id="L678">                            <span class="tok-kw">if</span> (!self.getListOf(OT.QueryWith).contains(<span class="tok-builtin">@intFromEnum</span>(ent))) <span class="tok-kw">break</span> :blk <span class="tok-null">true</span>;</span>
+<span class="line" id="L679">                        } <span class="tok-kw">else</span> <span class="tok-kw">if</span> (<span class="tok-builtin">@hasDecl</span>(OT, <span class="tok-str">&quot;QueryWithout&quot;</span>)) {</span>
+<span class="line" id="L680">                            <span class="tok-kw">if</span> (self.getListOf(OT.QueryWithout).contains(<span class="tok-builtin">@intFromEnum</span>(ent))) <span class="tok-kw">break</span> :blk <span class="tok-null">true</span>;</span>
+<span class="line" id="L681">                        }</span>
+<span class="line" id="L682">                    }</span>
+<span class="line" id="L683">                    <span class="tok-kw">break</span> :blk <span class="tok-null">false</span>;</span>
+<span class="line" id="L684">                };</span>
+<span class="line" id="L685">                <span class="tok-kw">if</span> (cont) <span class="tok-kw">continue</span> :ent_loop;</span>
+<span class="line" id="L686"></span>
+<span class="line" id="L687">                <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (out.opt_ptrs, QT.opt_types.types) |opt_ptrs, O| opt_ptrs[i] = self.getListOf(O).get(<span class="tok-builtin">@intFromEnum</span>(ent));</span>
+<span class="line" id="L688"></span>
+<span class="line" id="L689">                out.entities[len] = <span class="tok-builtin">@intFromEnum</span>(ent);</span>
+<span class="line" id="L690">                len += <span class="tok-number">1</span>;</span>
+<span class="line" id="L691">            }</span>
+<span class="line" id="L692"></span>
+<span class="line" id="L693">            out.len = len;</span>
+<span class="line" id="L694">            <span class="tok-kw">return</span> out;</span>
+<span class="line" id="L695">        }</span>
+<span class="line" id="L696"></span>
+<span class="line" id="L697">        <span class="tok-kw">fn</span> <span class="tok-fn">commands_query</span>(</span>
+<span class="line" id="L698">            ptr: *<span class="tok-type">anyopaque</span>,</span>
+<span class="line" id="L699">            alloc: std.mem.Allocator,</span>
+<span class="line" id="L700">            has_entities: <span class="tok-type">bool</span>,</span>
+<span class="line" id="L701">            req: []<span class="tok-kw">const</span> util.CompId,</span>
+<span class="line" id="L702">            opt: []<span class="tok-kw">const</span> util.CompId,</span>
+<span class="line" id="L703">            with: []<span class="tok-kw">const</span> util.CompId,</span>
+<span class="line" id="L704">            without: []<span class="tok-kw">const</span> util.CompId,</span>
+<span class="line" id="L705">        ) !ztg.Commands.RuntimeQuery {</span>
+<span class="line" id="L706">            <span class="tok-kw">var</span> self = commandsCast(ptr);</span>
+<span class="line" id="L707">            <span class="tok-kw">if</span> (has_entities <span class="tok-kw">and</span> req.len == <span class="tok-number">0</span>) <span class="tok-kw">return</span> self.commands_queryJustEntities(alloc, opt, with, without);</span>
+<span class="line" id="L708"></span>
+<span class="line" id="L709">            <span class="tok-kw">var</span> ents_qlists = <span class="tok-kw">try</span> self.initQueryLists(</span>
+<span class="line" id="L710">                alloc,</span>
+<span class="line" id="L711">                req,</span>
+<span class="line" id="L712">                opt,</span>
+<span class="line" id="L713">                with,</span>
+<span class="line" id="L714">                without,</span>
+<span class="line" id="L715">            );</span>
+<span class="line" id="L716">            <span class="tok-kw">const</span> ents = ents_qlists[<span class="tok-number">0</span>];</span>
+<span class="line" id="L717">            <span class="tok-kw">var</span> qlists = ents_qlists[<span class="tok-number">1</span>];</span>
+<span class="line" id="L718">            <span class="tok-kw">defer</span> alloc.free(qlists);</span>
+<span class="line" id="L719"></span>
+<span class="line" id="L720">            <span class="tok-kw">var</span> out = <span class="tok-kw">try</span> ztg.Commands.RuntimeQuery.init(alloc, req.len, opt.len, ents.len);</span>
+<span class="line" id="L721"></span>
+<span class="line" id="L722">            <span class="tok-comment">// Link qlists and the result query</span>
+</span>
+<span class="line" id="L723">            <span class="tok-kw">for</span> (qlists) |*list| {</span>
+<span class="line" id="L724">                <span class="tok-kw">switch</span> (list.*) {</span>
+<span class="line" id="L725">                    .required =&gt; list.required.out = out.comp_ptrs[list.required.out_idx],</span>
+<span class="line" id="L726">                    .optional =&gt; list.optional.out = out.opt_ptrs[list.optional.out_idx],</span>
+<span class="line" id="L727">                    <span class="tok-kw">else</span> =&gt; {},</span>
+<span class="line" id="L728">                }</span>
+<span class="line" id="L729">            }</span>
+<span class="line" id="L730"></span>
+<span class="line" id="L731">            out.len = fillQuery(</span>
+<span class="line" id="L732">                ents,</span>
+<span class="line" id="L733">                qlists,</span>
+<span class="line" id="L734">                <span class="tok-kw">if</span> (has_entities) out.entities <span class="tok-kw">else</span> <span class="tok-null">null</span>,</span>
+<span class="line" id="L735">            );</span>
+<span class="line" id="L736"></span>
+<span class="line" id="L737">            <span class="tok-kw">return</span> out;</span>
+<span class="line" id="L738">        }</span>
+<span class="line" id="L739"></span>
+<span class="line" id="L740">        <span class="tok-kw">fn</span> <span class="tok-fn">commands_queryJustEntities</span>(</span>
+<span class="line" id="L741">            self: *Self,</span>
+<span class="line" id="L742">            alloc: Allocator,</span>
+<span class="line" id="L743">            opt: []<span class="tok-kw">const</span> util.CompId,</span>
+<span class="line" id="L744">            with: []<span class="tok-kw">const</span> util.CompId,</span>
+<span class="line" id="L745">            without: []<span class="tok-kw">const</span> util.CompId,</span>
+<span class="line" id="L746">        ) !ztg.Commands.RuntimeQuery {</span>
+<span class="line" id="L747">            <span class="tok-kw">var</span> out = <span class="tok-kw">try</span> ztg.Commands.RuntimeQuery.init(alloc, <span class="tok-number">0</span>, <span class="tok-number">0</span>, self.entities.len);</span>
+<span class="line" id="L748">            <span class="tok-kw">for</span> (out.entities, self.entities.constSlice(), <span class="tok-number">0</span>..) |*o, ent, i| {</span>
+<span class="line" id="L749">                <span class="tok-kw">for</span> (with) |w| {</span>
+<span class="line" id="L750">                    <span class="tok-kw">if</span> (!self.assertListById(w).contains(<span class="tok-builtin">@intFromEnum</span>(ent))) <span class="tok-kw">continue</span>;</span>
+<span class="line" id="L751">                }</span>
+<span class="line" id="L752">                <span class="tok-kw">for</span> (without) |w| {</span>
+<span class="line" id="L753">                    <span class="tok-kw">if</span> (self.assertListById(w).contains(<span class="tok-builtin">@intFromEnum</span>(ent))) <span class="tok-kw">continue</span>;</span>
+<span class="line" id="L754">                }</span>
+<span class="line" id="L755"></span>
+<span class="line" id="L756">                o.* = <span class="tok-builtin">@intFromEnum</span>(ent);</span>
+<span class="line" id="L757">                <span class="tok-kw">for</span> (out.opt_ptrs, opt) |opt_ptrs, opt_id| opt_ptrs[i] = self.assertListById(opt_id).get(<span class="tok-builtin">@intFromEnum</span>(ent));</span>
+<span class="line" id="L758">            }</span>
+<span class="line" id="L759">            out.len = self.entities.len;</span>
+<span class="line" id="L760">            <span class="tok-kw">return</span> out;</span>
+<span class="line" id="L761">        }</span>
+<span class="line" id="L762"></span>
+<span class="line" id="L763">        <span class="tok-kw">const</span> QueryList = <span class="tok-kw">union</span>(<span class="tok-kw">enum</span>) {</span>
+<span class="line" id="L764">            required: <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L765">                array: *<span class="tok-kw">const</span> ComponentArray,</span>
+<span class="line" id="L766">                out_idx: <span class="tok-type">usize</span>,</span>
+<span class="line" id="L767">                out: []*<span class="tok-type">anyopaque</span> = <span class="tok-null">undefined</span>,</span>
+<span class="line" id="L768">            },</span>
+<span class="line" id="L769">            optional: <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L770">                array: *<span class="tok-kw">const</span> ComponentArray,</span>
+<span class="line" id="L771">                out_idx: <span class="tok-type">usize</span>,</span>
+<span class="line" id="L772">                out: []?*<span class="tok-type">anyopaque</span> = <span class="tok-null">undefined</span>,</span>
+<span class="line" id="L773">            },</span>
+<span class="line" id="L774">            with: *<span class="tok-kw">const</span> ComponentArray,</span>
+<span class="line" id="L775">            without: *<span class="tok-kw">const</span> ComponentArray,</span>
+<span class="line" id="L776"></span>
+<span class="line" id="L777">            <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">appendEnt</span>(self: *QueryList, idx: <span class="tok-type">usize</span>, ent: <span class="tok-type">usize</span>) <span class="tok-type">bool</span> {</span>
+<span class="line" id="L778">                <span class="tok-kw">switch</span> (self.*) {</span>
+<span class="line" id="L779">                    .required =&gt; |req| {</span>
+<span class="line" id="L780">                        req.out[idx] = req.array.get(ent) <span class="tok-kw">orelse</span> <span class="tok-kw">return</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L781">                        <span class="tok-kw">return</span> <span class="tok-null">true</span>;</span>
+<span class="line" id="L782">                    },</span>
+<span class="line" id="L783">                    .optional =&gt; |opt| {</span>
+<span class="line" id="L784">                        opt.out[idx] = opt.array.get(ent);</span>
+<span class="line" id="L785">                        <span class="tok-kw">return</span> <span class="tok-null">true</span>;</span>
+<span class="line" id="L786">                    },</span>
+<span class="line" id="L787">                    .with =&gt; |array| <span class="tok-kw">return</span> array.contains(ent),</span>
+<span class="line" id="L788">                    .without =&gt; |array| <span class="tok-kw">return</span> !array.contains(ent),</span>
+<span class="line" id="L789">                }</span>
+<span class="line" id="L790">            }</span>
+<span class="line" id="L791">        };</span>
+<span class="line" id="L792"></span>
+<span class="line" id="L793">        <span class="tok-kw">fn</span> <span class="tok-fn">initQueryLists</span>(</span>
+<span class="line" id="L794">            self: *Self,</span>
+<span class="line" id="L795">            alloc: std.mem.Allocator,</span>
+<span class="line" id="L796">            req_ids: []<span class="tok-kw">const</span> util.CompId,</span>
+<span class="line" id="L797">            opt_ids: []<span class="tok-kw">const</span> util.CompId,</span>
+<span class="line" id="L798">            with_ids: []<span class="tok-kw">const</span> util.CompId,</span>
+<span class="line" id="L799">            without_ids: []<span class="tok-kw">const</span> util.CompId,</span>
+<span class="line" id="L800">        ) !<span class="tok-kw">struct</span> { []<span class="tok-kw">const</span> ztg.Entity, []QueryList } {</span>
+<span class="line" id="L801">            <span class="tok-kw">var</span> smallest: *ComponentArray = self.assertListById(req_ids[<span class="tok-number">0</span>]);</span>
+<span class="line" id="L802"></span>
+<span class="line" id="L803">            <span class="tok-kw">var</span> lists = <span class="tok-kw">try</span> alloc.alloc(QueryList, req_ids.len + opt_ids.len + with_ids.len + without_ids.len);</span>
+<span class="line" id="L804">            <span class="tok-kw">var</span> idx: <span class="tok-type">usize</span> = <span class="tok-number">0</span>;</span>
+<span class="line" id="L805"></span>
+<span class="line" id="L806">            lists[<span class="tok-number">0</span>] = QueryList{ .required = .{</span>
+<span class="line" id="L807">                .array = smallest,</span>
+<span class="line" id="L808">                .out_idx = <span class="tok-number">0</span>,</span>
+<span class="line" id="L809">            } };</span>
+<span class="line" id="L810"></span>
+<span class="line" id="L811">            <span class="tok-kw">for</span> (req_ids[<span class="tok-number">1</span>..], <span class="tok-number">1</span>..) |id, i| {</span>
+<span class="line" id="L812">                <span class="tok-kw">const</span> check = self.assertListById(id);</span>
+<span class="line" id="L813">                idx += <span class="tok-number">1</span>;</span>
+<span class="line" id="L814">                lists[idx] = QueryList{ .required = .{</span>
+<span class="line" id="L815">                    .array = check,</span>
+<span class="line" id="L816">                    .out_idx = i,</span>
+<span class="line" id="L817">                } };</span>
+<span class="line" id="L818"></span>
+<span class="line" id="L819">                <span class="tok-kw">if</span> (check.len() &lt; smallest.len()) smallest = check;</span>
+<span class="line" id="L820">            }</span>
+<span class="line" id="L821"></span>
+<span class="line" id="L822">            <span class="tok-kw">for</span> (opt_ids, <span class="tok-number">0</span>..) |id, i| {</span>
+<span class="line" id="L823">                idx += <span class="tok-number">1</span>;</span>
+<span class="line" id="L824">                lists[idx] = QueryList{ .optional = .{</span>
+<span class="line" id="L825">                    .array = self.assertListById(id),</span>
+<span class="line" id="L826">                    .out_idx = i,</span>
+<span class="line" id="L827">                } };</span>
+<span class="line" id="L828">            }</span>
+<span class="line" id="L829"></span>
+<span class="line" id="L830">            <span class="tok-kw">for</span> (with_ids) |id| {</span>
+<span class="line" id="L831">                <span class="tok-kw">const</span> check = self.assertListById(id);</span>
+<span class="line" id="L832">                idx += <span class="tok-number">1</span>;</span>
+<span class="line" id="L833">                lists[idx] = QueryList{ .with = check };</span>
+<span class="line" id="L834"></span>
+<span class="line" id="L835">                <span class="tok-kw">if</span> (check.len() &lt; smallest.len()) smallest = check;</span>
+<span class="line" id="L836">            }</span>
+<span class="line" id="L837"></span>
+<span class="line" id="L838">            <span class="tok-kw">for</span> (without_ids) |id| {</span>
+<span class="line" id="L839">                idx += <span class="tok-number">1</span>;</span>
+<span class="line" id="L840">                lists[idx] = QueryList{ .without = self.assertListById(id) };</span>
+<span class="line" id="L841">            }</span>
+<span class="line" id="L842"></span>
+<span class="line" id="L843">            <span class="tok-kw">return</span> .{ smallest.entities.items, lists };</span>
+<span class="line" id="L844">        }</span>
+<span class="line" id="L845"></span>
+<span class="line" id="L846">        <span class="tok-kw">fn</span> <span class="tok-fn">fillQuery</span>(checked_entities: []<span class="tok-kw">const</span> ztg.Entity, qlists: []QueryList, entities_out: ?[]ztg.Entity) <span class="tok-type">usize</span> {</span>
+<span class="line" id="L847">            <span class="tok-kw">var</span> len: <span class="tok-type">usize</span> = <span class="tok-number">0</span>;</span>
+<span class="line" id="L848">            ents_loop: <span class="tok-kw">for</span> (checked_entities) |ent| {</span>
+<span class="line" id="L849">                <span class="tok-kw">for</span> (qlists) |*list| {</span>
+<span class="line" id="L850">                    <span class="tok-kw">if</span> (!list.appendEnt(len, ent)) <span class="tok-kw">continue</span> :ents_loop;</span>
+<span class="line" id="L851">                    <span class="tok-kw">if</span> (entities_out) |eout| eout[len] = ent;</span>
+<span class="line" id="L852">                }</span>
+<span class="line" id="L853">                len += <span class="tok-number">1</span>;</span>
+<span class="line" id="L854">            }</span>
+<span class="line" id="L855">            <span class="tok-kw">return</span> len;</span>
+<span class="line" id="L856">        }</span>
+<span class="line" id="L857"></span>
+<span class="line" id="L858">        <span class="tok-kw">fn</span> <span class="tok-fn">InitParamsForSystemOut</span>(<span class="tok-kw">comptime</span> params: []<span class="tok-kw">const</span> std.builtin.Type.Fn.Param) <span class="tok-type">type</span> {</span>
+<span class="line" id="L859">            <span class="tok-kw">var</span> types: []<span class="tok-kw">const</span> <span class="tok-type">type</span> = &amp;.{};</span>
+<span class="line" id="L860">            <span class="tok-kw">for</span> (params) |p| types = types ++ .{p.<span class="tok-type">type</span>.?};</span>
+<span class="line" id="L861">            <span class="tok-kw">return</span> std.meta.Tuple(types);</span>
+<span class="line" id="L862">        }</span>
+<span class="line" id="L863"></span>
+<span class="line" id="L864">        <span class="tok-comment">/// Generates the arguments tuple for a desired system based on its parameters.</span></span>
+<span class="line" id="L865">        <span class="tok-comment">/// You shouldn't need to use this, just add the function to the desired stage.</span></span>
+<span class="line" id="L866">        <span class="tok-comment">///</span></span>
+<span class="line" id="L867">        <span class="tok-comment">/// Example:</span></span>
+<span class="line" id="L868">        <span class="tok-comment">/// ```zig</span></span>
+<span class="line" id="L869">        <span class="tok-comment">/// const params = try world.initParamsForSystem(@typeInfo(@TypeOf(myFunction)).Fn.params);</span></span>
+<span class="line" id="L870">        <span class="tok-comment">/// defer world.deinitParamsForSystem(params);</span></span>
+<span class="line" id="L871">        <span class="tok-comment">///</span></span>
+<span class="line" id="L872">        <span class="tok-comment">/// @call(.auto, myFunction, params);</span></span>
+<span class="line" id="L873">        <span class="tok-comment">/// ```</span></span>
+<span class="line" id="L874">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">initParamsForSystem</span>(self: *Self, alloc: std.mem.Allocator, <span class="tok-kw">comptime</span> params: []<span class="tok-kw">const</span> std.builtin.Type.Fn.Param) !InitParamsForSystemOut(params) {</span>
+<span class="line" id="L875">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> params.len == <span class="tok-number">0</span>) <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;Use an empty tuple if the params list is empty.&quot;</span>);</span>
+<span class="line" id="L876">            <span class="tok-kw">var</span> out: InitParamsForSystemOut(params) = <span class="tok-null">undefined</span>;</span>
+<span class="line" id="L877">            <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (out, <span class="tok-number">0</span>..) |param, i| {</span>
+<span class="line" id="L878">                out[i] = <span class="tok-kw">try</span> self.initParam(alloc, <span class="tok-builtin">@TypeOf</span>(param));</span>
+<span class="line" id="L879">            }</span>
+<span class="line" id="L880">            <span class="tok-kw">return</span> out;</span>
+<span class="line" id="L881">        }</span>
+<span class="line" id="L882"></span>
+<span class="line" id="L883">        <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">initParam</span>(self: *Self, alloc: std.mem.Allocator, <span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>) !T {</span>
+<span class="line" id="L884">            <span class="tok-kw">const</span> is_container = <span class="tok-kw">comptime</span> std.meta.trait.isContainer(T);</span>
+<span class="line" id="L885"></span>
+<span class="line" id="L886">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> T == ztg.Commands) {</span>
+<span class="line" id="L887">                <span class="tok-kw">return</span> self.commands();</span>
+<span class="line" id="L888">            } <span class="tok-kw">else</span> <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> is_container <span class="tok-kw">and</span> <span class="tok-builtin">@hasDecl</span>(T, <span class="tok-str">&quot;IsQueryType&quot;</span>)) {</span>
+<span class="line" id="L889">                <span class="tok-kw">return</span> self.query(alloc, T);</span>
+<span class="line" id="L890">            } <span class="tok-kw">else</span> <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> is_container <span class="tok-kw">and</span> <span class="tok-builtin">@hasDecl</span>(T, <span class="tok-str">&quot;EventSendType&quot;</span>)) {</span>
+<span class="line" id="L891">                <span class="tok-kw">return</span> .{</span>
+<span class="line" id="L892">                    .alloc = alloc,</span>
+<span class="line" id="L893">                    .event_pool = self.event_pools.getPtr(T.EventSendType),</span>
+<span class="line" id="L894">                };</span>
+<span class="line" id="L895">            } <span class="tok-kw">else</span> <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> is_container <span class="tok-kw">and</span> <span class="tok-builtin">@hasDecl</span>(T, <span class="tok-str">&quot;EventRecvType&quot;</span>)) {</span>
+<span class="line" id="L896">                <span class="tok-kw">return</span> .{</span>
+<span class="line" id="L897">                    .items = self.event_pools.getPtr(T.EventRecvType).items,</span>
+<span class="line" id="L898">                };</span>
+<span class="line" id="L899">            } <span class="tok-kw">else</span> <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> wb.added_resources.has(ztg.meta.DerefType(T))) {</span>
+<span class="line" id="L900">                <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> std.meta.trait.isSingleItemPtr(T)) {</span>
+<span class="line" id="L901">                    <span class="tok-kw">return</span> self.getResPtr(<span class="tok-builtin">@typeInfo</span>(T).Pointer.child);</span>
+<span class="line" id="L902">                } <span class="tok-kw">else</span> <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> wb.added_resources.has(T)) {</span>
+<span class="line" id="L903">                    <span class="tok-kw">return</span> self.getRes(T);</span>
+<span class="line" id="L904">                }</span>
+<span class="line" id="L905">            }</span>
+<span class="line" id="L906"></span>
+<span class="line" id="L907">            <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;Argument &quot;</span> ++ <span class="tok-builtin">@typeName</span>(T) ++ <span class="tok-str">&quot; not allowed in system. If it is a resource remember to add it to the WorldBuilder.&quot;</span>);</span>
+<span class="line" id="L908">        }</span>
+<span class="line" id="L909"></span>
+<span class="line" id="L910">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">deinitParamsForSystem</span>(self: *Self, alloc: std.mem.Allocator, args: <span class="tok-kw">anytype</span>) <span class="tok-type">void</span> {</span>
+<span class="line" id="L911">            _ = self;</span>
+<span class="line" id="L912">            <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (std.meta.fields(<span class="tok-builtin">@TypeOf</span>(args.*))) |args_field| {</span>
+<span class="line" id="L913">                <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> <span class="tok-builtin">@typeInfo</span>(args_field.<span class="tok-type">type</span>) == .Struct <span class="tok-kw">and</span> <span class="tok-builtin">@hasDecl</span>(args_field.<span class="tok-type">type</span>, <span class="tok-str">&quot;query_types&quot;</span>)) {</span>
+<span class="line" id="L914">                    <span class="tok-builtin">@field</span>(args, args_field.name).deinit(alloc);</span>
+<span class="line" id="L915">                }</span>
+<span class="line" id="L916">            }</span>
+<span class="line" id="L917">        }</span>
+<span class="line" id="L918"></span>
+<span class="line" id="L919">        <span class="tok-comment">/// Returns whether the underlying WorldBuilder included a namespace</span></span>
+<span class="line" id="L920">        <span class="tok-comment">/// while it was being built.</span></span>
+<span class="line" id="L921">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">hasIncluded</span>(<span class="tok-kw">comptime</span> Namespace: <span class="tok-type">type</span>) <span class="tok-type">bool</span> {</span>
+<span class="line" id="L922">            <span class="tok-kw">comptime</span> <span class="tok-kw">return</span> wb.included.has(Namespace);</span>
+<span class="line" id="L923">        }</span>
+<span class="line" id="L924"></span>
+<span class="line" id="L925">        <span class="tok-kw">fn</span> <span class="tok-fn">commands_hasIncluded</span>(type_utp: ztg.meta.Utp) <span class="tok-type">bool</span> {</span>
+<span class="line" id="L926">            <span class="tok-kw">return</span> wb.included.hasUtp(type_utp);</span>
+<span class="line" id="L927">        }</span>
+<span class="line" id="L928"></span>
+<span class="line" id="L929">        <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">getListOf</span>(self: *Self, <span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>) *ComponentArray {</span>
+<span class="line" id="L930">            <span class="tok-kw">const</span> idx = <span class="tok-kw">comptime</span> wb.comp_types.indexOf(T) <span class="tok-kw">orelse</span> <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;Tried to get list of Component &quot;</span> ++ <span class="tok-builtin">@typeName</span>(T) ++ <span class="tok-str">&quot;, which was not registred.&quot;</span>);</span>
+<span class="line" id="L931">            <span class="tok-kw">return</span> &amp;self.comp_arrays[idx];</span>
+<span class="line" id="L932">        }</span>
+<span class="line" id="L933"></span>
+<span class="line" id="L934">        <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">getListById</span>(self: *Self, id: util.CompId) !*ComponentArray {</span>
+<span class="line" id="L935">            <span class="tok-kw">if</span> (builtin.mode == .Debug) <span class="tok-kw">if</span> (id &gt;= self.comp_arrays.len) <span class="tok-kw">return</span> CommandsComponentError.UnregisteredComponent;</span>
+<span class="line" id="L936">            <span class="tok-kw">return</span> &amp;self.comp_arrays[id];</span>
+<span class="line" id="L937">        }</span>
+<span class="line" id="L938"></span>
+<span class="line" id="L939">        <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">assertListById</span>(self: *Self, id: util.CompId) *ComponentArray {</span>
+<span class="line" id="L940">            <span class="tok-kw">return</span> self.getListById(id) <span class="tok-kw">catch</span> std.debug.panic(<span class="tok-str">&quot;Tried to get list of Component with ID {}, which was not registered.&quot;</span>, .{id});</span>
+<span class="line" id="L941">        }</span>
+<span class="line" id="L942"></span>
+<span class="line" id="L943">        <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">commandsCast</span>(ptr: *<span class="tok-type">anyopaque</span>) *Self {</span>
+<span class="line" id="L944">            <span class="tok-kw">return</span> <span class="tok-builtin">@ptrCast</span>(<span class="tok-builtin">@alignCast</span>(ptr));</span>
+<span class="line" id="L945">        }</span>
+<span class="line" id="L946"></span>
+<span class="line" id="L947">        <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">commandsCastConst</span>(ptr: *<span class="tok-kw">const</span> <span class="tok-type">anyopaque</span>) *<span class="tok-kw">const</span> Self {</span>
+<span class="line" id="L948">            <span class="tok-kw">return</span> <span class="tok-builtin">@ptrCast</span>(<span class="tok-builtin">@alignCast</span>(ptr));</span>
+<span class="line" id="L949">        }</span>
+<span class="line" id="L950"></span>
+<span class="line" id="L951">        <span class="tok-kw">fn</span> <span class="tok-fn">crash</span>(self: *Self, <span class="tok-kw">comptime</span> crash_msg: []<span class="tok-kw">const</span> <span class="tok-type">u8</span>, r: ztg.CrashReason) <span class="tok-type">noreturn</span> {</span>
+<span class="line" id="L952">            wb.on_crash_fn(self.commands(), r) <span class="tok-kw">catch</span> |err| ztg.log.err(<span class="tok-str">&quot;onCrashFn errored due to {}&quot;</span>, .{err});</span>
+<span class="line" id="L953">            <span class="tok-builtin">@panic</span>(crash_msg);</span>
+<span class="line" id="L954">        }</span>
+<span class="line" id="L955">    };</span>
+<span class="line" id="L956">}</span>
+<span class="line" id="L957"></span>
+<span class="line" id="L958"><span class="tok-kw">const</span> ComponentChange = <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L959">    ent: ztg.Entity,</span>
+<span class="line" id="L960">    component_id: util.CompId,</span>
+<span class="line" id="L961">};</span>
+<span class="line" id="L962"></span>
+<span class="line" id="L963"><span class="tok-comment">/// For internal queueing of commands. Cleared after a stage is completed.</span></span>
+<span class="line" id="L964"><span class="tok-kw">const</span> ChangeQueue = std.ArrayList(<span class="tok-kw">union</span>(<span class="tok-kw">enum</span>) {</span>
+<span class="line" id="L965">    added_component: <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L966">        ent: ztg.Entity,</span>
+<span class="line" id="L967">        component_id: util.CompId,</span>
+<span class="line" id="L968">        data: *<span class="tok-type">anyopaque</span>,</span>
+<span class="line" id="L969">    },</span>
+<span class="line" id="L970">    removed_ent: ztg.Entity,</span>
+<span class="line" id="L971">    removed_component: ComponentChange,</span>
+<span class="line" id="L972">});</span>
+<span class="line" id="L973"></span>
+<span class="line" id="L974"><span class="tok-comment">/// For public callback use, e.g. getting added entities this frame. Cleared each frame.</span></span>
+<span class="line" id="L975"><span class="tok-kw">const</span> ChangesList = std.ArrayList(<span class="tok-kw">union</span>(<span class="tok-kw">enum</span>) {</span>
+<span class="line" id="L976">    added_ent: ztg.Entity,</span>
+<span class="line" id="L977">    removed_ent: ztg.Entity,</span>
+<span class="line" id="L978">    added_component: ComponentChange,</span>
+<span class="line" id="L979">    removed_component: ComponentChange,</span>
+<span class="line" id="L980">});</span>
+<span class="line" id="L981"></span>
+<span class="line" id="L982"><span class="tok-kw">const</span> testing = std.testing;</span>
+<span class="line" id="L983"></span>
+<span class="line" id="L984"><span class="tok-kw">const</span> my_file = <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L985">    <span class="tok-kw">const</span> MyResource = <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L986">        finish_line: <span class="tok-type">usize</span>,</span>
+<span class="line" id="L987">        win_message: []<span class="tok-kw">const</span> <span class="tok-type">u8</span>,</span>
+<span class="line" id="L988"></span>
+<span class="line" id="L989">        frames: <span class="tok-type">usize</span> = <span class="tok-number">0</span>,</span>
+<span class="line" id="L990"></span>
+<span class="line" id="L991">        <span class="tok-kw">fn</span> <span class="tok-fn">ini_MyResource</span>(mr: *MyResource) <span class="tok-type">void</span> {</span>
+<span class="line" id="L992">            mr.win_message = <span class="tok-str">&quot;You did it!&quot;</span>;</span>
+<span class="line" id="L993">        }</span>
+<span class="line" id="L994"></span>
+<span class="line" id="L995">        <span class="tok-kw">fn</span> <span class="tok-fn">up_MyResource</span>(mr: *MyResource) <span class="tok-type">void</span> {</span>
+<span class="line" id="L996">            mr.frames += <span class="tok-number">1</span>;</span>
+<span class="line" id="L997">        }</span>
+<span class="line" id="L998">    };</span>
+<span class="line" id="L999"></span>
+<span class="line" id="L1000">    <span class="tok-kw">const</span> MyComponent = <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L1001">        position: <span class="tok-type">i32</span>,</span>
+<span class="line" id="L1002">        speed: <span class="tok-type">i32</span>,</span>
+<span class="line" id="L1003"></span>
+<span class="line" id="L1004">        score: <span class="tok-type">usize</span> = <span class="tok-number">0</span>,</span>
+<span class="line" id="L1005">    };</span>
+<span class="line" id="L1006"></span>
+<span class="line" id="L1007">    <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">include</span>(<span class="tok-kw">comptime</span> wb: *WorldBuilder) <span class="tok-type">void</span> {</span>
+<span class="line" id="L1008">        <span class="tok-comment">// Registering components</span>
+</span>
+<span class="line" id="L1009">        wb.addComponents(&amp;.{MyComponent});</span>
+<span class="line" id="L1010"></span>
+<span class="line" id="L1011">        <span class="tok-comment">// Adding systems</span>
+</span>
+<span class="line" id="L1012">        wb.addUpdateSystems(.{up_MyComponent});</span>
+<span class="line" id="L1013"></span>
+<span class="line" id="L1014">        <span class="tok-comment">// Registering/initing resources</span>
+</span>
+<span class="line" id="L1015">        wb.addSystems(.{</span>
+<span class="line" id="L1016">            .init = .{MyResource.ini_MyResource},</span>
+<span class="line" id="L1017">            .update = .{MyResource.up_MyResource},</span>
+<span class="line" id="L1018">        });</span>
+<span class="line" id="L1019">        wb.addResource(MyResource, .{ .finish_line = <span class="tok-number">200</span>, .win_message = <span class="tok-null">undefined</span> });</span>
+<span class="line" id="L1020">    }</span>
+<span class="line" id="L1021"></span>
+<span class="line" id="L1022">    <span class="tok-comment">// systems that error will bubble up the error to the run*Stage call</span>
+</span>
+<span class="line" id="L1023">    <span class="tok-kw">fn</span> <span class="tok-fn">up_MyComponent</span>(q: ztg.Query(.{MyComponent}), mr: MyResource) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L1024">        <span class="tok-kw">for</span> (q.items(<span class="tok-number">0</span>)) |mc| {</span>
+<span class="line" id="L1025">            mc.position = <span class="tok-kw">try</span> std.math.add(<span class="tok-type">i32</span>, mc.position, mc.speed);</span>
+<span class="line" id="L1026"></span>
+<span class="line" id="L1027">            <span class="tok-kw">if</span> (mc.position &gt;= mr.finish_line) mc.score += <span class="tok-number">1</span>;</span>
+<span class="line" id="L1028">        }</span>
+<span class="line" id="L1029">    }</span>
+<span class="line" id="L1030">};</span>
+<span class="line" id="L1031"></span>
+<span class="line" id="L1032"><span class="tok-kw">const</span> MyWorld = WorldBuilder.init(&amp;.{</span>
+<span class="line" id="L1033">    ztg.base, my_file,</span>
+<span class="line" id="L1034">}).Build();</span>
+<span class="line" id="L1035"></span>
+<span class="line" id="L1036"><span class="tok-kw">test</span> <span class="tok-str">&quot;creation&quot;</span> {</span>
+<span class="line" id="L1037">    <span class="tok-kw">var</span> world = <span class="tok-kw">try</span> MyWorld.init(std.testing.allocator);</span>
+<span class="line" id="L1038">    <span class="tok-kw">defer</span> world.deinit();</span>
+<span class="line" id="L1039">}</span>
+<span class="line" id="L1040"></span>
+<span class="line" id="L1041"><span class="tok-kw">test</span> <span class="tok-str">&quot;adding/removing entities&quot;</span> {</span>
+<span class="line" id="L1042">    <span class="tok-kw">var</span> world = <span class="tok-kw">try</span> MyWorld.init(std.testing.allocator);</span>
+<span class="line" id="L1043">    <span class="tok-kw">defer</span> world.deinit();</span>
+<span class="line" id="L1044"></span>
+<span class="line" id="L1045">    <span class="tok-comment">// Generally, youd do this by requesting a Commands argument in your system</span>
+</span>
+<span class="line" id="L1046">    <span class="tok-kw">const</span> ent = <span class="tok-kw">try</span> world.newEnt();</span>
+<span class="line" id="L1047">    <span class="tok-kw">try</span> world.giveEnt(ent, my_file.MyComponent{</span>
+<span class="line" id="L1048">        .position = <span class="tok-number">0</span>,</span>
+<span class="line" id="L1049">        .speed = <span class="tok-number">100</span>,</span>
+<span class="line" id="L1050">    });</span>
+<span class="line" id="L1051"></span>
+<span class="line" id="L1052">    <span class="tok-kw">try</span> world.runStage(.update);</span>
+<span class="line" id="L1053"></span>
+<span class="line" id="L1054">    <span class="tok-kw">var</span> q = <span class="tok-kw">try</span> world.query(std.testing.allocator, ztg.Query(.{my_file.MyComponent}));</span>
+<span class="line" id="L1055">    <span class="tok-kw">defer</span> q.deinit(std.testing.allocator);</span>
+<span class="line" id="L1056"></span>
+<span class="line" id="L1057">    <span class="tok-kw">try</span> testing.expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">usize</span>, <span class="tok-number">0</span>), q.single(<span class="tok-number">0</span>).score);</span>
+<span class="line" id="L1058"></span>
+<span class="line" id="L1059">    <span class="tok-kw">try</span> world.runStage(.update);</span>
+<span class="line" id="L1060"></span>
+<span class="line" id="L1061">    <span class="tok-kw">try</span> testing.expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">usize</span>, <span class="tok-number">1</span>), q.single(<span class="tok-number">0</span>).score);</span>
+<span class="line" id="L1062"></span>
+<span class="line" id="L1063">    <span class="tok-kw">try</span> world.removeEntAndAssociatedComponents(ent);</span>
+<span class="line" id="L1064"></span>
+<span class="line" id="L1065">    <span class="tok-kw">var</span> q2 = <span class="tok-kw">try</span> world.query(std.testing.allocator, ztg.Query(.{my_file.MyComponent}));</span>
+<span class="line" id="L1066">    <span class="tok-kw">defer</span> q2.deinit(std.testing.allocator);</span>
+<span class="line" id="L1067"></span>
+<span class="line" id="L1068">    <span class="tok-kw">try</span> testing.expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">usize</span>, <span class="tok-number">0</span>), q2.len);</span>
+<span class="line" id="L1069">}</span>
+<span class="line" id="L1070"></span>
+<span class="line" id="L1071"><span class="tok-kw">test</span> <span class="tok-str">&quot;adding/removing components&quot;</span> {</span>
+<span class="line" id="L1072">    <span class="tok-kw">var</span> world = <span class="tok-kw">try</span> MyWorld.init(std.testing.allocator);</span>
+<span class="line" id="L1073">    <span class="tok-kw">defer</span> world.deinit();</span>
+<span class="line" id="L1074"></span>
+<span class="line" id="L1075">    <span class="tok-kw">const</span> com = world.commands();</span>
+<span class="line" id="L1076"></span>
+<span class="line" id="L1077">    <span class="tok-kw">const</span> ent = <span class="tok-kw">try</span> com.newEntWith(my_file.MyComponent{</span>
+<span class="line" id="L1078">        .position = <span class="tok-number">10</span>,</span>
+<span class="line" id="L1079">        .speed = <span class="tok-number">20</span>,</span>
+<span class="line" id="L1080">    });</span>
+<span class="line" id="L1081"></span>
+<span class="line" id="L1082">    <span class="tok-kw">try</span> world.postSystemUpdate();</span>
+<span class="line" id="L1083"></span>
+<span class="line" id="L1084">    <span class="tok-kw">try</span> testing.expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">i32</span>, <span class="tok-number">10</span>), ent.getComponentPtr(my_file.MyComponent).?.position);</span>
+<span class="line" id="L1085">    <span class="tok-kw">try</span> testing.expect(ent.checkHas(my_file.MyComponent));</span>
+<span class="line" id="L1086"></span>
+<span class="line" id="L1087">    <span class="tok-kw">try</span> ent.removeComponent(my_file.MyComponent);</span>
+<span class="line" id="L1088"></span>
+<span class="line" id="L1089">    <span class="tok-kw">try</span> world.postSystemUpdate();</span>
+<span class="line" id="L1090"></span>
+<span class="line" id="L1091">    <span class="tok-kw">try</span> testing.expect(!ent.checkHas(my_file.MyComponent));</span>
+<span class="line" id="L1092">}</span>
+<span class="line" id="L1093"></span>
+<span class="line" id="L1094"><span class="tok-kw">test</span> <span class="tok-str">&quot;overwriting components&quot;</span> {</span>
+<span class="line" id="L1095">    <span class="tok-kw">var</span> world = <span class="tok-kw">try</span> MyWorld.init(std.testing.allocator);</span>
+<span class="line" id="L1096">    <span class="tok-kw">defer</span> world.deinit();</span>
+<span class="line" id="L1097"></span>
+<span class="line" id="L1098">    <span class="tok-kw">const</span> com = world.commands();</span>
+<span class="line" id="L1099"></span>
+<span class="line" id="L1100">    <span class="tok-kw">const</span> ent = <span class="tok-kw">try</span> com.newEntWith(my_file.MyComponent{</span>
+<span class="line" id="L1101">        .position = <span class="tok-number">10</span>,</span>
+<span class="line" id="L1102">        .speed = <span class="tok-number">20</span>,</span>
+<span class="line" id="L1103">    });</span>
+<span class="line" id="L1104"></span>
+<span class="line" id="L1105">    <span class="tok-kw">try</span> ent.give(my_file.MyComponent{</span>
+<span class="line" id="L1106">        .position = -<span class="tok-number">10</span>,</span>
+<span class="line" id="L1107">        .speed = -<span class="tok-number">20</span>,</span>
+<span class="line" id="L1108">    });</span>
+<span class="line" id="L1109"></span>
+<span class="line" id="L1110">    <span class="tok-kw">try</span> world.postSystemUpdate();</span>
+<span class="line" id="L1111"></span>
+<span class="line" id="L1112">    <span class="tok-kw">try</span> testing.expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">i32</span>, -<span class="tok-number">10</span>), ent.getComponentPtr(my_file.MyComponent).?.position);</span>
+<span class="line" id="L1113">}</span>
+<span class="line" id="L1114"></span>
+<span class="line" id="L1115"><span class="tok-kw">test</span> <span class="tok-str">&quot;resources&quot;</span> {</span>
+<span class="line" id="L1116">    <span class="tok-kw">var</span> world = <span class="tok-kw">try</span> MyWorld.init(std.testing.allocator);</span>
+<span class="line" id="L1117">    <span class="tok-kw">defer</span> world.deinit();</span>
+<span class="line" id="L1118"></span>
+<span class="line" id="L1119">    <span class="tok-kw">try</span> testing.expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">usize</span>, <span class="tok-number">0</span>), world.getRes(my_file.MyResource).frames);</span>
+<span class="line" id="L1120"></span>
+<span class="line" id="L1121">    <span class="tok-kw">try</span> world.runStage(.update);</span>
+<span class="line" id="L1122"></span>
+<span class="line" id="L1123">    <span class="tok-kw">try</span> testing.expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">usize</span>, <span class="tok-number">1</span>), world.getRes(my_file.MyResource).frames);</span>
+<span class="line" id="L1124"></span>
+<span class="line" id="L1125">    <span class="tok-kw">var</span> time = world.getResPtr(my_file.MyResource);</span>
+<span class="line" id="L1126">    time.frames = <span class="tok-number">100</span>;</span>
+<span class="line" id="L1127"></span>
+<span class="line" id="L1128">    <span class="tok-kw">try</span> testing.expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">usize</span>, <span class="tok-number">100</span>), world.getRes(my_file.MyResource).frames);</span>
+<span class="line" id="L1129">}</span>
+<span class="line" id="L1130"></span>
+</code></pre></body>
+</html>

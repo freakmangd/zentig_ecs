@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <title>math\init.zig - source view</title>
+    <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAPNJREFUeNpi/P//PwMlgOXHUjly9E0G4hwgZmQiQZMqEK8H4v9QzUEgQSaoADK+zhH9iAGL+C0gDoAaNg9mGLoLfgA1awK9hS9gzgJxA9RQBmQDrgMxJzRMGKE4HYj/Ial5A8QmQLwCJoBsgBYW2+TR1ChDaWt4LOBxKsi/VUh8XiD+gq4IVyzwQAMJBoKwacZlAB8Qf0bi96IZhtOAe1D6LpqaEiz6rmEzQAeIzwGxCJpieFqApo/vQKyJboAaEBsAsSEupwI1MwKjGBTVHOhegMX5UajYRqiBjMgYmj400cVh0XgTiKdC0zhJgJHS7AwQYABm9EAdCKrEfAAAAABJRU5ErkJggg=="/>
+    <style>
+      body{
+        font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
+        margin: 0;
+        line-height: 1.5;
+      }
+
+      pre > code {
+        display: block;
+        overflow: auto;
+        line-height: normal;
+        margin: 0em;
+      }
+      .tok-kw {
+          color: #333;
+          font-weight: bold;
+      }
+      .tok-str {
+          color: #d14;
+      }
+      .tok-builtin {
+          color: #005C7A;
+      }
+      .tok-comment {
+          color: #545454;
+          font-style: italic;
+      }
+      .tok-fn {
+          color: #900;
+          font-weight: bold;
+      }
+      .tok-null {
+          color: #005C5C;
+      }
+      .tok-number {
+          color: #005C5C;
+      }
+      .tok-type {
+          color: #458;
+          font-weight: bold;
+      }
+      pre {
+        counter-reset: line;
+      }
+      pre .line:before {
+        counter-increment: line;
+        content: counter(line);
+        display: inline-block;
+        padding-right: 1em;
+        width: 2em;
+        text-align: right;
+        color: #999;
+      }
+      
+      .line {
+        width: 100%;
+        display: inline-block;
+      }
+      .line:target {
+        border-top: 1px solid #ccc;
+        border-bottom: 1px solid #ccc;
+        background: #fafafa;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body{
+            background:#222;
+            color: #ccc;
+        }
+        pre > code {
+            color: #ccc;
+            background: #222;
+            border: unset;
+        }
+        .line:target {
+            border-top: 1px solid #444;
+            border-bottom: 1px solid #444;
+            background: #333;
+        }
+        .tok-kw {
+            color: #eee;
+        }
+        .tok-str {
+            color: #2e5;
+        }
+        .tok-builtin {
+            color: #ff894c;
+        }
+        .tok-comment {
+            color: #aa7;
+        }
+        .tok-fn {
+            color: #B1A0F8;
+        }
+        .tok-null {
+            color: #ff8080;
+        }
+        .tok-number {
+            color: #ff8080;
+        }
+        .tok-type {
+            color: #68f;
+        }
+      }
+    </style>
+</head>
+<body>
+<pre><code><span class="line" id="L1"><span class="tok-kw">const</span> std = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;std&quot;</span>);</span>
+<span class="line" id="L2"><span class="tok-kw">const</span> expectEqual = std.testing.expectEqual;</span>
+<span class="line" id="L3"></span>
+<span class="line" id="L4"><span class="tok-comment">/// Alias for `f32`, used to clarify input parameters for</span></span>
+<span class="line" id="L5"><span class="tok-comment">/// functions that take angles in radians</span></span>
+<span class="line" id="L6"><span class="tok-kw">pub</span> <span class="tok-kw">const</span> Radians = <span class="tok-type">f32</span>;</span>
+<span class="line" id="L7"></span>
+<span class="line" id="L8"><span class="tok-comment">/// Alias for `f32`, used to clarify input parameters for</span></span>
+<span class="line" id="L9"><span class="tok-comment">/// functions that take angles in degrees</span></span>
+<span class="line" id="L10"><span class="tok-kw">pub</span> <span class="tok-kw">const</span> Degrees = <span class="tok-type">f32</span>;</span>
+<span class="line" id="L11"></span>
+<span class="line" id="L12"><span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">toFloat</span>(<span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>, x: <span class="tok-kw">anytype</span>) T {</span>
+<span class="line" id="L13">    <span class="tok-kw">if</span> (T == <span class="tok-builtin">@TypeOf</span>(x)) <span class="tok-kw">return</span> x;</span>
+<span class="line" id="L14"></span>
+<span class="line" id="L15">    <span class="tok-kw">return</span> <span class="tok-kw">switch</span> (<span class="tok-builtin">@typeInfo</span>(<span class="tok-builtin">@TypeOf</span>(x))) {</span>
+<span class="line" id="L16">        .Int =&gt; <span class="tok-builtin">@floatFromInt</span>(x),</span>
+<span class="line" id="L17">        .Float =&gt; <span class="tok-builtin">@floatCast</span>(x),</span>
+<span class="line" id="L18">        .ComptimeFloat, .ComptimeInt =&gt; x,</span>
+<span class="line" id="L19">        <span class="tok-kw">else</span> =&gt; |X| <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;Cannot convert &quot;</span> ++ <span class="tok-builtin">@typeName</span>(X) ++ <span class="tok-str">&quot; to a float.&quot;</span>),</span>
+<span class="line" id="L20">    };</span>
+<span class="line" id="L21">}</span>
+<span class="line" id="L22"></span>
+<span class="line" id="L23"><span class="tok-kw">test</span> toFloat {</span>
+<span class="line" id="L24">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">1.0</span>), toFloat(<span class="tok-type">f32</span>, <span class="tok-number">1</span>));</span>
+<span class="line" id="L25">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">1.0</span>), toFloat(<span class="tok-type">f32</span>, <span class="tok-number">1.0</span>));</span>
+<span class="line" id="L26">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">1.0</span>), toFloat(<span class="tok-type">f32</span>, <span class="tok-builtin">@as</span>(<span class="tok-type">i32</span>, <span class="tok-number">1</span>)));</span>
+<span class="line" id="L27">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">1.0</span>), toFloat(<span class="tok-type">f32</span>, <span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">1.0</span>)));</span>
+<span class="line" id="L28">}</span>
+<span class="line" id="L29"></span>
+<span class="line" id="L30"><span class="tok-comment">/// Converts a and b to floats (if neeeded) and multiplies them, returning a float of type T</span></span>
+<span class="line" id="L31"><span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">mulAsFloat</span>(<span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>, a: <span class="tok-kw">anytype</span>, b: <span class="tok-kw">anytype</span>) T {</span>
+<span class="line" id="L32">    <span class="tok-kw">return</span> toFloat(T, a) * toFloat(T, b);</span>
+<span class="line" id="L33">}</span>
+<span class="line" id="L34"></span>
+<span class="line" id="L35"><span class="tok-kw">test</span> mulAsFloat {</span>
+<span class="line" id="L36">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">7.0</span>), mulAsFloat(<span class="tok-type">f32</span>, <span class="tok-number">14</span>, <span class="tok-number">0.5</span>));</span>
+<span class="line" id="L37">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">20.5</span>), mulAsFloat(<span class="tok-type">f32</span>, <span class="tok-builtin">@as</span>(<span class="tok-type">u1</span>, <span class="tok-number">1</span>), <span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">20.5</span>)));</span>
+<span class="line" id="L38">}</span>
+<span class="line" id="L39"></span>
+<span class="line" id="L40"><span class="tok-comment">/// Converts a and b to floats (if neeeded) and divides them, returning a float of type T</span></span>
+<span class="line" id="L41"><span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">divAsFloat</span>(<span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>, a: <span class="tok-kw">anytype</span>, b: <span class="tok-kw">anytype</span>) <span class="tok-kw">error</span>{DivideByZero}!T {</span>
+<span class="line" id="L42">    <span class="tok-kw">if</span> (b == <span class="tok-number">0</span>) <span class="tok-kw">return</span> <span class="tok-kw">error</span>.DivideByZero;</span>
+<span class="line" id="L43">    <span class="tok-kw">return</span> toFloat(T, a) / toFloat(T, b);</span>
+<span class="line" id="L44">}</span>
+<span class="line" id="L45"></span>
+<span class="line" id="L46"><span class="tok-kw">test</span> divAsFloat {</span>
+<span class="line" id="L47">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">0.13</span>), <span class="tok-kw">try</span> divAsFloat(<span class="tok-type">f32</span>, <span class="tok-number">13</span>, <span class="tok-number">100</span>));</span>
+<span class="line" id="L48">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">0.5</span>), <span class="tok-kw">try</span> divAsFloat(<span class="tok-type">f32</span>, <span class="tok-builtin">@as</span>(<span class="tok-type">u1</span>, <span class="tok-number">1</span>), <span class="tok-builtin">@as</span>(<span class="tok-type">i32</span>, <span class="tok-number">2</span>)));</span>
+<span class="line" id="L49">    <span class="tok-kw">try</span> std.testing.expectError(<span class="tok-kw">error</span>.DivideByZero, divAsFloat(<span class="tok-type">f32</span>, <span class="tok-number">1_000</span>, <span class="tok-number">0</span>));</span>
+<span class="line" id="L50">}</span>
+<span class="line" id="L51"></span>
+<span class="line" id="L52"><span class="tok-comment">/// Clamps v between 0 and 1</span></span>
+<span class="line" id="L53"><span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">clamp01</span>(v: <span class="tok-kw">anytype</span>) <span class="tok-builtin">@TypeOf</span>(v) {</span>
+<span class="line" id="L54">    <span class="tok-kw">return</span> <span class="tok-builtin">@call</span>(.always_inline, std.math.clamp, .{ v, <span class="tok-number">0</span>, <span class="tok-number">1</span> });</span>
+<span class="line" id="L55">}</span>
+<span class="line" id="L56"></span>
+<span class="line" id="L57"><span class="tok-kw">test</span> clamp01 {</span>
+<span class="line" id="L58">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">0.5</span>), clamp01(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">0.5</span>)));</span>
+<span class="line" id="L59">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">1.0</span>), clamp01(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">1.5</span>)));</span>
+<span class="line" id="L60">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">0.0</span>), clamp01(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, -<span class="tok-number">20.0</span>)));</span>
+<span class="line" id="L61">}</span>
+<span class="line" id="L62"></span>
+<span class="line" id="L63"><span class="tok-comment">/// Returns the length of a @Vector object</span></span>
+<span class="line" id="L64"><span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">lengthVec</span>(vec: <span class="tok-kw">anytype</span>) <span class="tok-type">f32</span> {</span>
+<span class="line" id="L65">    <span class="tok-kw">return</span> <span class="tok-builtin">@sqrt</span>(<span class="tok-builtin">@reduce</span>(.Add, vec * vec));</span>
+<span class="line" id="L66">}</span>
+<span class="line" id="L67"></span>
+<span class="line" id="L68"><span class="tok-kw">test</span> lengthVec {</span>
+<span class="line" id="L69">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">1.0</span>), lengthVec(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ <span class="tok-number">1</span>, <span class="tok-number">0</span> }));</span>
+<span class="line" id="L70">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">1.0</span>), lengthVec(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ -<span class="tok-number">1</span>, <span class="tok-number">0</span> }));</span>
+<span class="line" id="L71">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">5.0</span>), lengthVec(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ <span class="tok-number">3</span>, <span class="tok-number">4</span> }));</span>
+<span class="line" id="L72">}</span>
+<span class="line" id="L73"></span>
+<span class="line" id="L74"><span class="tok-comment">/// Returns the square length of a @Vector object</span></span>
+<span class="line" id="L75"><span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">sqrLengthVec</span>(vec: <span class="tok-kw">anytype</span>) <span class="tok-type">f32</span> {</span>
+<span class="line" id="L76">    <span class="tok-kw">return</span> <span class="tok-builtin">@reduce</span>(.Add, vec * vec);</span>
+<span class="line" id="L77">}</span>
+<span class="line" id="L78"></span>
+<span class="line" id="L79"><span class="tok-comment">/// Lerps between two @Vector objects by a scalar t clamped between 0 and 1</span></span>
+<span class="line" id="L80"><span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">lerpVec</span>(a: <span class="tok-kw">anytype</span>, b: <span class="tok-kw">anytype</span>, t: <span class="tok-type">f32</span>) <span class="tok-builtin">@TypeOf</span>(a, b) {</span>
+<span class="line" id="L81">    <span class="tok-kw">const</span> t_clamped = clamp01(t);</span>
+<span class="line" id="L82">    <span class="tok-kw">return</span> <span class="tok-builtin">@mulAdd</span>(<span class="tok-builtin">@TypeOf</span>(a, b), b - a, <span class="tok-builtin">@splat</span>(t_clamped), a);</span>
+<span class="line" id="L83">}</span>
+<span class="line" id="L84"></span>
+<span class="line" id="L85"><span class="tok-comment">/// Lerps between two @Vector objects by a scalar t</span></span>
+<span class="line" id="L86"><span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">lerpUnclampedVec</span>(a: <span class="tok-kw">anytype</span>, b: <span class="tok-kw">anytype</span>, t: <span class="tok-type">f32</span>) <span class="tok-builtin">@TypeOf</span>(a, b) {</span>
+<span class="line" id="L87">    <span class="tok-kw">return</span> <span class="tok-builtin">@mulAdd</span>(<span class="tok-builtin">@TypeOf</span>(a, b), b - a, <span class="tok-builtin">@splat</span>(t), a);</span>
+<span class="line" id="L88">}</span>
+<span class="line" id="L89"></span>
+<span class="line" id="L90"><span class="tok-comment">/// Normalizes a @Vector object</span></span>
+<span class="line" id="L91"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">normalizeVec</span>(vec: <span class="tok-kw">anytype</span>) <span class="tok-builtin">@TypeOf</span>(vec) {</span>
+<span class="line" id="L92">    <span class="tok-kw">const</span> len = lengthVec(vec);</span>
+<span class="line" id="L93">    <span class="tok-kw">if</span> (len == <span class="tok-number">0</span>) <span class="tok-kw">return</span> vec;</span>
+<span class="line" id="L94">    <span class="tok-kw">return</span> vec / <span class="tok-builtin">@as</span>(<span class="tok-builtin">@TypeOf</span>(vec), <span class="tok-builtin">@splat</span>(len));</span>
+<span class="line" id="L95">}</span>
+<span class="line" id="L96"></span>
+<span class="line" id="L97"><span class="tok-kw">test</span> normalizeVec {</span>
+<span class="line" id="L98">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ <span class="tok-number">1</span>, <span class="tok-number">0</span> }, normalizeVec(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ <span class="tok-number">200_000</span>, <span class="tok-number">0</span> }));</span>
+<span class="line" id="L99">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ <span class="tok-number">0.8</span>, <span class="tok-number">0.6</span> }, normalizeVec(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ <span class="tok-number">8</span>, <span class="tok-number">6</span> }));</span>
+<span class="line" id="L100">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ <span class="tok-number">0</span>, <span class="tok-number">0</span> }, normalizeVec(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ <span class="tok-number">0</span>, <span class="tok-number">0</span> }));</span>
+<span class="line" id="L101">}</span>
+<span class="line" id="L102"></span>
+<span class="line" id="L103"><span class="tok-comment">/// Returns the dot product of two @Vector objects</span></span>
+<span class="line" id="L104"><span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">dotVec</span>(vec0: <span class="tok-kw">anytype</span>, vec1: <span class="tok-builtin">@TypeOf</span>(vec0)) <span class="tok-type">f32</span> {</span>
+<span class="line" id="L105">    <span class="tok-kw">return</span> <span class="tok-builtin">@reduce</span>(.Add, vec0 * vec1);</span>
+<span class="line" id="L106">}</span>
+<span class="line" id="L107"></span>
+<span class="line" id="L108"><span class="tok-kw">test</span> dotVec {</span>
+<span class="line" id="L109">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">32.0</span>), dotVec(<span class="tok-builtin">@Vector</span>(<span class="tok-number">3</span>, <span class="tok-type">f32</span>){ <span class="tok-number">1</span>, <span class="tok-number">2</span>, <span class="tok-number">3</span> }, .{ <span class="tok-number">4</span>, <span class="tok-number">5</span>, <span class="tok-number">6</span> }));</span>
+<span class="line" id="L110">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-number">28.0</span>), dotVec(<span class="tok-builtin">@Vector</span>(<span class="tok-number">3</span>, <span class="tok-type">f32</span>){ <span class="tok-number">6</span>, <span class="tok-number">5</span>, <span class="tok-number">4</span> }, .{ <span class="tok-number">1</span>, <span class="tok-number">2</span>, <span class="tok-number">3</span> }));</span>
+<span class="line" id="L111">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, -<span class="tok-number">3.0</span>), dotVec(<span class="tok-builtin">@Vector</span>(<span class="tok-number">3</span>, <span class="tok-type">f32</span>){ <span class="tok-number">1</span>, <span class="tok-number">1</span>, <span class="tok-number">1</span> }, .{ -<span class="tok-number">1</span>, -<span class="tok-number">1</span>, -<span class="tok-number">1</span> }));</span>
+<span class="line" id="L112">}</span>
+<span class="line" id="L113"></span>
+<span class="line" id="L114"><span class="tok-comment">/// Swizzles a @Vector object by a comptime mask</span></span>
+<span class="line" id="L115"><span class="tok-comment">///</span></span>
+<span class="line" id="L116"><span class="tok-comment">/// Example:</span></span>
+<span class="line" id="L117"><span class="tok-comment">/// ```zig</span></span>
+<span class="line" id="L118"><span class="tok-comment">/// try expectEqual(@Vector(2, f32){ 1, 1 }, swizzleVec(@Vector(2, f32){ 1, 2 }, .{ 0, 0 }));</span></span>
+<span class="line" id="L119"><span class="tok-comment">/// try expectEqual(@Vector(2, f32){ 2, 2 }, swizzleVec(@Vector(2, f32){ 1, 2 }, .{ 1, 1 }));</span></span>
+<span class="line" id="L120"><span class="tok-comment">/// try expectEqual(@Vector(2, f32){ 2, 1 }, swizzleVec(@Vector(2, f32){ 1, 2 }, .{ 1, 0 }));</span></span>
+<span class="line" id="L121"><span class="tok-comment">/// ```</span></span>
+<span class="line" id="L122"><span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">swizzleVec</span>(vec: <span class="tok-kw">anytype</span>, <span class="tok-kw">comptime</span> mask: <span class="tok-builtin">@TypeOf</span>(vec)) <span class="tok-builtin">@TypeOf</span>(vec) {</span>
+<span class="line" id="L123">    <span class="tok-kw">const</span> Vector = <span class="tok-builtin">@typeInfo</span>(<span class="tok-builtin">@TypeOf</span>(vec)).Vector;</span>
+<span class="line" id="L124">    <span class="tok-kw">comptime</span> <span class="tok-kw">for</span> (<span class="tok-builtin">@as</span>([Vector.len]Vector.child, mask)) |m| <span class="tok-kw">if</span> (m &lt; <span class="tok-number">0</span>) <span class="tok-builtin">@compileError</span>(std.fmt.comptimePrint(<span class="tok-str">&quot;Swizzle mask must be all positive, found {}.&quot;</span>, .{m}));</span>
+<span class="line" id="L125">    <span class="tok-kw">return</span> <span class="tok-builtin">@shuffle</span>(<span class="tok-type">f32</span>, vec, <span class="tok-null">undefined</span>, mask);</span>
+<span class="line" id="L126">}</span>
+<span class="line" id="L127"></span>
+<span class="line" id="L128"><span class="tok-kw">test</span> swizzleVec {</span>
+<span class="line" id="L129">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ <span class="tok-number">1</span>, <span class="tok-number">1</span> }, swizzleVec(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ <span class="tok-number">1</span>, <span class="tok-number">2</span> }, .{ <span class="tok-number">0</span>, <span class="tok-number">0</span> }));</span>
+<span class="line" id="L130">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ <span class="tok-number">2</span>, <span class="tok-number">2</span> }, swizzleVec(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ <span class="tok-number">1</span>, <span class="tok-number">2</span> }, .{ <span class="tok-number">1</span>, <span class="tok-number">1</span> }));</span>
+<span class="line" id="L131">    <span class="tok-kw">try</span> expectEqual(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ <span class="tok-number">2</span>, <span class="tok-number">1</span> }, swizzleVec(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">f32</span>){ <span class="tok-number">1</span>, <span class="tok-number">2</span> }, .{ <span class="tok-number">1</span>, <span class="tok-number">0</span> }));</span>
+<span class="line" id="L132">}</span>
+<span class="line" id="L133"></span>
+<span class="line" id="L134"><span class="tok-kw">test</span> {</span>
+<span class="line" id="L135">    std.testing.refAllDeclsRecursive(<span class="tok-builtin">@This</span>());</span>
+<span class="line" id="L136">    _ = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;vec2.zig&quot;</span>);</span>
+<span class="line" id="L137">    _ = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;vec3.zig&quot;</span>);</span>
+<span class="line" id="L138">    _ = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;vec4.zig&quot;</span>);</span>
+<span class="line" id="L139">    _ = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;vec_funcs.zig&quot;</span>);</span>
+<span class="line" id="L140">}</span>
+<span class="line" id="L141"></span>
+</code></pre></body>
+</html>

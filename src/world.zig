@@ -377,6 +377,20 @@ pub fn World(comptime wb: WorldBuilder) type {
             return ent;
         }
 
+        /// Creates a new entity and gives it `component`
+        fn newEntWith(self: *Self, component: anytype) !ztg.Entity {
+            const ent = try self.newEnt();
+            try self.giveEnt(ent, component);
+            return ent;
+        }
+
+        /// Creates a new entity and gives it all of the components in `components`
+        fn newEntWithMany(self: *Self, components: anytype) !ztg.Entity {
+            const ent = try self.newEnt();
+            try self.giveEntMany(ent, components);
+            return ent;
+        }
+
         fn getOpenEntityId(entities: *const EntityArray, from: ztg.Entity) ?ztg.Entity {
             for (from..wb.max_entities) |e| if (!entities.hasEntity(e)) return @intCast(e);
             for (0..from) |e| if (!entities.hasEntity(e)) return @intCast(e);
