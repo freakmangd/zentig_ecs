@@ -35,7 +35,7 @@ pub fn report(writer: anytype, dt: f32) void {
         writer.print("=== PROFILER ===\n", .{}) catch {};
         var valueIter = sections.valueIterator();
         while (valueIter.next()) |sec| {
-            const micro = @divFloor(@as(u64, @intCast(sec.timing_micro)), sec.samples);
+            const micro = @as(u64, @intCast(sec.timing_micro)) / sec.samples;
             const secs = ztg.math.divAsFloat(f64, micro, 1000000) catch unreachable;
             writer.print("MS: {: <6.2} :: FPS: {d: <6.2} :: {s}\n", .{ @divFloor(micro, 1000), if (micro > 0) 1.0 / secs else std.math.nan(f64), sec.name }) catch {};
         }

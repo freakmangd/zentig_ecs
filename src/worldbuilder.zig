@@ -177,7 +177,7 @@ fn labelIndexFromName(comptime stage: StageDef, comptime label_name: []const u8)
     for (stage.labels.items, 0..) |label, i| {
         if (std.mem.eql(u8, label.name, label_name)) return i;
     }
-    @compileError("Cannot find label " ++ label_name ++ " within stage. Consider adding it with WorldBuilder.addLabel");
+    @compileError("Cannot find label " ++ label_name ++ " within stage " ++ stage.name ++ ". Consider adding it with WorldBuilder.addLabel");
 }
 
 /// Adds a new label named `label_name` to the system named `stage_name`.
