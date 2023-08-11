@@ -1,185 +1,0 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <title>mods\base\time.zig - source view</title>
-    <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAPNJREFUeNpi/P//PwMlgOXHUjly9E0G4hwgZmQiQZMqEK8H4v9QzUEgQSaoADK+zhH9iAGL+C0gDoAaNg9mGLoLfgA1awK9hS9gzgJxA9RQBmQDrgMxJzRMGKE4HYj/Ial5A8QmQLwCJoBsgBYW2+TR1ChDaWt4LOBxKsi/VUh8XiD+gq4IVyzwQAMJBoKwacZlAB8Qf0bi96IZhtOAe1D6LpqaEiz6rmEzQAeIzwGxCJpieFqApo/vQKyJboAaEBsAsSEupwI1MwKjGBTVHOhegMX5UajYRqiBjMgYmj400cVh0XgTiKdC0zhJgJHS7AwQYABm9EAdCKrEfAAAAABJRU5ErkJggg=="/>
-    <style>
-      body{
-        font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
-        margin: 0;
-        line-height: 1.5;
-      }
-
-      pre > code {
-        display: block;
-        overflow: auto;
-        line-height: normal;
-        margin: 0em;
-      }
-      .tok-kw {
-          color: #333;
-          font-weight: bold;
-      }
-      .tok-str {
-          color: #d14;
-      }
-      .tok-builtin {
-          color: #005C7A;
-      }
-      .tok-comment {
-          color: #545454;
-          font-style: italic;
-      }
-      .tok-fn {
-          color: #900;
-          font-weight: bold;
-      }
-      .tok-null {
-          color: #005C5C;
-      }
-      .tok-number {
-          color: #005C5C;
-      }
-      .tok-type {
-          color: #458;
-          font-weight: bold;
-      }
-      pre {
-        counter-reset: line;
-      }
-      pre .line:before {
-        counter-increment: line;
-        content: counter(line);
-        display: inline-block;
-        padding-right: 1em;
-        width: 2em;
-        text-align: right;
-        color: #999;
-      }
-      
-      .line {
-        width: 100%;
-        display: inline-block;
-      }
-      .line:target {
-        border-top: 1px solid #ccc;
-        border-bottom: 1px solid #ccc;
-        background: #fafafa;
-      }
-
-      @media (prefers-color-scheme: dark) {
-        body{
-            background:#222;
-            color: #ccc;
-        }
-        pre > code {
-            color: #ccc;
-            background: #222;
-            border: unset;
-        }
-        .line:target {
-            border-top: 1px solid #444;
-            border-bottom: 1px solid #444;
-            background: #333;
-        }
-        .tok-kw {
-            color: #eee;
-        }
-        .tok-str {
-            color: #2e5;
-        }
-        .tok-builtin {
-            color: #ff894c;
-        }
-        .tok-comment {
-            color: #aa7;
-        }
-        .tok-fn {
-            color: #B1A0F8;
-        }
-        .tok-null {
-            color: #ff8080;
-        }
-        .tok-number {
-            color: #ff8080;
-        }
-        .tok-type {
-            color: #68f;
-        }
-      }
-    </style>
-</head>
-<body>
-<pre><code><span class="line" id="L1"><span class="tok-kw">const</span> ztg = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;../../init.zig&quot;</span>);</span>
-<span class="line" id="L2"></span>
-<span class="line" id="L3"><span class="tok-kw">const</span> Time = <span class="tok-builtin">@This</span>();</span>
-<span class="line" id="L4"></span>
-<span class="line" id="L5">dt: <span class="tok-type">f32</span> = <span class="tok-number">0.0</span>,</span>
-<span class="line" id="L6">real_dt: <span class="tok-type">f32</span> = <span class="tok-number">0.0</span>,</span>
-<span class="line" id="L7"></span>
-<span class="line" id="L8">time_scale: <span class="tok-type">f32</span> = <span class="tok-number">1.0</span>,</span>
-<span class="line" id="L9"></span>
-<span class="line" id="L10">time: <span class="tok-type">f32</span> = <span class="tok-number">0.0</span>,</span>
-<span class="line" id="L11">real_time: <span class="tok-type">f32</span> = <span class="tok-number">0.0</span>,</span>
-<span class="line" id="L12"></span>
-<span class="line" id="L13"><span class="tok-comment">/// The `frame_count` starts at 0 and is updated in `.post_update`</span></span>
-<span class="line" id="L14">frame_count: <span class="tok-type">usize</span> = <span class="tok-number">0</span>,</span>
-<span class="line" id="L15"></span>
-<span class="line" id="L16"><span class="tok-kw">const</span> frames_sample_len = <span class="tok-number">10</span>;</span>
-<span class="line" id="L17"><span class="tok-kw">var</span> frames_sample_i: <span class="tok-type">usize</span> = <span class="tok-number">0</span>;</span>
-<span class="line" id="L18"><span class="tok-kw">var</span> frames_sample_counter: <span class="tok-type">f32</span> = <span class="tok-number">0.0</span>;</span>
-<span class="line" id="L19"><span class="tok-kw">var</span> frames_sample = <span class="tok-builtin">@Vector</span>(frames_sample_len, <span class="tok-type">usize</span>){ <span class="tok-number">0</span>, <span class="tok-number">0</span>, <span class="tok-number">0</span>, <span class="tok-number">0</span>, <span class="tok-number">0</span>, <span class="tok-number">0</span>, <span class="tok-number">0</span>, <span class="tok-number">0</span>, <span class="tok-number">0</span>, <span class="tok-number">0</span> };</span>
-<span class="line" id="L20"></span>
-<span class="line" id="L21"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">writeFpsStats</span>(self: Time, writer: <span class="tok-kw">anytype</span>) !<span class="tok-type">void</span> {</span>
-<span class="line" id="L22">    <span class="tok-kw">return</span> writer.print(<span class="tok-str">&quot;FPS: {d:.0}\nAVG: {d:.1}\nMAX: {}\nMIN: {}&quot;</span>, .{ <span class="tok-number">1.0</span> / <span class="tok-kw">if</span> (self.real_dt == <span class="tok-number">0.0</span>) <span class="tok-number">1.0</span> <span class="tok-kw">else</span> self.real_dt, getAvgFps(), getMaxFps(), getMinFps() });</span>
-<span class="line" id="L23">}</span>
-<span class="line" id="L24"></span>
-<span class="line" id="L25"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">getFps</span>(self: Time) <span class="tok-type">usize</span> {</span>
-<span class="line" id="L26">    <span class="tok-kw">return</span> <span class="tok-number">1.0</span> / <span class="tok-kw">if</span> (self.real_dt == <span class="tok-number">0.0</span>) <span class="tok-number">1.0</span> <span class="tok-kw">else</span> self.real_dt;</span>
-<span class="line" id="L27">}</span>
-<span class="line" id="L28"></span>
-<span class="line" id="L29"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">getAvgFps</span>() <span class="tok-type">f32</span> {</span>
-<span class="line" id="L30">    <span class="tok-kw">const</span> total = <span class="tok-builtin">@reduce</span>(.Add, frames_sample);</span>
-<span class="line" id="L31">    <span class="tok-kw">return</span> <span class="tok-builtin">@as</span>(<span class="tok-type">f32</span>, <span class="tok-builtin">@floatFromInt</span>(total)) / <span class="tok-builtin">@as</span>(<span class="tok-type">comptime_float</span>, frames_sample_len);</span>
-<span class="line" id="L32">}</span>
-<span class="line" id="L33"></span>
-<span class="line" id="L34"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">getMinFps</span>() <span class="tok-type">usize</span> {</span>
-<span class="line" id="L35">    <span class="tok-kw">return</span> <span class="tok-builtin">@reduce</span>(.Min, frames_sample);</span>
-<span class="line" id="L36">}</span>
-<span class="line" id="L37"></span>
-<span class="line" id="L38"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">getMaxFps</span>() <span class="tok-type">usize</span> {</span>
-<span class="line" id="L39">    <span class="tok-kw">return</span> <span class="tok-builtin">@reduce</span>(.Max, frames_sample);</span>
-<span class="line" id="L40">}</span>
-<span class="line" id="L41"></span>
-<span class="line" id="L42"><span class="tok-comment">/// Used for impls of Time</span></span>
-<span class="line" id="L43"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">update</span>(self: *Time, real_dt: <span class="tok-type">f32</span>) <span class="tok-type">void</span> {</span>
-<span class="line" id="L44">    self.real_dt = real_dt;</span>
-<span class="line" id="L45">    self.dt = real_dt * self.time_scale;</span>
-<span class="line" id="L46"></span>
-<span class="line" id="L47">    frames_sample_counter += real_dt;</span>
-<span class="line" id="L48"></span>
-<span class="line" id="L49">    <span class="tok-comment">// Collect samples over one second</span>
-</span>
-<span class="line" id="L50">    <span class="tok-kw">if</span> (frames_sample_counter &gt; <span class="tok-number">1.0</span> / <span class="tok-builtin">@as</span>(<span class="tok-type">comptime_float</span>, frames_sample_len)) {</span>
-<span class="line" id="L51">        frames_sample_counter = <span class="tok-number">0</span>;</span>
-<span class="line" id="L52">        frames_sample[frames_sample_i] = <span class="tok-builtin">@intFromFloat</span>(<span class="tok-number">1.0</span> / <span class="tok-kw">if</span> (real_dt == <span class="tok-number">0.0</span>) <span class="tok-number">1.0</span> <span class="tok-kw">else</span> real_dt);</span>
-<span class="line" id="L53"></span>
-<span class="line" id="L54">        frames_sample_i += <span class="tok-number">1</span>;</span>
-<span class="line" id="L55">        <span class="tok-kw">if</span> (frames_sample_i &gt;= frames_sample_len) frames_sample_i = <span class="tok-number">0</span>;</span>
-<span class="line" id="L56">    }</span>
-<span class="line" id="L57">}</span>
-<span class="line" id="L58"></span>
-<span class="line" id="L59"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">include</span>(<span class="tok-kw">comptime</span> wb: *ztg.WorldBuilder) <span class="tok-type">void</span> {</span>
-<span class="line" id="L60">    wb.addResource(Time, .{});</span>
-<span class="line" id="L61">    wb.addSystemsToStage(.update, .{ztg.after(.body, pou_Time)});</span>
-<span class="line" id="L62">}</span>
-<span class="line" id="L63"></span>
-<span class="line" id="L64"><span class="tok-kw">fn</span> <span class="tok-fn">pou_Time</span>(self: *Time) <span class="tok-type">void</span> {</span>
-<span class="line" id="L65">    self.frame_count += <span class="tok-number">1</span>;</span>
-<span class="line" id="L66">    self.time += self.dt;</span>
-<span class="line" id="L67">    self.real_time += self.real_dt;</span>
-<span class="line" id="L68">}</span>
-<span class="line" id="L69"></span>
-</code></pre></body>
-</html>

@@ -144,12 +144,8 @@ pub fn World(comptime wb: WorldBuilder) type {
             return self;
         }
 
-        fn deinit_errCallback(comptime msg: []const u8) fn (anyerror) void {
-            return struct {
-                fn f(err: anyerror) void {
-                    ztg.log.err(msg, .{err});
-                }
-            }.f;
+        fn deinit_errCallback(err: anyerror) void {
+            ztg.log.err("Encountered error {} in cleanup stage", .{err});
         }
 
         pub fn deinit(self: *Self) void {
@@ -159,11 +155,9 @@ pub fn World(comptime wb: WorldBuilder) type {
                 ztg.log.err("Found error {} while trying to clean up world for deinit.", .{err});
             };
 
-            self.runStageCatchErrors(.deinit, deinit_errCallback("Encountered error {} in cleanup stage")) catch |err| switch (err) {
-                error.OutOfMemory => {
-                    ztg.log.err("Encountered OOM error in deinit stage. Some systems may not have been run!", .{});
-                },
-                else => {},
+            self.runStageCatchErrors(.deinit, deinit_errCallback) catch |err| switch (err) {
+                error.OutOfMemory => ztg.log.err("Encountered OOM error in deinit stage. Some systems may not have been run!", .{}),
+                else => {}, // We can't hit any other errors
             };
 
             self.event_pools.deinit(self.frame_alloc);
@@ -335,11 +329,11 @@ pub fn World(comptime wb: WorldBuilder) type {
         /// Example:
         ///
         /// ```zig
-        /// try world.runLoadStages();
+        /// try world.runStage(.load);
         ///
         /// while(game.isRunning) {
         ///   try world.runUpdateStages();
-        ///   try world.runDrawStages();
+        ///   try world.runStage(.draw);
         ///   world.cleanForNextFrame();
         /// }
         /// ```

@@ -1,191 +1,0 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <title>mods\base\global_transform.zig - source view</title>
-    <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAPNJREFUeNpi/P//PwMlgOXHUjly9E0G4hwgZmQiQZMqEK8H4v9QzUEgQSaoADK+zhH9iAGL+C0gDoAaNg9mGLoLfgA1awK9hS9gzgJxA9RQBmQDrgMxJzRMGKE4HYj/Ial5A8QmQLwCJoBsgBYW2+TR1ChDaWt4LOBxKsi/VUh8XiD+gq4IVyzwQAMJBoKwacZlAB8Qf0bi96IZhtOAe1D6LpqaEiz6rmEzQAeIzwGxCJpieFqApo/vQKyJboAaEBsAsSEupwI1MwKjGBTVHOhegMX5UajYRqiBjMgYmj400cVh0XgTiKdC0zhJgJHS7AwQYABm9EAdCKrEfAAAAABJRU5ErkJggg=="/>
-    <style>
-      body{
-        font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
-        margin: 0;
-        line-height: 1.5;
-      }
-
-      pre > code {
-        display: block;
-        overflow: auto;
-        line-height: normal;
-        margin: 0em;
-      }
-      .tok-kw {
-          color: #333;
-          font-weight: bold;
-      }
-      .tok-str {
-          color: #d14;
-      }
-      .tok-builtin {
-          color: #005C7A;
-      }
-      .tok-comment {
-          color: #545454;
-          font-style: italic;
-      }
-      .tok-fn {
-          color: #900;
-          font-weight: bold;
-      }
-      .tok-null {
-          color: #005C5C;
-      }
-      .tok-number {
-          color: #005C5C;
-      }
-      .tok-type {
-          color: #458;
-          font-weight: bold;
-      }
-      pre {
-        counter-reset: line;
-      }
-      pre .line:before {
-        counter-increment: line;
-        content: counter(line);
-        display: inline-block;
-        padding-right: 1em;
-        width: 2em;
-        text-align: right;
-        color: #999;
-      }
-      
-      .line {
-        width: 100%;
-        display: inline-block;
-      }
-      .line:target {
-        border-top: 1px solid #ccc;
-        border-bottom: 1px solid #ccc;
-        background: #fafafa;
-      }
-
-      @media (prefers-color-scheme: dark) {
-        body{
-            background:#222;
-            color: #ccc;
-        }
-        pre > code {
-            color: #ccc;
-            background: #222;
-            border: unset;
-        }
-        .line:target {
-            border-top: 1px solid #444;
-            border-bottom: 1px solid #444;
-            background: #333;
-        }
-        .tok-kw {
-            color: #eee;
-        }
-        .tok-str {
-            color: #2e5;
-        }
-        .tok-builtin {
-            color: #ff894c;
-        }
-        .tok-comment {
-            color: #aa7;
-        }
-        .tok-fn {
-            color: #B1A0F8;
-        }
-        .tok-null {
-            color: #ff8080;
-        }
-        .tok-number {
-            color: #ff8080;
-        }
-        .tok-type {
-            color: #68f;
-        }
-      }
-    </style>
-</head>
-<body>
-<pre><code><span class="line" id="L1"><span class="tok-kw">const</span> std = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;std&quot;</span>);</span>
-<span class="line" id="L2"><span class="tok-kw">const</span> ztg = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;../../init.zig&quot;</span>);</span>
-<span class="line" id="L3"></span>
-<span class="line" id="L4"><span class="tok-kw">const</span> Self = <span class="tok-builtin">@This</span>();</span>
-<span class="line" id="L5"></span>
-<span class="line" id="L6">basis: ztg.zmath.Mat,</span>
-<span class="line" id="L7">__data: <span class="tok-kw">struct</span> {</span>
-<span class="line" id="L8">    basis_isdirty: <span class="tok-type">bool</span> = <span class="tok-null">true</span>,</span>
-<span class="line" id="L9">    rot: ztg.Vec4,</span>
-<span class="line" id="L10">    scale: ztg.Vec3,</span>
-<span class="line" id="L11">},</span>
-<span class="line" id="L12"></span>
-<span class="line" id="L13"><span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">identity</span>() Self {</span>
-<span class="line" id="L14">    <span class="tok-kw">return</span> .{</span>
-<span class="line" id="L15">        .basis = ztg.zmath.identity(),</span>
-<span class="line" id="L16">        .__data = .{</span>
-<span class="line" id="L17">            .rot = ztg.Vec4.identity(),</span>
-<span class="line" id="L18">            .scale = ztg.Vec3.one(),</span>
-<span class="line" id="L19">        },</span>
-<span class="line" id="L20">    };</span>
-<span class="line" id="L21">}</span>
-<span class="line" id="L22"></span>
-<span class="line" id="L23"><span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">getPos</span>(self: Self) ztg.Vec3 {</span>
-<span class="line" id="L24">    <span class="tok-kw">return</span> ztg.Vec3.fromZMath(self.basis[<span class="tok-number">3</span>]);</span>
-<span class="line" id="L25">}</span>
-<span class="line" id="L26"></span>
-<span class="line" id="L27"><span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">getRot</span>(self: Self) ztg.Vec4 {</span>
-<span class="line" id="L28">    <span class="tok-kw">return</span> self.__data.rot;</span>
-<span class="line" id="L29">}</span>
-<span class="line" id="L30"></span>
-<span class="line" id="L31"><span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">getScale</span>(self: Self) ztg.Vec3 {</span>
-<span class="line" id="L32">    <span class="tok-kw">return</span> self.__data.scale;</span>
-<span class="line" id="L33">}</span>
-<span class="line" id="L34"></span>
-<span class="line" id="L35"><span class="tok-kw">fn</span> <span class="tok-fn">updateBasis</span>(self: *Self, com: ztg.Commands, ent: ztg.Entity) <span class="tok-type">void</span> {</span>
-<span class="line" id="L36">    <span class="tok-kw">var</span> local_tr = com.getComponentPtr(ent, ztg.base.Transform).?;</span>
-<span class="line" id="L37"></span>
-<span class="line" id="L38">    <span class="tok-kw">var</span> parent_ent = (com.getEntParent(ent) <span class="tok-kw">catch</span> <span class="tok-kw">unreachable</span>) <span class="tok-kw">orelse</span> {</span>
-<span class="line" id="L39">        <span class="tok-comment">// we dont have a parent</span>
-</span>
-<span class="line" id="L40">        self.basis = local_tr.getUpdatedBasis();</span>
-<span class="line" id="L41">        self.__data.basis_isdirty = <span class="tok-null">false</span>;</span>
-<span class="line" id="L42">        <span class="tok-kw">return</span>;</span>
-<span class="line" id="L43">    };</span>
-<span class="line" id="L44"></span>
-<span class="line" id="L45">    <span class="tok-kw">var</span> parent_gtr = com.getComponentPtr(parent_ent, ztg.base.GlobalTransform) <span class="tok-kw">orelse</span> {</span>
-<span class="line" id="L46">        <span class="tok-comment">// parent doesnt have a transform</span>
-</span>
-<span class="line" id="L47">        self.basis = local_tr.getUpdatedBasis();</span>
-<span class="line" id="L48">        self.__data.basis_isdirty = <span class="tok-null">false</span>;</span>
-<span class="line" id="L49">        <span class="tok-kw">return</span>;</span>
-<span class="line" id="L50">    };</span>
-<span class="line" id="L51"></span>
-<span class="line" id="L52">    self.basis = ztg.zmath.mul(local_tr.getUpdatedBasis(), parent_gtr.getUpdatedBasis(com, parent_ent));</span>
-<span class="line" id="L53">    self.__data.basis_isdirty = <span class="tok-null">false</span>;</span>
-<span class="line" id="L54">}</span>
-<span class="line" id="L55"></span>
-<span class="line" id="L56"><span class="tok-kw">fn</span> <span class="tok-fn">getUpdatedBasis</span>(self: *Self, com: ztg.Commands, ent: ztg.Entity) ztg.zmath.Mat {</span>
-<span class="line" id="L57">    <span class="tok-kw">if</span> (!self.__data.basis_isdirty) <span class="tok-kw">return</span> self.basis;</span>
-<span class="line" id="L58">    self.updateBasis(com, ent);</span>
-<span class="line" id="L59">    <span class="tok-kw">return</span> self.basis;</span>
-<span class="line" id="L60">}</span>
-<span class="line" id="L61"></span>
-<span class="line" id="L62"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">include</span>(<span class="tok-kw">comptime</span> wb: *ztg.WorldBuilder) <span class="tok-type">void</span> {</span>
-<span class="line" id="L63">    wb.addComponents(&amp;.{Self});</span>
-<span class="line" id="L64">    wb.addLabel(.post_update, .gtr_update, .default);</span>
-<span class="line" id="L65">    wb.addSystemsToStage(.post_update, ztg.during(.gtr_update, pou_updateGlobals));</span>
-<span class="line" id="L66">}</span>
-<span class="line" id="L67"></span>
-<span class="line" id="L68"><span class="tok-kw">fn</span> <span class="tok-fn">pou_updateGlobals</span>(com: ztg.Commands, q: ztg.Query(.{ ztg.Entity, Self })) <span class="tok-type">void</span> {</span>
-<span class="line" id="L69">    <span class="tok-kw">for</span> (q.items(<span class="tok-number">0</span>), q.items(<span class="tok-number">1</span>)) |ent, gtr| {</span>
-<span class="line" id="L70">        gtr.updateBasis(com, ent);</span>
-<span class="line" id="L71">    }</span>
-<span class="line" id="L72">    <span class="tok-kw">for</span> (q.items(<span class="tok-number">1</span>)) |gtr| gtr.__data.basis_isdirty = <span class="tok-null">true</span>;</span>
-<span class="line" id="L73">}</span>
-<span class="line" id="L74"></span>
-</code></pre></body>
-</html>
