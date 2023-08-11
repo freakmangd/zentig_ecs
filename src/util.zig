@@ -32,6 +32,7 @@ pub fn assertOkOnAddedFunction(comptime Container: type) void {
 }
 
 pub fn resetCompIds() void {
+    if (comptime builtin.mode != .Debug) return;
     id_counter = 0;
     last_reset_id += 1;
 }
