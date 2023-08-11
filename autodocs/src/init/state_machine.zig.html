@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <title>state_machine.zig - source view</title>
+    <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAPNJREFUeNpi/P//PwMlgOXHUjly9E0G4hwgZmQiQZMqEK8H4v9QzUEgQSaoADK+zhH9iAGL+C0gDoAaNg9mGLoLfgA1awK9hS9gzgJxA9RQBmQDrgMxJzRMGKE4HYj/Ial5A8QmQLwCJoBsgBYW2+TR1ChDaWt4LOBxKsi/VUh8XiD+gq4IVyzwQAMJBoKwacZlAB8Qf0bi96IZhtOAe1D6LpqaEiz6rmEzQAeIzwGxCJpieFqApo/vQKyJboAaEBsAsSEupwI1MwKjGBTVHOhegMX5UajYRqiBjMgYmj400cVh0XgTiKdC0zhJgJHS7AwQYABm9EAdCKrEfAAAAABJRU5ErkJggg=="/>
+    <style>
+      body{
+        font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
+        margin: 0;
+        line-height: 1.5;
+      }
+
+      pre > code {
+        display: block;
+        overflow: auto;
+        line-height: normal;
+        margin: 0em;
+      }
+      .tok-kw {
+          color: #333;
+          font-weight: bold;
+      }
+      .tok-str {
+          color: #d14;
+      }
+      .tok-builtin {
+          color: #005C7A;
+      }
+      .tok-comment {
+          color: #545454;
+          font-style: italic;
+      }
+      .tok-fn {
+          color: #900;
+          font-weight: bold;
+      }
+      .tok-null {
+          color: #005C5C;
+      }
+      .tok-number {
+          color: #005C5C;
+      }
+      .tok-type {
+          color: #458;
+          font-weight: bold;
+      }
+      pre {
+        counter-reset: line;
+      }
+      pre .line:before {
+        counter-increment: line;
+        content: counter(line);
+        display: inline-block;
+        padding-right: 1em;
+        width: 2em;
+        text-align: right;
+        color: #999;
+      }
+      
+      .line {
+        width: 100%;
+        display: inline-block;
+      }
+      .line:target {
+        border-top: 1px solid #ccc;
+        border-bottom: 1px solid #ccc;
+        background: #fafafa;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body{
+            background:#222;
+            color: #ccc;
+        }
+        pre > code {
+            color: #ccc;
+            background: #222;
+            border: unset;
+        }
+        .line:target {
+            border-top: 1px solid #444;
+            border-bottom: 1px solid #444;
+            background: #333;
+        }
+        .tok-kw {
+            color: #eee;
+        }
+        .tok-str {
+            color: #2e5;
+        }
+        .tok-builtin {
+            color: #ff894c;
+        }
+        .tok-comment {
+            color: #aa7;
+        }
+        .tok-fn {
+            color: #B1A0F8;
+        }
+        .tok-null {
+            color: #ff8080;
+        }
+        .tok-number {
+            color: #ff8080;
+        }
+        .tok-type {
+            color: #68f;
+        }
+      }
+    </style>
+</head>
+<body>
+<pre><code><span class="line" id="L1"><span class="tok-kw">const</span> std = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;std&quot;</span>);</span>
+<span class="line" id="L2"><span class="tok-kw">const</span> ztg = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;init.zig&quot;</span>);</span>
+<span class="line" id="L3"></span>
+<span class="line" id="L4"><span class="tok-kw">const</span> Self = <span class="tok-builtin">@This</span>();</span>
+<span class="line" id="L5"></span>
+<span class="line" id="L6">alloc: std.mem.Allocator,</span>
+<span class="line" id="L7"></span>
+<span class="line" id="L8">current_state: <span class="tok-type">usize</span>,</span>
+<span class="line" id="L9">transitions: std.AutoHashMapUnmanaged(Transitions) = .{},</span>
+<span class="line" id="L10">onTransition: *<span class="tok-kw">const</span> <span class="tok-kw">fn</span> (ctx: *<span class="tok-type">anyopaque</span>, event: ?<span class="tok-type">usize</span>, from: <span class="tok-type">usize</span>, to: <span class="tok-type">usize</span>) <span class="tok-type">anyerror</span>!<span class="tok-type">void</span>,</span>
+<span class="line" id="L11"></span>
+<span class="line" id="L12">states_max_val: <span class="tok-type">usize</span>,</span>
+<span class="line" id="L13">events_max_val: <span class="tok-type">usize</span>,</span>
+<span class="line" id="L14"></span>
+<span class="line" id="L15"><span class="tok-kw">const</span> Transitions = std.AutoHashMapUnmanaged(<span class="tok-type">usize</span>);</span>
+<span class="line" id="L16"></span>
+<span class="line" id="L17"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">init</span>(alloc: std.mem.Allocator, <span class="tok-kw">comptime</span> States: <span class="tok-type">type</span>, <span class="tok-kw">comptime</span> Events: <span class="tok-type">type</span>, default_state: States, onTransition: *<span class="tok-kw">const</span> <span class="tok-kw">fn</span> (ctx: *<span class="tok-type">anyopaque</span>, event: ?<span class="tok-type">usize</span>, from: <span class="tok-type">usize</span>, to: <span class="tok-type">usize</span>) <span class="tok-type">anyerror</span>!<span class="tok-type">void</span>) Self {</span>
+<span class="line" id="L18">    <span class="tok-kw">return</span> .{</span>
+<span class="line" id="L19">        .alloc = alloc,</span>
+<span class="line" id="L20">        .current_state = <span class="tok-builtin">@intFromEnum</span>(default_state),</span>
+<span class="line" id="L21">        .onTransition = onTransition,</span>
+<span class="line" id="L22">        .states_max_val = std.meta.fields(States).len - <span class="tok-number">1</span>,</span>
+<span class="line" id="L23">        .events_max_val = std.meta.fields(Events).len - <span class="tok-number">1</span>,</span>
+<span class="line" id="L24">    };</span>
+<span class="line" id="L25">}</span>
+<span class="line" id="L26"></span>
+<span class="line" id="L27"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">transitionTo</span>(self: *Self, ctx: *<span class="tok-type">anyopaque</span>, state: <span class="tok-kw">anytype</span>) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L28">    <span class="tok-kw">const</span> val = <span class="tok-kw">try</span> self.convertTo(.state, state);</span>
+<span class="line" id="L29">    <span class="tok-kw">try</span> self.onTransition(ctx, <span class="tok-null">null</span>, self.current_state, val);</span>
+<span class="line" id="L30">    self.current_state = val;</span>
+<span class="line" id="L31">}</span>
+<span class="line" id="L32"></span>
+<span class="line" id="L33"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">invoke</span>(self: *Self, ctx: *<span class="tok-type">anyopaque</span>, event: <span class="tok-kw">anytype</span>) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L34">    <span class="tok-kw">const</span> val = <span class="tok-kw">try</span> self.convertTo(.event, event);</span>
+<span class="line" id="L35"></span>
+<span class="line" id="L36">    <span class="tok-kw">const</span> transition = self.transitions.getPtr(val) <span class="tok-kw">orelse</span> <span class="tok-kw">return</span> <span class="tok-kw">error</span>.EventHasNoTransitions;</span>
+<span class="line" id="L37">    <span class="tok-kw">const</span> next = transition.get(self.current_state) <span class="tok-kw">orelse</span> <span class="tok-kw">return</span> <span class="tok-kw">error</span>.EventNotRegisteredForCurrentState;</span>
+<span class="line" id="L38">    <span class="tok-kw">try</span> self.transitionTo(ctx, next);</span>
+<span class="line" id="L39">}</span>
+<span class="line" id="L40"></span>
+<span class="line" id="L41"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">addEventTransition</span>(self: *Self, event: <span class="tok-kw">anytype</span>, from: <span class="tok-kw">anytype</span>, to: <span class="tok-kw">anytype</span>) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L42">    <span class="tok-kw">const</span> event_val = <span class="tok-kw">try</span> self.convertTo(.event, event);</span>
+<span class="line" id="L43">    <span class="tok-kw">const</span> from_val = <span class="tok-kw">try</span> self.convertTo(.state, from);</span>
+<span class="line" id="L44">    <span class="tok-kw">const</span> to_val = <span class="tok-kw">try</span> self.convertTo(.state, to);</span>
+<span class="line" id="L45"></span>
+<span class="line" id="L46">    <span class="tok-kw">const</span> entry = <span class="tok-kw">try</span> self.transitions.getOrPutValue(self.alloc, event_val, .{});</span>
+<span class="line" id="L47">    <span class="tok-kw">try</span> entry.value_ptr.put(self.alloc, from_val, to_val);</span>
+<span class="line" id="L48">}</span>
+<span class="line" id="L49"></span>
+<span class="line" id="L50"><span class="tok-kw">fn</span> <span class="tok-fn">convertTo</span>(self: Self, t: <span class="tok-kw">enum</span> { state, event }, value: <span class="tok-kw">anytype</span>) !<span class="tok-type">usize</span> {</span>
+<span class="line" id="L51">    <span class="tok-kw">const</span> converted: <span class="tok-type">usize</span> = <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> <span class="tok-builtin">@typeInfo</span>(value) == .Enum) <span class="tok-builtin">@intFromEnum</span>(value) <span class="tok-kw">else</span> value;</span>
+<span class="line" id="L52">    <span class="tok-kw">switch</span> (t) {</span>
+<span class="line" id="L53">        .state =&gt; <span class="tok-kw">if</span> (converted &gt; self.states_max_val) <span class="tok-kw">return</span> <span class="tok-kw">error</span>.IllegalState,</span>
+<span class="line" id="L54">        .state =&gt; <span class="tok-kw">if</span> (converted &gt; self.events_max_val) <span class="tok-kw">return</span> <span class="tok-kw">error</span>.IllegalEvent,</span>
+<span class="line" id="L55">    }</span>
+<span class="line" id="L56">    <span class="tok-kw">return</span> converted;</span>
+<span class="line" id="L57">}</span>
+<span class="line" id="L58"></span>
+</code></pre></body>
+</html>

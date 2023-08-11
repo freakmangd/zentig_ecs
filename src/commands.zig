@@ -1,3 +1,5 @@
+//! A runtime interface for a World which can be requested in systems
+
 const std = @import("std");
 const ztg = @import("init.zig");
 const ca = @import("component_array.zig");

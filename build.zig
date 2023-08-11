@@ -14,21 +14,22 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    //const autodoc_test = b.addTest(.{
-    //    .root_source_file = std.Build.FileSource.relative("src/init.zig"),
-    //    .target = target,
-    //    .optimize = optimize,
-    //});
-    //autodoc_test.addModule("zmath", zmath_pkg.zmath);
+    const autodoc_test = b.addTest(.{
+        .root_source_file = std.Build.FileSource.relative("src/init.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    autodoc_test.addModule("zentig", zentig_mod);
+    autodoc_test.addModule("zmath", zmath_pkg.zmath);
 
-    //const install_docs = b.addInstallDirectory(.{
-    //    .source_dir = autodoc_test.getEmittedDocs(),
-    //    .install_dir = .prefix,
-    //    .install_subdir = "autodocs",
-    //});
+    const install_docs = b.addInstallDirectory(.{
+        .source_dir = autodoc_test.getEmittedDocs(),
+        .install_dir = .prefix,
+        .install_subdir = "autodocs",
+    });
 
-    //const docs_step = b.step("autodocs", "Build and install documentation");
-    //docs_step.dependOn(&install_docs.step);
+    const docs_step = b.step("autodocs", "Build and install documentation");
+    docs_step.dependOn(&install_docs.step);
 
     b.modules.put(b.dupe("zmath"), zmath_pkg.zmath) catch @panic("OOM");
     b.modules.put(b.dupe("zmath_options"), zmath_pkg.zmath_options) catch @panic("OOM");

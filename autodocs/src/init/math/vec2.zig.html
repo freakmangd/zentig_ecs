@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <title>math\vec2.zig - source view</title>
+    <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAPNJREFUeNpi/P//PwMlgOXHUjly9E0G4hwgZmQiQZMqEK8H4v9QzUEgQSaoADK+zhH9iAGL+C0gDoAaNg9mGLoLfgA1awK9hS9gzgJxA9RQBmQDrgMxJzRMGKE4HYj/Ial5A8QmQLwCJoBsgBYW2+TR1ChDaWt4LOBxKsi/VUh8XiD+gq4IVyzwQAMJBoKwacZlAB8Qf0bi96IZhtOAe1D6LpqaEiz6rmEzQAeIzwGxCJpieFqApo/vQKyJboAaEBsAsSEupwI1MwKjGBTVHOhegMX5UajYRqiBjMgYmj400cVh0XgTiKdC0zhJgJHS7AwQYABm9EAdCKrEfAAAAABJRU5ErkJggg=="/>
+    <style>
+      body{
+        font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
+        margin: 0;
+        line-height: 1.5;
+      }
+
+      pre > code {
+        display: block;
+        overflow: auto;
+        line-height: normal;
+        margin: 0em;
+      }
+      .tok-kw {
+          color: #333;
+          font-weight: bold;
+      }
+      .tok-str {
+          color: #d14;
+      }
+      .tok-builtin {
+          color: #005C7A;
+      }
+      .tok-comment {
+          color: #545454;
+          font-style: italic;
+      }
+      .tok-fn {
+          color: #900;
+          font-weight: bold;
+      }
+      .tok-null {
+          color: #005C5C;
+      }
+      .tok-number {
+          color: #005C5C;
+      }
+      .tok-type {
+          color: #458;
+          font-weight: bold;
+      }
+      pre {
+        counter-reset: line;
+      }
+      pre .line:before {
+        counter-increment: line;
+        content: counter(line);
+        display: inline-block;
+        padding-right: 1em;
+        width: 2em;
+        text-align: right;
+        color: #999;
+      }
+      
+      .line {
+        width: 100%;
+        display: inline-block;
+      }
+      .line:target {
+        border-top: 1px solid #ccc;
+        border-bottom: 1px solid #ccc;
+        background: #fafafa;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body{
+            background:#222;
+            color: #ccc;
+        }
+        pre > code {
+            color: #ccc;
+            background: #222;
+            border: unset;
+        }
+        .line:target {
+            border-top: 1px solid #444;
+            border-bottom: 1px solid #444;
+            background: #333;
+        }
+        .tok-kw {
+            color: #eee;
+        }
+        .tok-str {
+            color: #2e5;
+        }
+        .tok-builtin {
+            color: #ff894c;
+        }
+        .tok-comment {
+            color: #aa7;
+        }
+        .tok-fn {
+            color: #B1A0F8;
+        }
+        .tok-null {
+            color: #ff8080;
+        }
+        .tok-number {
+            color: #ff8080;
+        }
+        .tok-type {
+            color: #68f;
+        }
+      }
+    </style>
+</head>
+<body>
+<pre><code><span class="line" id="L1"><span class="tok-kw">const</span> std = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;std&quot;</span>);</span>
+<span class="line" id="L2"><span class="tok-kw">const</span> testing = std.testing;</span>
+<span class="line" id="L3"></span>
+<span class="line" id="L4"><span class="tok-kw">const</span> ztg = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;../init.zig&quot;</span>);</span>
+<span class="line" id="L5"><span class="tok-kw">const</span> math = std.math;</span>
+<span class="line" id="L6"></span>
+<span class="line" id="L7"><span class="tok-comment">/// A vector of 2 `f32`s</span></span>
+<span class="line" id="L8"><span class="tok-kw">pub</span> <span class="tok-kw">const</span> Vec2 = <span class="tok-kw">extern</span> <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L9">    <span class="tok-kw">const</span> vec_funcs = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;vec_funcs.zig&quot;</span>);</span>
+<span class="line" id="L10">    <span class="tok-kw">pub</span> <span class="tok-kw">usingnamespace</span> vec_funcs.init(Vec2);</span>
+<span class="line" id="L11"></span>
+<span class="line" id="L12">    x: <span class="tok-type">f32</span> = <span class="tok-number">0.0</span>,</span>
+<span class="line" id="L13">    y: <span class="tok-type">f32</span> = <span class="tok-number">0.0</span>,</span>
+<span class="line" id="L14"></span>
+<span class="line" id="L15">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">init</span>(x: <span class="tok-kw">anytype</span>, y: <span class="tok-kw">anytype</span>) Vec2 {</span>
+<span class="line" id="L16">        <span class="tok-kw">return</span> .{</span>
+<span class="line" id="L17">            .x = <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> <span class="tok-builtin">@typeInfo</span>(<span class="tok-builtin">@TypeOf</span>(x)) == .Int) <span class="tok-builtin">@floatFromInt</span>(x) <span class="tok-kw">else</span> x,</span>
+<span class="line" id="L18">            .y = <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> <span class="tok-builtin">@typeInfo</span>(<span class="tok-builtin">@TypeOf</span>(y)) == .Int) <span class="tok-builtin">@floatFromInt</span>(y) <span class="tok-kw">else</span> y,</span>
+<span class="line" id="L19">        };</span>
+<span class="line" id="L20">    }</span>
+<span class="line" id="L21"></span>
+<span class="line" id="L22">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">set</span>(self: *Vec2, x: <span class="tok-type">f32</span>, y: <span class="tok-type">f32</span>) <span class="tok-type">void</span> {</span>
+<span class="line" id="L23">        self.x = x;</span>
+<span class="line" id="L24">        self.y = y;</span>
+<span class="line" id="L25">    }</span>
+<span class="line" id="L26"></span>
+<span class="line" id="L27">    <span class="tok-comment">/// Returns T with all of it's components set to the original vector's</span></span>
+<span class="line" id="L28">    <span class="tok-comment">/// T's only required components must be `x`, and `y`</span></span>
+<span class="line" id="L29">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">into</span>(self: Vec2, <span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>) T {</span>
+<span class="line" id="L30">        <span class="tok-kw">return</span> .{ .x = self.x, .y = self.y };</span>
+<span class="line" id="L31">    }</span>
+<span class="line" id="L32"></span>
+<span class="line" id="L33">    <span class="tok-comment">/// Converts the Vector into a @Vector object of type `T`, doing</span></span>
+<span class="line" id="L34">    <span class="tok-comment">/// the necessary conversions.</span></span>
+<span class="line" id="L35">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">intoVectorOf</span>(self: Vec2, <span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>) <span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, T) {</span>
+<span class="line" id="L36">        <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> std.meta.trait.isFloat(T)) {</span>
+<span class="line" id="L37">            <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> T == <span class="tok-type">f32</span>) {</span>
+<span class="line" id="L38">                <span class="tok-kw">return</span> self.intoSimd();</span>
+<span class="line" id="L39">            } <span class="tok-kw">else</span> {</span>
+<span class="line" id="L40">                <span class="tok-kw">return</span> .{ <span class="tok-builtin">@as</span>(T, <span class="tok-builtin">@floatCast</span>(self.x)), <span class="tok-builtin">@as</span>(T, <span class="tok-builtin">@floatCast</span>(self.y)) };</span>
+<span class="line" id="L41">            }</span>
+<span class="line" id="L42">        } <span class="tok-kw">else</span> <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> std.meta.trait.isIntegral(T)) {</span>
+<span class="line" id="L43">            <span class="tok-kw">return</span> .{ <span class="tok-builtin">@as</span>(T, <span class="tok-builtin">@intFromFloat</span>(self.x)), <span class="tok-builtin">@as</span>(T, <span class="tok-builtin">@intFromFloat</span>(self.y)) };</span>
+<span class="line" id="L44">        } <span class="tok-kw">else</span> {</span>
+<span class="line" id="L45">            <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;Cannot turn self into a vector of &quot;</span> ++ <span class="tok-builtin">@typeName</span>(T));</span>
+<span class="line" id="L46">        }</span>
+<span class="line" id="L47">    }</span>
+<span class="line" id="L48"></span>
+<span class="line" id="L49">    <span class="tok-kw">test</span> intoVectorOf {</span>
+<span class="line" id="L50">        <span class="tok-kw">try</span> testing.expectEqual(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">i32</span>){ <span class="tok-number">1</span>, <span class="tok-number">2</span> }, init(<span class="tok-number">1.4</span>, <span class="tok-number">2.8</span>).intoVectorOf(<span class="tok-type">i32</span>));</span>
+<span class="line" id="L51">        <span class="tok-kw">try</span> testing.expectEqual(<span class="tok-builtin">@Vector</span>(<span class="tok-number">2</span>, <span class="tok-type">c_int</span>){ <span class="tok-number">20</span>, <span class="tok-number">12</span> }, init(<span class="tok-number">20.2</span>, <span class="tok-number">12.7</span>).intoVectorOf(<span class="tok-type">i32</span>));</span>
+<span class="line" id="L52">    }</span>
+<span class="line" id="L53"></span>
+<span class="line" id="L54">    <span class="tok-comment">/// Converts vector to an angle in radians</span></span>
+<span class="line" id="L55">    <span class="tok-comment">/// starting at .{ 1, 0 } and going ccw towards .{ 0, 1 }</span></span>
+<span class="line" id="L56">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">intoDirAngle</span>(self: Vec2) ztg.math.Radians {</span>
+<span class="line" id="L57">        <span class="tok-kw">return</span> math.atan2(<span class="tok-type">f32</span>, self.y, self.x);</span>
+<span class="line" id="L58">    }</span>
+<span class="line" id="L59"></span>
+<span class="line" id="L60">    <span class="tok-kw">test</span> intoDirAngle {</span>
+<span class="line" id="L61">        <span class="tok-kw">try</span> testing.expectEqual(<span class="tok-builtin">@as</span>(ztg.math.Radians, <span class="tok-number">0</span>), init(<span class="tok-number">1</span>, <span class="tok-number">0</span>).intoDirAngle());</span>
+<span class="line" id="L62">        <span class="tok-kw">try</span> testing.expectEqual(std.math.degreesToRadians(ztg.math.Radians, <span class="tok-number">90</span>), init(<span class="tok-number">0</span>, <span class="tok-number">1</span>).intoDirAngle());</span>
+<span class="line" id="L63">        <span class="tok-kw">try</span> testing.expectEqual(std.math.degreesToRadians(ztg.math.Radians, <span class="tok-number">180</span>), init(-<span class="tok-number">1</span>, <span class="tok-number">0</span>).intoDirAngle());</span>
+<span class="line" id="L64">    }</span>
+<span class="line" id="L65"></span>
+<span class="line" id="L66">    <span class="tok-comment">/// Converts angle theta to a vector representation</span></span>
+<span class="line" id="L67">    <span class="tok-comment">/// starting at .{ 1, 0 } and going ccw towards .{ 0, 1 }</span></span>
+<span class="line" id="L68">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">fromDirAngle</span>(theta: ztg.math.Radians) Vec2 {</span>
+<span class="line" id="L69">        <span class="tok-kw">return</span> .{</span>
+<span class="line" id="L70">            .x = math.cos(theta),</span>
+<span class="line" id="L71">            .y = math.sin(theta),</span>
+<span class="line" id="L72">        };</span>
+<span class="line" id="L73">    }</span>
+<span class="line" id="L74"></span>
+<span class="line" id="L75">    <span class="tok-kw">test</span> fromDirAngle {</span>
+<span class="line" id="L76">        <span class="tok-kw">try</span> Vec2.expectApproxEqAbs(init(<span class="tok-number">0</span>, -<span class="tok-number">1</span>), fromDirAngle(std.math.pi * <span class="tok-number">1.5</span>));</span>
+<span class="line" id="L77">        <span class="tok-kw">try</span> Vec2.expectApproxEqAbs(init(<span class="tok-number">1</span>, <span class="tok-number">0</span>), fromDirAngle(<span class="tok-number">0</span>));</span>
+<span class="line" id="L78">    }</span>
+<span class="line" id="L79"></span>
+<span class="line" id="L80">    <span class="tok-comment">/// For use when integrating with the zmath library, sets z and w to 0</span></span>
+<span class="line" id="L81">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">intoZMath</span>(self: Vec2) <span class="tok-builtin">@Vector</span>(<span class="tok-number">4</span>, <span class="tok-type">f32</span>) {</span>
+<span class="line" id="L82">        <span class="tok-kw">return</span> .{ self.x, self.y, <span class="tok-number">0.0</span>, <span class="tok-number">0.0</span> };</span>
+<span class="line" id="L83">    }</span>
+<span class="line" id="L84"></span>
+<span class="line" id="L85">    <span class="tok-comment">/// For use when integrating with the zmath library, discards z and w components</span></span>
+<span class="line" id="L86">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">fromZMath</span>(vec: <span class="tok-builtin">@Vector</span>(<span class="tok-number">4</span>, <span class="tok-type">f32</span>)) Vec2 {</span>
+<span class="line" id="L87">        <span class="tok-kw">return</span> .{ vec[<span class="tok-number">0</span>], vec[<span class="tok-number">1</span>] };</span>
+<span class="line" id="L88">    }</span>
+<span class="line" id="L89"></span>
+<span class="line" id="L90">    <span class="tok-comment">/// Creates a new Vec2 from the components of other</span></span>
+<span class="line" id="L91">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">from</span>(other: <span class="tok-kw">anytype</span>) Vec2 {</span>
+<span class="line" id="L92">        <span class="tok-kw">return</span> .{ .x = other.x, .y = other.y };</span>
+<span class="line" id="L93">    }</span>
+<span class="line" id="L94"></span>
+<span class="line" id="L95">    <span class="tok-comment">/// Will try to convert vec to a Vec2</span></span>
+<span class="line" id="L96">    <span class="tok-comment">/// e.g. if vec has an x field, it will use it,</span></span>
+<span class="line" id="L97">    <span class="tok-comment">/// same goes for the y field.</span></span>
+<span class="line" id="L98">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">fromAny</span>(vec: <span class="tok-kw">anytype</span>) Vec2 {</span>
+<span class="line" id="L99">        <span class="tok-kw">return</span> .{</span>
+<span class="line" id="L100">            .x = vec_funcs.convertFieldToF32(vec, <span class="tok-str">&quot;x&quot;</span>, <span class="tok-number">0</span>),</span>
+<span class="line" id="L101">            .y = vec_funcs.convertFieldToF32(vec, <span class="tok-str">&quot;y&quot;</span>, <span class="tok-number">0</span>),</span>
+<span class="line" id="L102">        };</span>
+<span class="line" id="L103">    }</span>
+<span class="line" id="L104"></span>
+<span class="line" id="L105">    <span class="tok-kw">test</span> fromAny {</span>
+<span class="line" id="L106">        <span class="tok-kw">const</span> MyVector = <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L107">            x: <span class="tok-type">c_int</span>,</span>
+<span class="line" id="L108">            y: <span class="tok-type">u8</span>,</span>
+<span class="line" id="L109">        };</span>
+<span class="line" id="L110"></span>
+<span class="line" id="L111">        <span class="tok-kw">try</span> Vec2.expectEqual(init(-<span class="tok-number">2</span>, <span class="tok-number">5</span>), fromAny(MyVector{ .x = -<span class="tok-number">2</span>, .y = <span class="tok-number">5</span> }));</span>
+<span class="line" id="L112"></span>
+<span class="line" id="L113">        <span class="tok-kw">const</span> MyOtherVec = <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L114">            x: <span class="tok-type">f16</span>,</span>
+<span class="line" id="L115">        };</span>
+<span class="line" id="L116"></span>
+<span class="line" id="L117">        <span class="tok-kw">try</span> Vec2.expectEqual(init(<span class="tok-number">10</span>, <span class="tok-number">0</span>), fromAny(MyOtherVec{ .x = <span class="tok-number">10</span> }));</span>
+<span class="line" id="L118">    }</span>
+<span class="line" id="L119"></span>
+<span class="line" id="L120">    <span class="tok-comment">/// Creates a Vec3 from self and sets the z component</span></span>
+<span class="line" id="L121">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">extend</span>(self: Vec2, z: <span class="tok-type">f32</span>) ztg.Vec3 {</span>
+<span class="line" id="L122">        <span class="tok-kw">return</span> self.extendInto(ztg.Vec3, z);</span>
+<span class="line" id="L123">    }</span>
+<span class="line" id="L124"></span>
+<span class="line" id="L125">    <span class="tok-comment">/// Creates a T, which must have `x`, `y`, and `z` components, from self and sets the w component</span></span>
+<span class="line" id="L126">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">extendInto</span>(self: Vec2, <span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>, z: <span class="tok-type">f32</span>) T {</span>
+<span class="line" id="L127">        <span class="tok-kw">return</span> .{ .x = self.x, .y = self.y, .z = z };</span>
+<span class="line" id="L128">    }</span>
+<span class="line" id="L129"></span>
+<span class="line" id="L130">    <span class="tok-comment">/// Just returns the x component</span></span>
+<span class="line" id="L131">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">flatten</span>(self: Vec2) <span class="tok-type">f32</span> {</span>
+<span class="line" id="L132">        <span class="tok-kw">return</span> self.x;</span>
+<span class="line" id="L133">    }</span>
+<span class="line" id="L134"></span>
+<span class="line" id="L135">    <span class="tok-comment">/// Returns a new Vec2 with all of it's components set to a number within [min, max)</span></span>
+<span class="line" id="L136">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">random</span>(rand: std.rand.Random, _min: <span class="tok-type">f32</span>, _max: <span class="tok-type">f32</span>) Vec2 {</span>
+<span class="line" id="L137">        <span class="tok-kw">return</span> .{</span>
+<span class="line" id="L138">            .x = std.math.lerp(_min, _max, rand.float(<span class="tok-type">f32</span>)),</span>
+<span class="line" id="L139">            .y = std.math.lerp(_min, _max, rand.float(<span class="tok-type">f32</span>)),</span>
+<span class="line" id="L140">        };</span>
+<span class="line" id="L141">    }</span>
+<span class="line" id="L142"></span>
+<span class="line" id="L143">    <span class="tok-comment">/// Returns a new random Vec2 that lies on the outside of a unit circle</span></span>
+<span class="line" id="L144">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">randomOnUnitCircle</span>(rand: std.rand.Random) Vec2 {</span>
+<span class="line" id="L145">        <span class="tok-kw">return</span> fromDirAngle(rand.float(<span class="tok-type">f32</span>) * std.math.pi * <span class="tok-number">2</span>);</span>
+<span class="line" id="L146">    }</span>
+<span class="line" id="L147"></span>
+<span class="line" id="L148">    <span class="tok-comment">/// Returns the perpendicular of the vector</span></span>
+<span class="line" id="L149">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">perpendicular</span>(dir: Vec2) Vec2 {</span>
+<span class="line" id="L150">        <span class="tok-kw">return</span> .{</span>
+<span class="line" id="L151">            .x = -dir.y,</span>
+<span class="line" id="L152">            .y = dir.x,</span>
+<span class="line" id="L153">        };</span>
+<span class="line" id="L154">    }</span>
+<span class="line" id="L155"></span>
+<span class="line" id="L156">    <span class="tok-comment">/// Returns a new copy of the vector rotated ccw by `angle` radians</span></span>
+<span class="line" id="L157">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">getRotated</span>(self: Vec2, angle: ztg.math.Radians) Vec2 {</span>
+<span class="line" id="L158">        <span class="tok-kw">return</span> .{</span>
+<span class="line" id="L159">            .x = <span class="tok-builtin">@mulAdd</span>(<span class="tok-type">f32</span>, std.math.cos(angle), self.x, -std.math.sin(angle) * self.y),</span>
+<span class="line" id="L160">            .y = <span class="tok-builtin">@mulAdd</span>(<span class="tok-type">f32</span>, std.math.sin(angle), self.x, std.math.cos(angle) * self.y),</span>
+<span class="line" id="L161">        };</span>
+<span class="line" id="L162">    }</span>
+<span class="line" id="L163"></span>
+<span class="line" id="L164">    <span class="tok-comment">/// Rotates the vector ccw in place by `angle` radians</span></span>
+<span class="line" id="L165">    <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">setRotated</span>(self: *Vec2, angle: ztg.math.Radians) <span class="tok-type">void</span> {</span>
+<span class="line" id="L166">        self.* = self.getRotated(angle);</span>
+<span class="line" id="L167">    }</span>
+<span class="line" id="L168"></span>
+<span class="line" id="L169">    <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">format</span>(value: Vec2, <span class="tok-kw">comptime</span> fmt: []<span class="tok-kw">const</span> <span class="tok-type">u8</span>, options: std.fmt.FormatOptions, writer: <span class="tok-kw">anytype</span>) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L170">        _ = options;</span>
+<span class="line" id="L171">        <span class="tok-kw">try</span> writer.print(<span class="tok-str">&quot;Vec2({&quot;</span> ++ fmt ++ <span class="tok-str">&quot;}, {&quot;</span> ++ fmt ++ <span class="tok-str">&quot;})&quot;</span>, .{ value.x, value.y });</span>
+<span class="line" id="L172">    }</span>
+<span class="line" id="L173">};</span>
+<span class="line" id="L174"></span>
+</code></pre></body>
+</html>

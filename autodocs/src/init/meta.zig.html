@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <title>meta.zig - source view</title>
+    <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAPNJREFUeNpi/P//PwMlgOXHUjly9E0G4hwgZmQiQZMqEK8H4v9QzUEgQSaoADK+zhH9iAGL+C0gDoAaNg9mGLoLfgA1awK9hS9gzgJxA9RQBmQDrgMxJzRMGKE4HYj/Ial5A8QmQLwCJoBsgBYW2+TR1ChDaWt4LOBxKsi/VUh8XiD+gq4IVyzwQAMJBoKwacZlAB8Qf0bi96IZhtOAe1D6LpqaEiz6rmEzQAeIzwGxCJpieFqApo/vQKyJboAaEBsAsSEupwI1MwKjGBTVHOhegMX5UajYRqiBjMgYmj400cVh0XgTiKdC0zhJgJHS7AwQYABm9EAdCKrEfAAAAABJRU5ErkJggg=="/>
+    <style>
+      body{
+        font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
+        margin: 0;
+        line-height: 1.5;
+      }
+
+      pre > code {
+        display: block;
+        overflow: auto;
+        line-height: normal;
+        margin: 0em;
+      }
+      .tok-kw {
+          color: #333;
+          font-weight: bold;
+      }
+      .tok-str {
+          color: #d14;
+      }
+      .tok-builtin {
+          color: #005C7A;
+      }
+      .tok-comment {
+          color: #545454;
+          font-style: italic;
+      }
+      .tok-fn {
+          color: #900;
+          font-weight: bold;
+      }
+      .tok-null {
+          color: #005C5C;
+      }
+      .tok-number {
+          color: #005C5C;
+      }
+      .tok-type {
+          color: #458;
+          font-weight: bold;
+      }
+      pre {
+        counter-reset: line;
+      }
+      pre .line:before {
+        counter-increment: line;
+        content: counter(line);
+        display: inline-block;
+        padding-right: 1em;
+        width: 2em;
+        text-align: right;
+        color: #999;
+      }
+      
+      .line {
+        width: 100%;
+        display: inline-block;
+      }
+      .line:target {
+        border-top: 1px solid #ccc;
+        border-bottom: 1px solid #ccc;
+        background: #fafafa;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body{
+            background:#222;
+            color: #ccc;
+        }
+        pre > code {
+            color: #ccc;
+            background: #222;
+            border: unset;
+        }
+        .line:target {
+            border-top: 1px solid #444;
+            border-bottom: 1px solid #444;
+            background: #333;
+        }
+        .tok-kw {
+            color: #eee;
+        }
+        .tok-str {
+            color: #2e5;
+        }
+        .tok-builtin {
+            color: #ff894c;
+        }
+        .tok-comment {
+            color: #aa7;
+        }
+        .tok-fn {
+            color: #B1A0F8;
+        }
+        .tok-null {
+            color: #ff8080;
+        }
+        .tok-number {
+            color: #ff8080;
+        }
+        .tok-type {
+            color: #68f;
+        }
+      }
+    </style>
+</head>
+<body>
+<pre><code><span class="line" id="L1"><span class="tok-kw">const</span> std = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;std&quot;</span>);</span>
+<span class="line" id="L2"></span>
+<span class="line" id="L3"><span class="tok-kw">pub</span> <span class="tok-kw">const</span> TypeBuilder = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;etc/type_builder.zig&quot;</span>);</span>
+<span class="line" id="L4"><span class="tok-kw">pub</span> <span class="tok-kw">const</span> TypeMap = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;etc/type_map.zig&quot;</span>);</span>
+<span class="line" id="L5"></span>
+<span class="line" id="L6"><span class="tok-kw">pub</span> <span class="tok-kw">const</span> EnumLiteral = <span class="tok-builtin">@TypeOf</span>(.enum_literal);</span>
+<span class="line" id="L7"></span>
+<span class="line" id="L8"><span class="tok-comment">/// Returns whether a function type can return an error</span></span>
+<span class="line" id="L9"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">canReturnError</span>(<span class="tok-kw">comptime</span> Fn: <span class="tok-type">type</span>) <span class="tok-type">bool</span> {</span>
+<span class="line" id="L10">    <span class="tok-kw">comptime</span> <span class="tok-kw">return</span> <span class="tok-builtin">@typeInfo</span>(<span class="tok-builtin">@typeInfo</span>(Fn).Fn.return_type.?) == .ErrorUnion;</span>
+<span class="line" id="L11">}</span>
+<span class="line" id="L12"></span>
+<span class="line" id="L13"><span class="tok-kw">pub</span> <span class="tok-kw">const</span> MemberFnType = <span class="tok-kw">enum</span> {</span>
+<span class="line" id="L14">    by_value,</span>
+<span class="line" id="L15">    by_ptr,</span>
+<span class="line" id="L16">    by_const_ptr,</span>
+<span class="line" id="L17">    non_member,</span>
+<span class="line" id="L18">};</span>
+<span class="line" id="L19"></span>
+<span class="line" id="L20"><span class="tok-comment">/// Returns whether a function is a member function</span></span>
+<span class="line" id="L21"><span class="tok-comment">/// and whether it takes by value, ptr, or const ptr</span></span>
+<span class="line" id="L22"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">memberFnType</span>(<span class="tok-kw">comptime</span> Container: <span class="tok-type">type</span>, <span class="tok-kw">comptime</span> fn_name: []<span class="tok-kw">const</span> <span class="tok-type">u8</span>) MemberFnType {</span>
+<span class="line" id="L23">    <span class="tok-kw">if</span> (!<span class="tok-builtin">@hasDecl</span>(Container, fn_name)) <span class="tok-builtin">@compileError</span>(<span class="tok-str">&quot;Function &quot;</span> ++ fn_name ++ <span class="tok-str">&quot; is not part of the &quot;</span> ++ <span class="tok-builtin">@typeName</span>(Container) ++ <span class="tok-str">&quot; namespace.&quot;</span>);</span>
+<span class="line" id="L24"></span>
+<span class="line" id="L25">    <span class="tok-kw">const</span> params = <span class="tok-builtin">@typeInfo</span>(<span class="tok-builtin">@TypeOf</span>(<span class="tok-builtin">@field</span>(Container, fn_name))).Fn.params;</span>
+<span class="line" id="L26">    <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> params.len == <span class="tok-number">0</span>) <span class="tok-kw">return</span> .non_member;</span>
+<span class="line" id="L27"></span>
+<span class="line" id="L28">    <span class="tok-kw">const</span> Param0 = params[<span class="tok-number">0</span>].<span class="tok-type">type</span> <span class="tok-kw">orelse</span> <span class="tok-kw">return</span> .non_member;</span>
+<span class="line" id="L29"></span>
+<span class="line" id="L30">    <span class="tok-kw">if</span> (DerefType(Param0) == Container) {</span>
+<span class="line" id="L31">        <span class="tok-kw">if</span> (std.meta.trait.isConstPtr(Param0)) {</span>
+<span class="line" id="L32">            <span class="tok-kw">return</span> .by_const_ptr;</span>
+<span class="line" id="L33">        } <span class="tok-kw">else</span> <span class="tok-kw">if</span> (std.meta.trait.isSingleItemPtr(Param0)) {</span>
+<span class="line" id="L34">            <span class="tok-kw">return</span> .by_ptr;</span>
+<span class="line" id="L35">        } <span class="tok-kw">else</span> {</span>
+<span class="line" id="L36">            <span class="tok-kw">return</span> .by_value;</span>
+<span class="line" id="L37">        }</span>
+<span class="line" id="L38">    }</span>
+<span class="line" id="L39">    <span class="tok-kw">return</span> .non_member;</span>
+<span class="line" id="L40">}</span>
+<span class="line" id="L41"></span>
+<span class="line" id="L42"><span class="tok-comment">/// If `T` is a Pointer type this function returns the child, otherwise returns `T`</span></span>
+<span class="line" id="L43"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">DerefType</span>(<span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>) <span class="tok-type">type</span> {</span>
+<span class="line" id="L44">    <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> std.meta.trait.isSingleItemPtr(T)) <span class="tok-kw">return</span> std.meta.Child(T);</span>
+<span class="line" id="L45">    <span class="tok-kw">return</span> T;</span>
+<span class="line" id="L46">}</span>
+<span class="line" id="L47"></span>
+<span class="line" id="L48"><span class="tok-comment">/// Returns the return type of the function f</span></span>
+<span class="line" id="L49"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">ReturnType</span>(<span class="tok-kw">comptime</span> f: <span class="tok-kw">anytype</span>) <span class="tok-type">type</span> {</span>
+<span class="line" id="L50">    <span class="tok-kw">return</span> <span class="tok-builtin">@typeInfo</span>(<span class="tok-builtin">@TypeOf</span>(f)).Fn.return_type.?;</span>
+<span class="line" id="L51">}</span>
+<span class="line" id="L52"></span>
+<span class="line" id="L53"><span class="tok-comment">/// A structure for making lists of comptime only objects.</span></span>
+<span class="line" id="L54"><span class="tok-comment">/// To be only used at comptime.</span></span>
+<span class="line" id="L55"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">ComptimeList</span>(<span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>) <span class="tok-type">type</span> {</span>
+<span class="line" id="L56">    <span class="tok-kw">return</span> <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L57">        <span class="tok-kw">const</span> Self = <span class="tok-builtin">@This</span>();</span>
+<span class="line" id="L58"></span>
+<span class="line" id="L59">        items: []<span class="tok-kw">const</span> T = &amp;.{},</span>
+<span class="line" id="L60"></span>
+<span class="line" id="L61">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">fromSlice</span>(<span class="tok-kw">comptime</span> items: []<span class="tok-kw">const</span> T) Self {</span>
+<span class="line" id="L62">            <span class="tok-kw">return</span> .{ .items = items };</span>
+<span class="line" id="L63">        }</span>
+<span class="line" id="L64"></span>
+<span class="line" id="L65">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">append</span>(<span class="tok-kw">comptime</span> self: *Self, <span class="tok-kw">comptime</span> t: T) <span class="tok-type">void</span> {</span>
+<span class="line" id="L66">            self.items = self.items ++ .{t};</span>
+<span class="line" id="L67">        }</span>
+<span class="line" id="L68"></span>
+<span class="line" id="L69">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">insert</span>(<span class="tok-kw">comptime</span> self: *Self, <span class="tok-kw">comptime</span> index: <span class="tok-type">usize</span>, <span class="tok-kw">comptime</span> t: T) <span class="tok-type">void</span> {</span>
+<span class="line" id="L70">            <span class="tok-kw">var</span> items: [self.items.len + <span class="tok-number">1</span>]T = <span class="tok-null">undefined</span>;</span>
+<span class="line" id="L71"></span>
+<span class="line" id="L72">            <span class="tok-builtin">@memcpy</span>(items[<span class="tok-number">0</span>..index], self.items[<span class="tok-number">0</span>..index]);</span>
+<span class="line" id="L73">            <span class="tok-builtin">@memcpy</span>(items[index + <span class="tok-number">1</span> ..], self.items[index..]);</span>
+<span class="line" id="L74">            items[index] = t;</span>
+<span class="line" id="L75"></span>
+<span class="line" id="L76">            self.items = &amp;items;</span>
+<span class="line" id="L77">        }</span>
+<span class="line" id="L78"></span>
+<span class="line" id="L79">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">replace</span>(<span class="tok-kw">comptime</span> self: *Self, <span class="tok-kw">comptime</span> index: <span class="tok-type">usize</span>, <span class="tok-kw">comptime</span> t: T) <span class="tok-type">void</span> {</span>
+<span class="line" id="L80">            <span class="tok-kw">var</span> items: [self.items.len]T = <span class="tok-null">undefined</span>;</span>
+<span class="line" id="L81">            <span class="tok-builtin">@memcpy</span>(&amp;items, self.items);</span>
+<span class="line" id="L82"></span>
+<span class="line" id="L83">            items[index] = t;</span>
+<span class="line" id="L84"></span>
+<span class="line" id="L85">            self.items = &amp;items;</span>
+<span class="line" id="L86">        }</span>
+<span class="line" id="L87">    };</span>
+<span class="line" id="L88">}</span>
+<span class="line" id="L89"></span>
+<span class="line" id="L90"><span class="tok-kw">test</span> ComptimeList {</span>
+<span class="line" id="L91">    <span class="tok-kw">const</span> list = <span class="tok-kw">comptime</span> blk: {</span>
+<span class="line" id="L92">        <span class="tok-kw">var</span> list = ComptimeList(<span class="tok-type">usize</span>).fromSlice(&amp;.{ <span class="tok-number">1</span>, <span class="tok-number">2</span>, <span class="tok-number">3</span> });</span>
+<span class="line" id="L93">        list.append(<span class="tok-number">4</span>);</span>
+<span class="line" id="L94">        list.replace(<span class="tok-number">0</span>, <span class="tok-number">5</span>);</span>
+<span class="line" id="L95">        <span class="tok-kw">break</span> :blk list;</span>
+<span class="line" id="L96">    };</span>
+<span class="line" id="L97">    <span class="tok-kw">try</span> std.testing.expectEqualSlices(<span class="tok-type">usize</span>, &amp;.{ <span class="tok-number">5</span>, <span class="tok-number">2</span>, <span class="tok-number">3</span>, <span class="tok-number">4</span> }, list.items);</span>
+<span class="line" id="L98">}</span>
+<span class="line" id="L99"></span>
+<span class="line" id="L100"><span class="tok-kw">pub</span> <span class="tok-kw">const</span> Utp = *<span class="tok-kw">const</span> <span class="tok-kw">opaque</span> {};</span>
+<span class="line" id="L101"><span class="tok-kw">pub</span> <span class="tok-kw">const</span> utpOf = <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L102">    <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">utpOf</span>(<span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>) Utp {</span>
+<span class="line" id="L103">        <span class="tok-kw">comptime</span> <span class="tok-kw">return</span> utpOfImpl(T);</span>
+<span class="line" id="L104">    }</span>
+<span class="line" id="L105">    <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">utpOfImpl</span>(<span class="tok-kw">comptime</span> T: <span class="tok-type">type</span>) Utp {</span>
+<span class="line" id="L106">        _ = T;</span>
+<span class="line" id="L107">        <span class="tok-kw">const</span> gen = <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L108">            <span class="tok-kw">var</span> id: <span class="tok-type">u1</span> = <span class="tok-null">undefined</span>;</span>
+<span class="line" id="L109">        };</span>
+<span class="line" id="L110">        <span class="tok-kw">return</span> <span class="tok-builtin">@ptrCast</span>(&amp;gen.id);</span>
+<span class="line" id="L111">    }</span>
+<span class="line" id="L112">}.utpOf;</span>
+<span class="line" id="L113"></span>
+<span class="line" id="L114"><span class="tok-comment">//pub const UniqueTypePtr = *const anyopaque;</span>
+</span>
+<span class="line" id="L115"><span class="tok-comment">//pub fn uniqueTypePtr(comptime T: type) UniqueTypePtr {</span>
+</span>
+<span class="line" id="L116"><span class="tok-comment">//    return @typeName(T);</span>
+</span>
+<span class="line" id="L117"><span class="tok-comment">//}</span>
+</span>
+<span class="line" id="L118"></span>
+<span class="line" id="L119"><span class="tok-comment">//pub const TypeId = u64;</span>
+</span>
+<span class="line" id="L120"><span class="tok-comment">//var id_counter: u64 = 0;</span>
+</span>
+<span class="line" id="L121"><span class="tok-comment">//pub fn typeId(comptime T: type) u64 {</span>
+</span>
+<span class="line" id="L122"><span class="tok-comment">//    _ = T;</span>
+</span>
+<span class="line" id="L123"><span class="tok-comment">//    const static = struct {</span>
+</span>
+<span class="line" id="L124"><span class="tok-comment">//        var id: ?u64 = null;</span>
+</span>
+<span class="line" id="L125"><span class="tok-comment">//    };</span>
+</span>
+<span class="line" id="L126"><span class="tok-comment">//    const result = static.id orelse blk: {</span>
+</span>
+<span class="line" id="L127"><span class="tok-comment">//        static.id = id_counter;</span>
+</span>
+<span class="line" id="L128"><span class="tok-comment">//        id_counter += 1;</span>
+</span>
+<span class="line" id="L129"><span class="tok-comment">//        break :blk static.id.?;</span>
+</span>
+<span class="line" id="L130"><span class="tok-comment">//    };</span>
+</span>
+<span class="line" id="L131"><span class="tok-comment">//    return result;</span>
+</span>
+<span class="line" id="L132"><span class="tok-comment">//}</span>
+</span>
+<span class="line" id="L133"></span>
+</code></pre></body>
+</html>

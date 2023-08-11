@@ -1,16 +1,9 @@
-//!zig-autodoc-guide: docs/README.md
-//!zig-autodoc-guide: docs/installation.md
-//!zig-autodoc-guide: docs/hello_world.md
-//!zig-autodoc-guide: docs/queries.md
-//!zig-autodoc-guide: docs/resources.md
-//!zig-autodoc-guide: docs/stages.md
-//!zig-autodoc-guide: docs/system_ordering.md
-//!zig-autodoc-guide: docs/events.md
-//!zig-autodoc-guide: docs/builtin_mods.md
-
 const std = @import("std");
 
+/// A unique ID that is assigned to each entity
 pub const Entity = usize;
+
+/// An Entity and a Commands grouped together for acting on a specific entity
 pub const EntityHandle = @import("entity_handle.zig");
 
 pub usingnamespace @import("events.zig");
@@ -27,8 +20,13 @@ pub const Vec2 = @import("math/vec2.zig").Vec2;
 pub const Vec3 = @import("math/vec3.zig").Vec3;
 pub const Vec4 = @import("math/vec4.zig").Vec4;
 
+/// Shorthand for ztg.Vec2.init
 pub const vec2 = Vec2.init;
+
+/// Shorthand for ztg.Vec3.init
 pub const vec3 = Vec3.init;
+
+/// Shorthand for ztg.Vec4.init
 pub const vec4 = Vec4.init;
 
 //pub const Mat3 = @import("math/mat3.zig");
@@ -40,12 +38,16 @@ pub const base = @import("mods/base/init.zig");
 pub const input = @import("mods/input.zig");
 //pub const physics = @import("mods/physics.zig");
 
+/// Zentig's scoped logging functions
 pub const log = std.log.scoped(.zentig);
 
 pub const meta = @import("meta.zig");
 pub const profiler = @import("etc/profiler.zig");
 
+/// A resource that can be requested, represents an arena allocator that gets reset each frame
 pub const FrameAlloc = struct { std.mem.Allocator };
+
+/// Reason for an internal world crash
 pub const CrashReason = enum { hit_ent_limit };
 
 test {

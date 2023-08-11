@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <title>system_order.zig - source view</title>
+    <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAPNJREFUeNpi/P//PwMlgOXHUjly9E0G4hwgZmQiQZMqEK8H4v9QzUEgQSaoADK+zhH9iAGL+C0gDoAaNg9mGLoLfgA1awK9hS9gzgJxA9RQBmQDrgMxJzRMGKE4HYj/Ial5A8QmQLwCJoBsgBYW2+TR1ChDaWt4LOBxKsi/VUh8XiD+gq4IVyzwQAMJBoKwacZlAB8Qf0bi96IZhtOAe1D6LpqaEiz6rmEzQAeIzwGxCJpieFqApo/vQKyJboAaEBsAsSEupwI1MwKjGBTVHOhegMX5UajYRqiBjMgYmj400cVh0XgTiKdC0zhJgJHS7AwQYABm9EAdCKrEfAAAAABJRU5ErkJggg=="/>
+    <style>
+      body{
+        font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
+        margin: 0;
+        line-height: 1.5;
+      }
+
+      pre > code {
+        display: block;
+        overflow: auto;
+        line-height: normal;
+        margin: 0em;
+      }
+      .tok-kw {
+          color: #333;
+          font-weight: bold;
+      }
+      .tok-str {
+          color: #d14;
+      }
+      .tok-builtin {
+          color: #005C7A;
+      }
+      .tok-comment {
+          color: #545454;
+          font-style: italic;
+      }
+      .tok-fn {
+          color: #900;
+          font-weight: bold;
+      }
+      .tok-null {
+          color: #005C5C;
+      }
+      .tok-number {
+          color: #005C5C;
+      }
+      .tok-type {
+          color: #458;
+          font-weight: bold;
+      }
+      pre {
+        counter-reset: line;
+      }
+      pre .line:before {
+        counter-increment: line;
+        content: counter(line);
+        display: inline-block;
+        padding-right: 1em;
+        width: 2em;
+        text-align: right;
+        color: #999;
+      }
+      
+      .line {
+        width: 100%;
+        display: inline-block;
+      }
+      .line:target {
+        border-top: 1px solid #ccc;
+        border-bottom: 1px solid #ccc;
+        background: #fafafa;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body{
+            background:#222;
+            color: #ccc;
+        }
+        pre > code {
+            color: #ccc;
+            background: #222;
+            border: unset;
+        }
+        .line:target {
+            border-top: 1px solid #444;
+            border-bottom: 1px solid #444;
+            background: #333;
+        }
+        .tok-kw {
+            color: #eee;
+        }
+        .tok-str {
+            color: #2e5;
+        }
+        .tok-builtin {
+            color: #ff894c;
+        }
+        .tok-comment {
+            color: #aa7;
+        }
+        .tok-fn {
+            color: #B1A0F8;
+        }
+        .tok-null {
+            color: #ff8080;
+        }
+        .tok-number {
+            color: #ff8080;
+        }
+        .tok-type {
+            color: #68f;
+        }
+      }
+    </style>
+</head>
+<body>
+<pre><code><span class="line" id="L1"><span class="tok-kw">const</span> std = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;std&quot;</span>);</span>
+<span class="line" id="L2"><span class="tok-kw">const</span> ztg = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;init.zig&quot;</span>);</span>
+<span class="line" id="L3"></span>
+<span class="line" id="L4"><span class="tok-comment">/// An enum describing the three possible orderings for</span></span>
+<span class="line" id="L5"><span class="tok-comment">/// a system within a label.</span></span>
+<span class="line" id="L6"><span class="tok-kw">pub</span> <span class="tok-kw">const</span> SystemOrder = <span class="tok-kw">enum</span> {</span>
+<span class="line" id="L7">    before,</span>
+<span class="line" id="L8">    during,</span>
+<span class="line" id="L9">    after,</span>
+<span class="line" id="L10">};</span>
+<span class="line" id="L11"></span>
+<span class="line" id="L12"><span class="tok-kw">fn</span> <span class="tok-fn">Bind</span>(<span class="tok-kw">comptime</span> _label: ztg.meta.EnumLiteral, <span class="tok-kw">comptime</span> f: <span class="tok-kw">anytype</span>, <span class="tok-kw">comptime</span> offset: SystemOrder) <span class="tok-type">type</span> {</span>
+<span class="line" id="L13">    <span class="tok-kw">return</span> <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L14">        <span class="tok-kw">comptime</span> label: ztg.meta.EnumLiteral = _label,</span>
+<span class="line" id="L15">        <span class="tok-kw">comptime</span> f: <span class="tok-builtin">@TypeOf</span>(f) = f,</span>
+<span class="line" id="L16">        <span class="tok-kw">comptime</span> offset: SystemOrder = offset,</span>
+<span class="line" id="L17">    };</span>
+<span class="line" id="L18">}</span>
+<span class="line" id="L19"></span>
+<span class="line" id="L20"><span class="tok-comment">/// Equivelent to calling `before`, `during`, or `after` depending on the `offset` parameter</span></span>
+<span class="line" id="L21"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">ordered</span>(<span class="tok-kw">comptime</span> _label: ztg.meta.EnumLiteral, <span class="tok-kw">comptime</span> f: <span class="tok-kw">anytype</span>, <span class="tok-kw">comptime</span> offset: SystemOrder) Bind(_label, f, offset) {</span>
+<span class="line" id="L22">    <span class="tok-kw">return</span> .{};</span>
+<span class="line" id="L23">}</span>
+<span class="line" id="L24"></span>
+<span class="line" id="L25"><span class="tok-comment">/// Makes the system `f` invoke _before_ the specified label</span></span>
+<span class="line" id="L26"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">before</span>(<span class="tok-kw">comptime</span> _label: ztg.meta.EnumLiteral, <span class="tok-kw">comptime</span> f: <span class="tok-kw">anytype</span>) Bind(_label, f, .before) {</span>
+<span class="line" id="L27">    <span class="tok-kw">return</span> .{};</span>
+<span class="line" id="L28">}</span>
+<span class="line" id="L29"></span>
+<span class="line" id="L30"><span class="tok-comment">/// Makes the system `f` invoke _during_ the specified label</span></span>
+<span class="line" id="L31"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">during</span>(<span class="tok-kw">comptime</span> _label: ztg.meta.EnumLiteral, <span class="tok-kw">comptime</span> f: <span class="tok-kw">anytype</span>) Bind(_label, f, .during) {</span>
+<span class="line" id="L32">    <span class="tok-kw">return</span> .{};</span>
+<span class="line" id="L33">}</span>
+<span class="line" id="L34"></span>
+<span class="line" id="L35"><span class="tok-comment">/// Makes the system `f` invoke _after_ the specified label</span></span>
+<span class="line" id="L36"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">after</span>(<span class="tok-kw">comptime</span> _label: ztg.meta.EnumLiteral, <span class="tok-kw">comptime</span> f: <span class="tok-kw">anytype</span>) Bind(_label, f, .after) {</span>
+<span class="line" id="L37">    <span class="tok-kw">return</span> .{};</span>
+<span class="line" id="L38">}</span>
+<span class="line" id="L39"></span>
+</code></pre></body>
+</html>

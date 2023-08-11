@@ -3,6 +3,7 @@ const ztg = @import("../init.zig");
 const math = std.math;
 const util = ztg.util;
 
+/// A vector of 3 `f32`s
 pub const Vec3 = extern struct {
     const vec_funcs = @import("vec_funcs.zig");
     pub usingnamespace vec_funcs.init(Vec3);

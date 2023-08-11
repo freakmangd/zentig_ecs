@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <title>mods\input.zig - source view</title>
+    <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAPNJREFUeNpi/P//PwMlgOXHUjly9E0G4hwgZmQiQZMqEK8H4v9QzUEgQSaoADK+zhH9iAGL+C0gDoAaNg9mGLoLfgA1awK9hS9gzgJxA9RQBmQDrgMxJzRMGKE4HYj/Ial5A8QmQLwCJoBsgBYW2+TR1ChDaWt4LOBxKsi/VUh8XiD+gq4IVyzwQAMJBoKwacZlAB8Qf0bi96IZhtOAe1D6LpqaEiz6rmEzQAeIzwGxCJpieFqApo/vQKyJboAaEBsAsSEupwI1MwKjGBTVHOhegMX5UajYRqiBjMgYmj400cVh0XgTiKdC0zhJgJHS7AwQYABm9EAdCKrEfAAAAABJRU5ErkJggg=="/>
+    <style>
+      body{
+        font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
+        margin: 0;
+        line-height: 1.5;
+      }
+
+      pre > code {
+        display: block;
+        overflow: auto;
+        line-height: normal;
+        margin: 0em;
+      }
+      .tok-kw {
+          color: #333;
+          font-weight: bold;
+      }
+      .tok-str {
+          color: #d14;
+      }
+      .tok-builtin {
+          color: #005C7A;
+      }
+      .tok-comment {
+          color: #545454;
+          font-style: italic;
+      }
+      .tok-fn {
+          color: #900;
+          font-weight: bold;
+      }
+      .tok-null {
+          color: #005C5C;
+      }
+      .tok-number {
+          color: #005C5C;
+      }
+      .tok-type {
+          color: #458;
+          font-weight: bold;
+      }
+      pre {
+        counter-reset: line;
+      }
+      pre .line:before {
+        counter-increment: line;
+        content: counter(line);
+        display: inline-block;
+        padding-right: 1em;
+        width: 2em;
+        text-align: right;
+        color: #999;
+      }
+      
+      .line {
+        width: 100%;
+        display: inline-block;
+      }
+      .line:target {
+        border-top: 1px solid #ccc;
+        border-bottom: 1px solid #ccc;
+        background: #fafafa;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body{
+            background:#222;
+            color: #ccc;
+        }
+        pre > code {
+            color: #ccc;
+            background: #222;
+            border: unset;
+        }
+        .line:target {
+            border-top: 1px solid #444;
+            border-bottom: 1px solid #444;
+            background: #333;
+        }
+        .tok-kw {
+            color: #eee;
+        }
+        .tok-str {
+            color: #2e5;
+        }
+        .tok-builtin {
+            color: #ff894c;
+        }
+        .tok-comment {
+            color: #aa7;
+        }
+        .tok-fn {
+            color: #B1A0F8;
+        }
+        .tok-null {
+            color: #ff8080;
+        }
+        .tok-number {
+            color: #ff8080;
+        }
+        .tok-type {
+            color: #68f;
+        }
+      }
+    </style>
+</head>
+<body>
+<pre><code><span class="line" id="L1"><span class="tok-kw">const</span> std = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;std&quot;</span>);</span>
+<span class="line" id="L2"><span class="tok-kw">const</span> ztg = <span class="tok-builtin">@import</span>(<span class="tok-str">&quot;../init.zig&quot;</span>);</span>
+<span class="line" id="L3"><span class="tok-kw">const</span> log = std.log.scoped(.zentig_input);</span>
+<span class="line" id="L4"></span>
+<span class="line" id="L5"><span class="tok-kw">const</span> Options = <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L6">    max_controllers: <span class="tok-type">usize</span> = <span class="tok-number">4</span>,</span>
+<span class="line" id="L7">    update_stage: <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L8">        stage: <span class="tok-builtin">@TypeOf</span>(.enum_literal) = .update,</span>
+<span class="line" id="L9">        label: <span class="tok-builtin">@TypeOf</span>(.enum_literal) = .body,</span>
+<span class="line" id="L10">        order: ztg.SystemOrder = .during,</span>
+<span class="line" id="L11">    } = .{},</span>
+<span class="line" id="L12">};</span>
+<span class="line" id="L13"></span>
+<span class="line" id="L14"><span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">Build</span>(</span>
+<span class="line" id="L15">    <span class="tok-kw">comptime</span> Wrapper: <span class="tok-type">type</span>,</span>
+<span class="line" id="L16">    <span class="tok-kw">comptime</span> button_literals: <span class="tok-kw">anytype</span>,</span>
+<span class="line" id="L17">    <span class="tok-kw">comptime</span> axis_literals: <span class="tok-kw">anytype</span>,</span>
+<span class="line" id="L18">    <span class="tok-kw">comptime</span> options: Options,</span>
+<span class="line" id="L19">) <span class="tok-type">type</span> {</span>
+<span class="line" id="L20">    <span class="tok-kw">const</span> ButtonBindings = blk: {</span>
+<span class="line" id="L21">        <span class="tok-kw">var</span> buttons_tb = ztg.meta.TypeBuilder{};</span>
+<span class="line" id="L22">        <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (button_literals) |b| {</span>
+<span class="line" id="L23">            buttons_tb.addField(<span class="tok-builtin">@tagName</span>(b), []<span class="tok-kw">const</span> Wrapper.ButtonType, <span class="tok-builtin">@ptrCast</span>(&amp;<span class="tok-builtin">@as</span>([]<span class="tok-kw">const</span> Wrapper.ButtonType, &amp;.{})));</span>
+<span class="line" id="L24">        }</span>
+<span class="line" id="L25">        <span class="tok-kw">break</span> :blk buttons_tb.Build();</span>
+<span class="line" id="L26">    };</span>
+<span class="line" id="L27"></span>
+<span class="line" id="L28">    <span class="tok-kw">const</span> AxesBindings = blk: {</span>
+<span class="line" id="L29">        <span class="tok-kw">var</span> axes_tb = ztg.meta.TypeBuilder{};</span>
+<span class="line" id="L30">        <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (axis_literals) |a| {</span>
+<span class="line" id="L31">            axes_tb.addField(<span class="tok-builtin">@tagName</span>(a), []<span class="tok-kw">const</span> Wrapper.AxisType, <span class="tok-builtin">@ptrCast</span>(&amp;<span class="tok-builtin">@as</span>([]<span class="tok-kw">const</span> Wrapper.AxisType, &amp;.{})));</span>
+<span class="line" id="L32">        }</span>
+<span class="line" id="L33">        <span class="tok-kw">break</span> :blk axes_tb.Build();</span>
+<span class="line" id="L34">    };</span>
+<span class="line" id="L35"></span>
+<span class="line" id="L36">    <span class="tok-kw">const</span> AddBindings = <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L37">        buttons: ButtonBindings = .{},</span>
+<span class="line" id="L38">        axes: AxesBindings = .{},</span>
+<span class="line" id="L39">    };</span>
+<span class="line" id="L40"></span>
+<span class="line" id="L41">    <span class="tok-kw">return</span> <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L42">        <span class="tok-kw">pub</span> <span class="tok-kw">const</span> Buttons = EnumFromLiterals(button_literals);</span>
+<span class="line" id="L43">        <span class="tok-kw">pub</span> <span class="tok-kw">const</span> Axes = EnumFromLiterals(axis_literals);</span>
+<span class="line" id="L44">        <span class="tok-kw">const</span> Controller = ControllerBuilder(Buttons, Axes, Wrapper.ButtonType, Wrapper.AxisType);</span>
+<span class="line" id="L45"></span>
+<span class="line" id="L46">        <span class="tok-kw">const</span> Self = <span class="tok-builtin">@This</span>();</span>
+<span class="line" id="L47"></span>
+<span class="line" id="L48">        alloc: std.mem.Allocator = <span class="tok-null">undefined</span>,</span>
+<span class="line" id="L49">        controllers: [options.max_controllers]Controller = <span class="tok-null">undefined</span>,</span>
+<span class="line" id="L50"></span>
+<span class="line" id="L51">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">addBindings</span>(self: *Self, controller: <span class="tok-type">usize</span>, bindings: AddBindings) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L52">            <span class="tok-kw">try</span> self.addButtonBindings(controller, bindings.buttons);</span>
+<span class="line" id="L53">            <span class="tok-kw">try</span> self.addAxisBindings(controller, bindings.axes);</span>
+<span class="line" id="L54">        }</span>
+<span class="line" id="L55"></span>
+<span class="line" id="L56">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">addButtonBinding</span>(self: *Self, controller: <span class="tok-type">usize</span>, button: Buttons, binding: Wrapper.ButtonType) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L57">            <span class="tok-kw">try</span> self.controllers[controller].button_bindings.append(self.alloc, .{</span>
+<span class="line" id="L58">                .index = <span class="tok-builtin">@intFromEnum</span>(button),</span>
+<span class="line" id="L59">                .binding = binding,</span>
+<span class="line" id="L60">            });</span>
+<span class="line" id="L61">        }</span>
+<span class="line" id="L62"></span>
+<span class="line" id="L63">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">addButtonBindings</span>(self: *Self, controller: <span class="tok-type">usize</span>, bindings: ButtonBindings) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L64">            <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (<span class="tok-builtin">@typeInfo</span>(ButtonBindings).Struct.fields) |field| {</span>
+<span class="line" id="L65">                <span class="tok-kw">for</span> (<span class="tok-builtin">@field</span>(bindings, field.name)) |b| {</span>
+<span class="line" id="L66">                    <span class="tok-kw">try</span> self.addButtonBinding(controller, <span class="tok-builtin">@field</span>(Buttons, field.name), b);</span>
+<span class="line" id="L67">                }</span>
+<span class="line" id="L68">            }</span>
+<span class="line" id="L69">        }</span>
+<span class="line" id="L70"></span>
+<span class="line" id="L71">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">addAxisBinding</span>(self: *Self, controller: <span class="tok-type">usize</span>, axis: Axes, binding: Wrapper.AxisType) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L72">            <span class="tok-kw">try</span> self.controllers[controller].axis_bindings.append(self.alloc, .{</span>
+<span class="line" id="L73">                .index = <span class="tok-builtin">@intFromEnum</span>(axis),</span>
+<span class="line" id="L74">                .binding = binding,</span>
+<span class="line" id="L75">            });</span>
+<span class="line" id="L76">        }</span>
+<span class="line" id="L77"></span>
+<span class="line" id="L78">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">addAxisBindings</span>(self: *Self, controller: <span class="tok-type">usize</span>, bindings: AxesBindings) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L79">            <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (<span class="tok-builtin">@typeInfo</span>(AxesBindings).Struct.fields) |field| {</span>
+<span class="line" id="L80">                <span class="tok-kw">for</span> (<span class="tok-builtin">@field</span>(bindings, field.name)) |a| {</span>
+<span class="line" id="L81">                    <span class="tok-kw">try</span> self.addAxisBinding(controller, <span class="tok-builtin">@field</span>(Axes, field.name), a);</span>
+<span class="line" id="L82">                }</span>
+<span class="line" id="L83">            }</span>
+<span class="line" id="L84">        }</span>
+<span class="line" id="L85"></span>
+<span class="line" id="L86">        <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">clearAllBindings</span>(self: *Self) <span class="tok-type">void</span> {</span>
+<span class="line" id="L87">            <span class="tok-kw">for</span> (<span class="tok-number">0</span>..self.controllers.len) |c| self.clearBindings(c);</span>
+<span class="line" id="L88">        }</span>
+<span class="line" id="L89"></span>
+<span class="line" id="L90">        <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">clearBindings</span>(self: *Self, controller: <span class="tok-type">usize</span>) <span class="tok-type">void</span> {</span>
+<span class="line" id="L91">            self.clearButtonBindings(controller);</span>
+<span class="line" id="L92">            self.clearAxisBindings(controller);</span>
+<span class="line" id="L93">        }</span>
+<span class="line" id="L94"></span>
+<span class="line" id="L95">        <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">clearButtonBindings</span>(self: *Self, controller: <span class="tok-type">usize</span>) <span class="tok-type">void</span> {</span>
+<span class="line" id="L96">            self.controllers[controller].button_bindings.clearRetainingCapacity();</span>
+<span class="line" id="L97">        }</span>
+<span class="line" id="L98"></span>
+<span class="line" id="L99">        <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">clearAxisBindings</span>(self: *Self, controller: <span class="tok-type">usize</span>) <span class="tok-type">void</span> {</span>
+<span class="line" id="L100">            self.controllers[controller].axis_bindings.clearRetainingCapacity();</span>
+<span class="line" id="L101">        }</span>
+<span class="line" id="L102"></span>
+<span class="line" id="L103">        <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">isDown</span>(self: Self, controller: <span class="tok-type">usize</span>, button: Buttons) <span class="tok-type">bool</span> {</span>
+<span class="line" id="L104">            <span class="tok-kw">return</span> self.controllers[controller].buttons.isSet(<span class="tok-builtin">@as</span>(<span class="tok-type">usize</span>, <span class="tok-builtin">@intCast</span>(<span class="tok-builtin">@intFromEnum</span>(button))) * <span class="tok-number">3</span>);</span>
+<span class="line" id="L105">        }</span>
+<span class="line" id="L106"></span>
+<span class="line" id="L107">        <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">isPressed</span>(self: Self, controller: <span class="tok-type">usize</span>, button: Buttons) <span class="tok-type">bool</span> {</span>
+<span class="line" id="L108">            <span class="tok-kw">return</span> self.controllers[controller].buttons.isSet((<span class="tok-builtin">@as</span>(<span class="tok-type">usize</span>, <span class="tok-builtin">@intCast</span>(<span class="tok-builtin">@intFromEnum</span>(button))) * <span class="tok-number">3</span>) + <span class="tok-number">1</span>);</span>
+<span class="line" id="L109">        }</span>
+<span class="line" id="L110"></span>
+<span class="line" id="L111">        <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">isReleased</span>(self: Self, controller: <span class="tok-type">usize</span>, button: Buttons) <span class="tok-type">bool</span> {</span>
+<span class="line" id="L112">            <span class="tok-kw">return</span> self.controllers[controller].buttons.isSet((<span class="tok-builtin">@as</span>(<span class="tok-type">usize</span>, <span class="tok-builtin">@intCast</span>(<span class="tok-builtin">@intFromEnum</span>(button))) * <span class="tok-number">3</span>) + <span class="tok-number">2</span>);</span>
+<span class="line" id="L113">        }</span>
+<span class="line" id="L114"></span>
+<span class="line" id="L115">        <span class="tok-kw">pub</span> <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">getAxis</span>(self: Self, controller: <span class="tok-type">usize</span>, axis: Axes) <span class="tok-type">f32</span> {</span>
+<span class="line" id="L116">            <span class="tok-kw">return</span> self.controllers[controller].axes[<span class="tok-builtin">@intFromEnum</span>(axis)];</span>
+<span class="line" id="L117">        }</span>
+<span class="line" id="L118"></span>
+<span class="line" id="L119">        <span class="tok-comment">/// Writes controller bindings to a file</span></span>
+<span class="line" id="L120">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">exportBindings</span>(self: Self, file_name: []<span class="tok-kw">const</span> <span class="tok-type">u8</span>) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L121">            <span class="tok-kw">var</span> file = <span class="tok-kw">try</span> std.fs.cwd().createFile(file_name, .{ .truncate = <span class="tok-null">true</span> });</span>
+<span class="line" id="L122">            <span class="tok-kw">defer</span> file.close();</span>
+<span class="line" id="L123"></span>
+<span class="line" id="L124">            <span class="tok-kw">try</span> self.writeBindings(file.writer());</span>
+<span class="line" id="L125">        }</span>
+<span class="line" id="L126"></span>
+<span class="line" id="L127">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">writeBindings</span>(self: Self, writer: <span class="tok-kw">anytype</span>) !<span class="tok-type">void</span> {</span>
+<span class="line" id="L128">            <span class="tok-kw">for</span> (self.controllers, <span class="tok-number">0</span>..) |contr, i| {</span>
+<span class="line" id="L129">                <span class="tok-kw">try</span> writer.print(<span class="tok-str">&quot;controller {}:\n&quot;</span>, .{i});</span>
+<span class="line" id="L130">                <span class="tok-kw">for</span> (contr.button_bindings.items) |bb| {</span>
+<span class="line" id="L131">                    <span class="tok-kw">try</span> writer.print(<span class="tok-str">&quot;{}=&quot;</span>, .{bb.index});</span>
+<span class="line" id="L132">                    <span class="tok-kw">try</span> Wrapper.exportButtonBinding(writer, bb.binding);</span>
+<span class="line" id="L133">                    <span class="tok-kw">try</span> writer.print(<span class="tok-str">&quot;\n&quot;</span>, .{});</span>
+<span class="line" id="L134">                }</span>
+<span class="line" id="L135"></span>
+<span class="line" id="L136">                <span class="tok-kw">try</span> writer.print(<span class="tok-str">&quot;axes:\n&quot;</span>, .{});</span>
+<span class="line" id="L137">                <span class="tok-kw">for</span> (contr.axis_bindings.items) |ab| {</span>
+<span class="line" id="L138">                    <span class="tok-kw">try</span> writer.print(<span class="tok-str">&quot;{}=&quot;</span>, .{ab.index});</span>
+<span class="line" id="L139">                    <span class="tok-kw">try</span> Wrapper.exportAxisBinding(writer, ab.binding);</span>
+<span class="line" id="L140">                    <span class="tok-kw">try</span> writer.print(<span class="tok-str">&quot;\n&quot;</span>, .{});</span>
+<span class="line" id="L141">                }</span>
+<span class="line" id="L142">            }</span>
+<span class="line" id="L143">        }</span>
+<span class="line" id="L144"></span>
+<span class="line" id="L145">        <span class="tok-comment">/// Tries to find the controller bindings file, returns true if it is and imported correctly.</span></span>
+<span class="line" id="L146">        <span class="tok-comment">/// Use this to check for bindings before appending defaults.</span></span>
+<span class="line" id="L147">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">importBindings</span>(self: *Self, file_name: []<span class="tok-kw">const</span> <span class="tok-type">u8</span>) <span class="tok-type">bool</span> {</span>
+<span class="line" id="L148">            <span class="tok-kw">var</span> file = std.fs.cwd().openFile(file_name, .{}) <span class="tok-kw">catch</span> |err| <span class="tok-kw">switch</span> (err) {</span>
+<span class="line" id="L149">                <span class="tok-kw">error</span>.FileNotFound =&gt; {</span>
+<span class="line" id="L150">                    log.info(<span class="tok-str">&quot;Could not find bindings file.&quot;</span>, .{});</span>
+<span class="line" id="L151">                    <span class="tok-kw">return</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L152">                },</span>
+<span class="line" id="L153">                <span class="tok-kw">else</span> =&gt; {</span>
+<span class="line" id="L154">                    log.err(<span class="tok-str">&quot;Could not open bindings file due to: {}&quot;</span>, .{err});</span>
+<span class="line" id="L155">                    <span class="tok-kw">return</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L156">                },</span>
+<span class="line" id="L157">            };</span>
+<span class="line" id="L158">            <span class="tok-kw">defer</span> file.close();</span>
+<span class="line" id="L159"></span>
+<span class="line" id="L160">            <span class="tok-kw">defer</span> <span class="tok-kw">for</span> (self.controllers) |c| {</span>
+<span class="line" id="L161">                <span class="tok-kw">if</span> (c.button_bindings.items.len + c.axis_bindings.items.len == <span class="tok-number">0</span>)</span>
+<span class="line" id="L162">                    log.warn(<span class="tok-str">&quot;Found 0 bindings for controller {} after importing file.&quot;</span>, .{c});</span>
+<span class="line" id="L163">            };</span>
+<span class="line" id="L164">            <span class="tok-kw">return</span> self.readBindings(file.reader());</span>
+<span class="line" id="L165">        }</span>
+<span class="line" id="L166"></span>
+<span class="line" id="L167">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">readBindings</span>(self: *Self, reader: <span class="tok-kw">anytype</span>) <span class="tok-type">bool</span> {</span>
+<span class="line" id="L168">            self.clearAllBindings();</span>
+<span class="line" id="L169">            <span class="tok-kw">const</span> res = self.importBindingsInternal(reader);</span>
+<span class="line" id="L170">            <span class="tok-kw">if</span> (!res) self.clearAllBindings();</span>
+<span class="line" id="L171">            <span class="tok-kw">return</span> res;</span>
+<span class="line" id="L172">        }</span>
+<span class="line" id="L173"></span>
+<span class="line" id="L174">        <span class="tok-kw">inline</span> <span class="tok-kw">fn</span> <span class="tok-fn">importBindingsInternal</span>(self: *Self, reader: <span class="tok-kw">anytype</span>) <span class="tok-type">bool</span> {</span>
+<span class="line" id="L175">            <span class="tok-kw">var</span> current_controller: <span class="tok-type">usize</span> = <span class="tok-number">0</span>;</span>
+<span class="line" id="L176">            <span class="tok-kw">var</span> read_mode: <span class="tok-kw">enum</span> {</span>
+<span class="line" id="L177">                buttons,</span>
+<span class="line" id="L178">                axes,</span>
+<span class="line" id="L179">            } = .buttons;</span>
+<span class="line" id="L180"></span>
+<span class="line" id="L181">            <span class="tok-kw">const</span> max_line_size = <span class="tok-number">200</span>;</span>
+<span class="line" id="L182">            <span class="tok-kw">var</span> line_buf: [max_line_size]<span class="tok-type">u8</span> = <span class="tok-null">undefined</span>;</span>
+<span class="line" id="L183">            <span class="tok-kw">var</span> file_bufferstream = std.io.fixedBufferStream(&amp;line_buf);</span>
+<span class="line" id="L184"></span>
+<span class="line" id="L185">            <span class="tok-kw">var</span> safety: <span class="tok-type">usize</span> = <span class="tok-number">0</span>;</span>
+<span class="line" id="L186"></span>
+<span class="line" id="L187">            <span class="tok-kw">while</span> (reader.streamUntilDelimiter(file_bufferstream.writer(), <span class="tok-str">'\n'</span>, max_line_size)) : (safety += <span class="tok-number">1</span>) {</span>
+<span class="line" id="L188">                <span class="tok-kw">if</span> (safety &gt; <span class="tok-number">1_000</span>) {</span>
+<span class="line" id="L189">                    log.err(<span class="tok-str">&quot;Hit loop limit for import of 1000 iterations&quot;</span>, .{});</span>
+<span class="line" id="L190">                    <span class="tok-kw">return</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L191">                }</span>
+<span class="line" id="L192"></span>
+<span class="line" id="L193">                <span class="tok-kw">defer</span> file_bufferstream.reset();</span>
+<span class="line" id="L194">                <span class="tok-kw">const</span> line = line_buf[<span class="tok-number">0</span>..file_bufferstream.pos];</span>
+<span class="line" id="L195"></span>
+<span class="line" id="L196">                <span class="tok-kw">if</span> (std.mem.startsWith(<span class="tok-type">u8</span>, line, <span class="tok-str">&quot;controller&quot;</span>)) {</span>
+<span class="line" id="L197">                    <span class="tok-kw">const</span> end_idx = std.mem.indexOf(<span class="tok-type">u8</span>, line, <span class="tok-str">&quot;:&quot;</span>) <span class="tok-kw">orelse</span> {</span>
+<span class="line" id="L198">                        log.err(<span class="tok-str">&quot;Bad formatted bindings file, no `:` character after controller index.&quot;</span>, .{});</span>
+<span class="line" id="L199">                        <span class="tok-kw">return</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L200">                    };</span>
+<span class="line" id="L201">                    current_controller = std.fmt.parseInt(<span class="tok-type">usize</span>, line[<span class="tok-number">11</span>..end_idx], <span class="tok-number">10</span>) <span class="tok-kw">catch</span> |err| {</span>
+<span class="line" id="L202">                        log.err(<span class="tok-str">&quot;Could not parse controller index integer due to {}&quot;</span>, .{err});</span>
+<span class="line" id="L203">                        <span class="tok-kw">return</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L204">                    };</span>
+<span class="line" id="L205">                    read_mode = .buttons;</span>
+<span class="line" id="L206">                } <span class="tok-kw">else</span> <span class="tok-kw">if</span> (std.mem.startsWith(<span class="tok-type">u8</span>, line, <span class="tok-str">&quot;axes:&quot;</span>)) {</span>
+<span class="line" id="L207">                    read_mode = .axes;</span>
+<span class="line" id="L208">                } <span class="tok-kw">else</span> {</span>
+<span class="line" id="L209">                    <span class="tok-kw">const</span> bd_eql_idx = getBindingIndexAndEqlsIndex(line) <span class="tok-kw">catch</span> <span class="tok-kw">return</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L210"></span>
+<span class="line" id="L211">                    <span class="tok-kw">const</span> binding_index = bd_eql_idx[<span class="tok-number">0</span>];</span>
+<span class="line" id="L212">                    <span class="tok-kw">const</span> eqls_idx = bd_eql_idx[<span class="tok-number">1</span>];</span>
+<span class="line" id="L213">                    <span class="tok-kw">const</span> binding_text = line[eqls_idx + <span class="tok-number">1</span> ..];</span>
+<span class="line" id="L214"></span>
+<span class="line" id="L215">                    <span class="tok-kw">const</span> ButtonIndex = std.math.IntFittingRange(<span class="tok-number">0</span>, button_literals.len);</span>
+<span class="line" id="L216">                    <span class="tok-kw">const</span> AxisIndex = std.math.IntFittingRange(<span class="tok-number">0</span>, axis_literals.len);</span>
+<span class="line" id="L217"></span>
+<span class="line" id="L218">                    <span class="tok-kw">switch</span> (read_mode) {</span>
+<span class="line" id="L219">                        .buttons =&gt; {</span>
+<span class="line" id="L220">                            self.controllers[current_controller].button_bindings.append(self.alloc, .{</span>
+<span class="line" id="L221">                                .index = std.math.cast(ButtonIndex, binding_index) <span class="tok-kw">orelse</span> {</span>
+<span class="line" id="L222">                                    log.err(<span class="tok-str">&quot;Index of button binding exceeded max range. Max: {}, Found {}&quot;</span>, .{ button_literals.len, binding_index });</span>
+<span class="line" id="L223">                                    <span class="tok-kw">return</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L224">                                },</span>
+<span class="line" id="L225">                                .binding = Wrapper.importButtonBinding(binding_text) <span class="tok-kw">catch</span> |err| {</span>
+<span class="line" id="L226">                                    log.err(<span class="tok-str">&quot;Could not import button binding due to {}&quot;</span>, .{err});</span>
+<span class="line" id="L227">                                    <span class="tok-kw">return</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L228">                                },</span>
+<span class="line" id="L229">                            }) <span class="tok-kw">catch</span> |err| {</span>
+<span class="line" id="L230">                                log.err(<span class="tok-str">&quot;Could not append to button bindings due to {}&quot;</span>, .{err});</span>
+<span class="line" id="L231">                                <span class="tok-kw">return</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L232">                            };</span>
+<span class="line" id="L233">                        },</span>
+<span class="line" id="L234">                        .axes =&gt; {</span>
+<span class="line" id="L235">                            self.controllers[current_controller].axis_bindings.append(self.alloc, .{</span>
+<span class="line" id="L236">                                .index = std.math.cast(AxisIndex, binding_index) <span class="tok-kw">orelse</span> {</span>
+<span class="line" id="L237">                                    log.err(<span class="tok-str">&quot;Index of axis binding exceeded max range. Max: {}, Found: {}&quot;</span>, .{ axis_literals.len, binding_index });</span>
+<span class="line" id="L238">                                    <span class="tok-kw">return</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L239">                                },</span>
+<span class="line" id="L240">                                .binding = Wrapper.importAxisBinding(binding_text) <span class="tok-kw">catch</span> |err| {</span>
+<span class="line" id="L241">                                    log.err(<span class="tok-str">&quot;Could not import axis binding due to {}&quot;</span>, .{err});</span>
+<span class="line" id="L242">                                    <span class="tok-kw">return</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L243">                                },</span>
+<span class="line" id="L244">                            }) <span class="tok-kw">catch</span> |err| {</span>
+<span class="line" id="L245">                                log.err(<span class="tok-str">&quot;Could not append to button bindings due to {}&quot;</span>, .{err});</span>
+<span class="line" id="L246">                                <span class="tok-kw">return</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L247">                            };</span>
+<span class="line" id="L248">                        },</span>
+<span class="line" id="L249">                    }</span>
+<span class="line" id="L250">                }</span>
+<span class="line" id="L251">            } <span class="tok-kw">else</span> |err| <span class="tok-kw">switch</span> (err) {</span>
+<span class="line" id="L252">                <span class="tok-kw">error</span>.EndOfStream =&gt; {</span>
+<span class="line" id="L253">                    log.info(<span class="tok-str">&quot;importing bindings: Hit end of stream&quot;</span>, .{});</span>
+<span class="line" id="L254">                },</span>
+<span class="line" id="L255">                <span class="tok-kw">else</span> =&gt; {</span>
+<span class="line" id="L256">                    log.err(<span class="tok-str">&quot;Cound not import bindings due to {}&quot;</span>, .{err});</span>
+<span class="line" id="L257">                    <span class="tok-kw">return</span> <span class="tok-null">false</span>;</span>
+<span class="line" id="L258">                },</span>
+<span class="line" id="L259">            }</span>
+<span class="line" id="L260"></span>
+<span class="line" id="L261">            log.info(<span class="tok-str">&quot;importing bindings: Finished successfully&quot;</span>, .{});</span>
+<span class="line" id="L262">            <span class="tok-kw">return</span> <span class="tok-null">true</span>;</span>
+<span class="line" id="L263">        }</span>
+<span class="line" id="L264"></span>
+<span class="line" id="L265">        <span class="tok-kw">fn</span> <span class="tok-fn">getBindingIndexAndEqlsIndex</span>(line: []<span class="tok-kw">const</span> <span class="tok-type">u8</span>) !<span class="tok-kw">struct</span> { <span class="tok-type">usize</span>, <span class="tok-type">usize</span> } {</span>
+<span class="line" id="L266">            <span class="tok-kw">const</span> eqls_idx = std.mem.indexOf(<span class="tok-type">u8</span>, line, <span class="tok-str">&quot;=&quot;</span>) <span class="tok-kw">orelse</span> {</span>
+<span class="line" id="L267">                log.err(<span class="tok-str">&quot;Bad formatted bindings file, no `=` character on binding line.&quot;</span>, .{});</span>
+<span class="line" id="L268">                <span class="tok-kw">return</span> <span class="tok-kw">error</span>.BadFormat;</span>
+<span class="line" id="L269">            };</span>
+<span class="line" id="L270">            <span class="tok-kw">const</span> binding_index = std.fmt.parseInt(<span class="tok-type">usize</span>, line[<span class="tok-number">0</span>..eqls_idx], <span class="tok-number">10</span>) <span class="tok-kw">catch</span> |err| {</span>
+<span class="line" id="L271">                log.err(<span class="tok-str">&quot;Could not parse controller binding index due to {}&quot;</span>, .{err});</span>
+<span class="line" id="L272">                <span class="tok-kw">return</span> <span class="tok-kw">error</span>.BadFormat;</span>
+<span class="line" id="L273">            };</span>
+<span class="line" id="L274"></span>
+<span class="line" id="L275">            <span class="tok-kw">return</span> .{ binding_index, eqls_idx };</span>
+<span class="line" id="L276">        }</span>
+<span class="line" id="L277"></span>
+<span class="line" id="L278">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">include</span>(<span class="tok-kw">comptime</span> wb: *ztg.WorldBuilder) <span class="tok-type">void</span> {</span>
+<span class="line" id="L279">            wb.addResource(Self, .{});</span>
+<span class="line" id="L280">            wb.addSystems(.{</span>
+<span class="line" id="L281">                .init = .{ini_Self},</span>
+<span class="line" id="L282">                .deinit = .{dei_Self},</span>
+<span class="line" id="L283">            });</span>
+<span class="line" id="L284">            wb.addSystemsToStage(options.update_stage.stage, .{ztg.ordered(options.update_stage.label, update_Self, options.update_stage.order)});</span>
+<span class="line" id="L285">        }</span>
+<span class="line" id="L286"></span>
+<span class="line" id="L287">        <span class="tok-kw">fn</span> <span class="tok-fn">ini_Self</span>(self: *Self, alloc: std.mem.Allocator) <span class="tok-type">void</span> {</span>
+<span class="line" id="L288">            <span class="tok-kw">for</span> (&amp;self.controllers) |*c| {</span>
+<span class="line" id="L289">                c.* = Controller.init();</span>
+<span class="line" id="L290">            }</span>
+<span class="line" id="L291"></span>
+<span class="line" id="L292">            self.alloc = alloc;</span>
+<span class="line" id="L293">        }</span>
+<span class="line" id="L294"></span>
+<span class="line" id="L295">        <span class="tok-kw">fn</span> <span class="tok-fn">update_Self</span>(self: *Self) <span class="tok-type">void</span> {</span>
+<span class="line" id="L296">            <span class="tok-kw">for</span> (&amp;self.controllers) |*ct| {</span>
+<span class="line" id="L297">                <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> button_literals.len &gt; <span class="tok-number">0</span>) {</span>
+<span class="line" id="L298">                    <span class="tok-kw">for</span> (ct.button_bindings.items) |bb| {</span>
+<span class="line" id="L299">                        <span class="tok-kw">const</span> is_down = Wrapper.isButtonDown(bb.binding);</span>
+<span class="line" id="L300">                        <span class="tok-kw">const</span> is_pres = Wrapper.isButtonPressed(bb.binding);</span>
+<span class="line" id="L301">                        <span class="tok-kw">const</span> is_rel = Wrapper.isButtonReleased(bb.binding);</span>
+<span class="line" id="L302">                        ct.buttons.setValue(<span class="tok-builtin">@as</span>(<span class="tok-type">usize</span>, bb.index) * <span class="tok-number">3</span>, is_down);</span>
+<span class="line" id="L303">                        ct.buttons.setValue(<span class="tok-builtin">@as</span>(<span class="tok-type">usize</span>, bb.index) * <span class="tok-number">3</span> + <span class="tok-number">1</span>, is_pres);</span>
+<span class="line" id="L304">                        ct.buttons.setValue(<span class="tok-builtin">@as</span>(<span class="tok-type">usize</span>, bb.index) * <span class="tok-number">3</span> + <span class="tok-number">2</span>, is_rel);</span>
+<span class="line" id="L305">                    }</span>
+<span class="line" id="L306">                }</span>
+<span class="line" id="L307">                <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> axis_literals.len &gt; <span class="tok-number">0</span>) {</span>
+<span class="line" id="L308">                    <span class="tok-kw">for</span> (ct.axis_bindings.items) |ab| {</span>
+<span class="line" id="L309">                        <span class="tok-kw">const</span> value = Wrapper.getAxis(ab.binding);</span>
+<span class="line" id="L310">                        ct.axes[ab.index] = value;</span>
+<span class="line" id="L311">                    }</span>
+<span class="line" id="L312">                }</span>
+<span class="line" id="L313">            }</span>
+<span class="line" id="L314">        }</span>
+<span class="line" id="L315"></span>
+<span class="line" id="L316">        <span class="tok-kw">fn</span> <span class="tok-fn">dei_Self</span>(self: *Self) <span class="tok-type">void</span> {</span>
+<span class="line" id="L317">            <span class="tok-kw">for</span> (&amp;self.controllers) |*con| {</span>
+<span class="line" id="L318">                <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> button_literals.len &gt; <span class="tok-number">0</span>) con.button_bindings.deinit(self.alloc);</span>
+<span class="line" id="L319">                <span class="tok-kw">if</span> (<span class="tok-kw">comptime</span> axis_literals.len &gt; <span class="tok-number">0</span>) con.axis_bindings.deinit(self.alloc);</span>
+<span class="line" id="L320">            }</span>
+<span class="line" id="L321">        }</span>
+<span class="line" id="L322">    };</span>
+<span class="line" id="L323">}</span>
+<span class="line" id="L324"></span>
+<span class="line" id="L325"><span class="tok-kw">fn</span> <span class="tok-fn">ControllerBuilder</span>(</span>
+<span class="line" id="L326">    <span class="tok-kw">comptime</span> Buttons: <span class="tok-type">type</span>,</span>
+<span class="line" id="L327">    <span class="tok-kw">comptime</span> Axes: <span class="tok-type">type</span>,</span>
+<span class="line" id="L328">    <span class="tok-kw">comptime</span> ButtonType: <span class="tok-type">type</span>,</span>
+<span class="line" id="L329">    <span class="tok-kw">comptime</span> AxisType: <span class="tok-type">type</span>,</span>
+<span class="line" id="L330">) <span class="tok-type">type</span> {</span>
+<span class="line" id="L331">    <span class="tok-kw">const</span> buttons_len = <span class="tok-builtin">@typeInfo</span>(Buttons).Enum.fields.len;</span>
+<span class="line" id="L332">    <span class="tok-kw">const</span> axes_len = <span class="tok-builtin">@typeInfo</span>(Axes).Enum.fields.len;</span>
+<span class="line" id="L333"></span>
+<span class="line" id="L334">    <span class="tok-kw">const</span> ButtonBinding = <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L335">        index: std.math.IntFittingRange(<span class="tok-number">0</span>, buttons_len),</span>
+<span class="line" id="L336">        binding: ButtonType,</span>
+<span class="line" id="L337">    };</span>
+<span class="line" id="L338"></span>
+<span class="line" id="L339">    <span class="tok-kw">const</span> AxisBinding = <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L340">        index: std.math.IntFittingRange(<span class="tok-number">0</span>, axes_len),</span>
+<span class="line" id="L341">        binding: AxisType,</span>
+<span class="line" id="L342">    };</span>
+<span class="line" id="L343"></span>
+<span class="line" id="L344">    <span class="tok-kw">return</span> <span class="tok-kw">struct</span> {</span>
+<span class="line" id="L345">        <span class="tok-kw">const</span> Self = <span class="tok-builtin">@This</span>();</span>
+<span class="line" id="L346"></span>
+<span class="line" id="L347">        buttons: std.StaticBitSet(buttons_len * <span class="tok-number">3</span>),</span>
+<span class="line" id="L348">        button_bindings: std.ArrayListUnmanaged(ButtonBinding),</span>
+<span class="line" id="L349"></span>
+<span class="line" id="L350">        axes: [axes_len]<span class="tok-type">f32</span>,</span>
+<span class="line" id="L351">        axis_bindings: std.ArrayListUnmanaged(AxisBinding),</span>
+<span class="line" id="L352"></span>
+<span class="line" id="L353">        <span class="tok-kw">pub</span> <span class="tok-kw">fn</span> <span class="tok-fn">init</span>() Self {</span>
+<span class="line" id="L354">            <span class="tok-kw">var</span> self = Self{</span>
+<span class="line" id="L355">                .buttons = std.StaticBitSet(buttons_len * <span class="tok-number">3</span>).initEmpty(),</span>
+<span class="line" id="L356">                .axes = <span class="tok-null">undefined</span>,</span>
+<span class="line" id="L357"></span>
+<span class="line" id="L358">                .button_bindings = .{},</span>
+<span class="line" id="L359">                .axis_bindings = .{},</span>
+<span class="line" id="L360">            };</span>
+<span class="line" id="L361"></span>
+<span class="line" id="L362">            <span class="tok-kw">for</span> (&amp;self.axes) |*ax| {</span>
+<span class="line" id="L363">                ax.* = <span class="tok-number">0.0</span>;</span>
+<span class="line" id="L364">            }</span>
+<span class="line" id="L365"></span>
+<span class="line" id="L366">            <span class="tok-kw">return</span> self;</span>
+<span class="line" id="L367">        }</span>
+<span class="line" id="L368">    };</span>
+<span class="line" id="L369">}</span>
+<span class="line" id="L370"></span>
+<span class="line" id="L371"><span class="tok-kw">fn</span> <span class="tok-fn">EnumFromLiterals</span>(<span class="tok-kw">comptime</span> literals: <span class="tok-kw">anytype</span>) <span class="tok-type">type</span> {</span>
+<span class="line" id="L372">    <span class="tok-kw">return</span> <span class="tok-kw">comptime</span> blk: {</span>
+<span class="line" id="L373">        <span class="tok-kw">var</span> enum_fields: []<span class="tok-kw">const</span> std.builtin.Type.EnumField = &amp;.{};</span>
+<span class="line" id="L374"></span>
+<span class="line" id="L375">        <span class="tok-kw">inline</span> <span class="tok-kw">for</span> (literals, <span class="tok-number">0</span>..) |lit, i| {</span>
+<span class="line" id="L376">            enum_fields = enum_fields ++ [<span class="tok-number">1</span>]std.builtin.Type.EnumField{.{</span>
+<span class="line" id="L377">                .name = <span class="tok-builtin">@tagName</span>(lit),</span>
+<span class="line" id="L378">                .value = i,</span>
+<span class="line" id="L379">            }};</span>
+<span class="line" id="L380">        }</span>
+<span class="line" id="L381"></span>
+<span class="line" id="L382">        <span class="tok-kw">break</span> :blk <span class="tok-builtin">@Type</span>(std.builtin.Type{ .Enum = .{</span>
+<span class="line" id="L383">            .fields = enum_fields,</span>
+<span class="line" id="L384">            .is_exhaustive = <span class="tok-null">true</span>,</span>
+<span class="line" id="L385">            .tag_type = std.math.IntFittingRange(<span class="tok-number">0</span>, literals.len),</span>
+<span class="line" id="L386">            .decls = &amp;.{},</span>
+<span class="line" id="L387">        } });</span>
+<span class="line" id="L388">    };</span>
+<span class="line" id="L389">}</span>
+<span class="line" id="L390"></span>
+</code></pre></body>
+</html>
