@@ -378,14 +378,14 @@ pub fn World(comptime wb: WorldBuilder) type {
         }
 
         /// Creates a new entity and gives it `component`
-        fn newEntWith(self: *Self, component: anytype) !ztg.Entity {
+        pub fn newEntWith(self: *Self, component: anytype) !ztg.Entity {
             const ent = try self.newEnt();
             try self.giveEnt(ent, component);
             return ent;
         }
 
         /// Creates a new entity and gives it all of the components in `components`
-        fn newEntWithMany(self: *Self, components: anytype) !ztg.Entity {
+        pub fn newEntWithMany(self: *Self, components: anytype) !ztg.Entity {
             const ent = try self.newEnt();
             try self.giveEntMany(ent, components);
             return ent;
