@@ -12,7 +12,7 @@ const TypeMap = ztg.meta.TypeMap;
 const TypeBuilder = ztg.meta.TypeBuilder;
 
 pub const CommandsComponentError = error{UnregisteredComponent};
-pub const CommandsGiveEntError = CommandsComponentError || ca.Error;
+pub const CommandsGiveEntError = CommandsComponentError || error{EntityDoesntExist} || ca.Error;
 
 const WorldInfo = struct {
     const use_c_alloc = false; // once bug is fixed set to "builtin.mode != .Debug"
@@ -54,7 +54,8 @@ pub fn World(comptime wb: WorldBuilder) type {
         const StagesList = @import("stages.zig").Init(wb.stage_defs.items, Self);
 
         const ComponentArray = ca.ComponentArray(MinEntityIndex, wb.max_entities);
-        const EntityArray = ea.EntityArray(wb.max_entities);
+        const ComponentMask = std.bit_set.StaticBitSet(wb.comp_types.types.len);
+        const EntityArray = ea.EntityArray(ComponentMask, wb.max_entities);
 
         info: *WorldInfo,
 
@@ -463,8 +464,11 @@ pub fn World(comptime wb: WorldBuilder) type {
         }
 
         /// Registers a component to the entity `ent`
-        pub fn giveEnt(self: *Self, ent: ztg.Entity, comp: anytype) anyerror!void {
+        pub fn giveEnt(self: *Self, ent: ztg.Entity, comp: anytype) !void {
             if (comptime wb.comp_types.types.len == 0) @compileError("World has no registered components and cannot add components");
+
+            if (!self.entities.hasEntity(ent)) return error.EntityDoesntExist;
+
             const Component = @TypeOf(comp);
             const idx = comptime wb.comp_types.indexOf(Component) orelse @compileError("Tried to add Component " ++ @typeName(Component) ++ ", which was not registred.");
 
@@ -472,20 +476,21 @@ pub fn World(comptime wb: WorldBuilder) type {
 
             if (comptime has_onAdded) util.assertOkOnAddedFunction(Component);
 
-            const member_type: if (has_onAdded) ztg.meta.MemberFnType else void = comptime if (has_onAdded) ztg.meta.memberFnType(Component, Component.onAdded) else void{};
+            const member_type: if (has_onAdded) ztg.meta.MemberFnType else void = comptime if (has_onAdded) ztg.meta.memberFnType(Component, "onAdded") else void{};
             const needs_mut: bool = comptime if (has_onAdded) member_type == .by_ptr else false;
             const can_err = comptime has_onAdded and ztg.meta.canReturnError(@TypeOf(Component.onAdded));
             var mutable_comp: if (has_onAdded and needs_mut) Component else void = if (comptime has_onAdded and needs_mut) comp else void{};
 
             if (comptime has_onAdded) {
                 if (comptime member_type == .non_member) {
-                    if (comptime can_err) try Component.onAdded(ent, self) else Component.onAdded(ent, self);
+                    if (comptime can_err) try Component.onAdded(ent, self.commands()) else Component.onAdded(ent, self.commands());
                 } else {
                     var c = if (comptime needs_mut) mutable_comp else comp;
-                    if (comptime can_err) try c.onAdded(ent, self) else c.onAdded(ent, self);
+                    if (comptime can_err) try c.onAdded(ent, self.commands()) else c.onAdded(ent, self.commands());
                 }
             }
 
+            self.entities.comp_masks[ent].set(idx);
             try self.comp_arrays[idx].assign(ent, if (has_onAdded and needs_mut) mutable_comp else comp);
             try self.changes_list.append(.{ .added_component = .{
                 .ent = ent,
@@ -505,6 +510,9 @@ pub fn World(comptime wb: WorldBuilder) type {
             if (comptime wb.comp_types.types.len == 0) @compileError("World has no registered components and cannot add components");
             var self = commandsCast(ptr);
 
+            if (!self.entities.hasEntity(ent)) return error.EntityDoesntExist;
+
+            self.entities.comp_masks[ent].set(component_id);
             var arr = try self.getListById(component_id);
 
             if (arr.willResize()) {
@@ -532,7 +540,7 @@ pub fn World(comptime wb: WorldBuilder) type {
 
         /// Returns true or false depending on whether `ent` has been assigned a component of type `Component`
         pub fn checkEntHas(self: *Self, ent: ztg.Entity, comptime Component: type) bool {
-            return self.getEntsComponent(ent, Component) != null;
+            return self.comp_arrays[comptime wb.comp_types.indexOf(Component) orelse @compileError("Component of type " ++ @typeName(Component) ++ " was not registered")].contains(ent);
         }
 
         fn commands_checkEntHas(ptr: *anyopaque, ent: ztg.Entity, component_id: util.CompId) CommandsComponentError!bool {
@@ -628,35 +636,33 @@ pub fn World(comptime wb: WorldBuilder) type {
         /// for (q.items(0)) |tr| std.debug.print("{d:0.1}\n", .{tr.pos.x});
         /// ```
         pub fn query(self: *Self, alloc: std.mem.Allocator, comptime QT: type) !QT {
-            if (QT.has_entities and QT.req_types.types.len == 0) return self.queryJustEntities(alloc, QT);
+            if (comptime QT.has_entities and QT.req_types.types.len == 0) return self.queryJustEntities(alloc, QT);
 
-            var ents_qlists = try self.initQueryLists(
-                alloc,
-                &util.idsFromTypes(QT.req_types.types),
-                &util.idsFromTypes(QT.opt_types.types),
-                &util.idsFromTypes(QT.with_types.types),
-                &util.idsFromTypes(QT.without_types.types),
-            );
+            const req_ids = util.idsFromTypes(QT.req_types.types);
+            const opt_ids = util.idsFromTypes(QT.opt_types.types);
+            const with_ids = util.idsFromTypes(QT.with_types.types);
+            const without_ids = util.idsFromTypes(QT.without_types.types);
 
-            const ents = ents_qlists[0];
+            var queryInfo = try self.initQueryLists(alloc, &req_ids, &opt_ids, &with_ids);
+            defer alloc.free(queryInfo.qlists);
 
-            var qlists = ents_qlists[1];
-            defer alloc.free(qlists);
+            const masks = getCompMasks(&.{ &req_ids, &with_ids }, &.{&without_ids});
 
-            var out = try QT.init(alloc, ents.len);
+            var out = try QT.init(alloc, queryInfo.checked_entities.len);
 
             // Link qlists and the result query
-            for (qlists) |*list| {
+            for (queryInfo.qlists) |*list| {
                 switch (list.*) {
                     .required => list.required.out = out.comp_ptrs[list.required.out_idx],
                     .optional => list.optional.out = if (comptime QT.opt_types.types.len > 0) out.opt_ptrs[list.optional.out_idx] else unreachable,
-                    else => {},
                 }
             }
 
-            out.len = fillQuery(
-                ents,
-                qlists,
+            out.len = self.fillQuery(
+                queryInfo.checked_entities,
+                queryInfo.qlists,
+                masks.comp_mask,
+                masks.negative_mask,
                 if (comptime QT.has_entities) out.entities else null,
             );
 
@@ -665,22 +671,16 @@ pub fn World(comptime wb: WorldBuilder) type {
 
         // For queries which the only required type is Entity
         fn queryJustEntities(self: *Self, alloc: std.mem.Allocator, comptime QT: type) !QT {
+            const masks = getCompMasks(
+                &.{&util.idsFromTypes(QT.with_types.types)},
+                &.{&util.idsFromTypes(QT.without_types.types)},
+            );
+
             var len: usize = 0;
             var out = try QT.init(alloc, self.entities.len);
 
-            ent_loop: for (self.entities.constSlice(), 0..) |ent, i| {
-                const cont = blk: {
-                    inline for (QT.options) |OT| {
-                        if (@hasDecl(OT, "QueryWith")) {
-                            if (!self.getListOf(OT.QueryWith).contains(@intFromEnum(ent))) break :blk true;
-                        } else if (@hasDecl(OT, "QueryWithout")) {
-                            if (self.getListOf(OT.QueryWithout).contains(@intFromEnum(ent))) break :blk true;
-                        }
-                    }
-                    break :blk false;
-                };
-                if (cont) continue :ent_loop;
-
+            for (self.entities.constSlice(), 0..) |ent, i| {
+                if (!entPassesCompMasks(self.entities.comp_masks[@intFromEnum(ent)], masks.comp_mask, masks.negative_mask)) continue;
                 inline for (out.opt_ptrs, QT.opt_types.types) |opt_ptrs, O| opt_ptrs[i] = self.getListOf(O).get(@intFromEnum(ent));
 
                 out.entities[len] = @intFromEnum(ent);
@@ -703,31 +703,26 @@ pub fn World(comptime wb: WorldBuilder) type {
             var self = commandsCast(ptr);
             if (has_entities and req.len == 0) return self.commands_queryJustEntities(alloc, opt, with, without);
 
-            var ents_qlists = try self.initQueryLists(
-                alloc,
-                req,
-                opt,
-                with,
-                without,
-            );
-            const ents = ents_qlists[0];
-            var qlists = ents_qlists[1];
-            defer alloc.free(qlists);
+            var queryInfo = try self.initQueryLists(alloc, req, opt, with);
+            defer alloc.free(queryInfo.qlists);
 
-            var out = try ztg.Commands.RuntimeQuery.init(alloc, req.len, opt.len, ents.len);
+            const masks = getCompMasks(&.{ req, with }, &.{without});
+
+            var out = try ztg.Commands.RuntimeQuery.init(alloc, req.len, opt.len, queryInfo.checked_entities.len);
 
             // Link qlists and the result query
-            for (qlists) |*list| {
+            for (queryInfo.qlists) |*list| {
                 switch (list.*) {
                     .required => list.required.out = out.comp_ptrs[list.required.out_idx],
                     .optional => list.optional.out = out.opt_ptrs[list.optional.out_idx],
-                    else => {},
                 }
             }
 
-            out.len = fillQuery(
-                ents,
-                qlists,
+            out.len = self.fillQuery(
+                queryInfo.checked_entities,
+                queryInfo.qlists,
+                masks.comp_mask,
+                masks.negative_mask,
                 if (has_entities) out.entities else null,
             );
 
@@ -741,14 +736,11 @@ pub fn World(comptime wb: WorldBuilder) type {
             with: []const util.CompId,
             without: []const util.CompId,
         ) !ztg.Commands.RuntimeQuery {
+            const masks = getCompMasks(&.{with}, &.{without});
+
             var out = try ztg.Commands.RuntimeQuery.init(alloc, 0, 0, self.entities.len);
             for (out.entities, self.entities.constSlice(), 0..) |*o, ent, i| {
-                for (with) |w| {
-                    if (!self.assertListById(w).contains(@intFromEnum(ent))) continue;
-                }
-                for (without) |w| {
-                    if (self.assertListById(w).contains(@intFromEnum(ent))) continue;
-                }
+                if (!entPassesCompMasks(self.entities.comp_masks[@intFromEnum(ent)], masks.comp_mask, masks.negative_mask)) continue;
 
                 o.* = @intFromEnum(ent);
                 for (out.opt_ptrs, opt) |opt_ptrs, opt_id| opt_ptrs[i] = self.assertListById(opt_id).get(@intFromEnum(ent));
@@ -768,23 +760,6 @@ pub fn World(comptime wb: WorldBuilder) type {
                 out_idx: usize,
                 out: []?*anyopaque = undefined,
             },
-            with: *const ComponentArray,
-            without: *const ComponentArray,
-
-            pub fn appendEnt(self: *QueryList, idx: usize, ent: usize) bool {
-                switch (self.*) {
-                    .required => |req| {
-                        req.out[idx] = req.array.get(ent) orelse return false;
-                        return true;
-                    },
-                    .optional => |opt| {
-                        opt.out[idx] = opt.array.get(ent);
-                        return true;
-                    },
-                    .with => |array| return array.contains(ent),
-                    .without => |array| return !array.contains(ent),
-                }
-            }
         };
 
         fn initQueryLists(
@@ -793,11 +768,13 @@ pub fn World(comptime wb: WorldBuilder) type {
             req_ids: []const util.CompId,
             opt_ids: []const util.CompId,
             with_ids: []const util.CompId,
-            without_ids: []const util.CompId,
-        ) !struct { []const ztg.Entity, []QueryList } {
+        ) !struct {
+            checked_entities: []const ztg.Entity,
+            qlists: []QueryList,
+        } {
             var smallest: *ComponentArray = self.assertListById(req_ids[0]);
 
-            var lists = try alloc.alloc(QueryList, req_ids.len + opt_ids.len + with_ids.len + without_ids.len);
+            var lists = try alloc.alloc(QueryList, req_ids.len + opt_ids.len);
             var idx: usize = 0;
 
             lists[0] = QueryList{ .required = .{
@@ -826,30 +803,60 @@ pub fn World(comptime wb: WorldBuilder) type {
 
             for (with_ids) |id| {
                 const check = self.assertListById(id);
-                idx += 1;
-                lists[idx] = QueryList{ .with = check };
-
                 if (check.len() < smallest.len()) smallest = check;
             }
 
-            for (without_ids) |id| {
-                idx += 1;
-                lists[idx] = QueryList{ .without = self.assertListById(id) };
-            }
-
-            return .{ smallest.entities.items, lists };
+            return .{
+                .checked_entities = smallest.entities.items,
+                .qlists = lists,
+            };
         }
 
-        fn fillQuery(checked_entities: []const ztg.Entity, qlists: []QueryList, entities_out: ?[]ztg.Entity) usize {
+        fn getCompMasks(
+            comp_ids_list: []const []const util.CompId,
+            negative_ids_list: []const []const util.CompId,
+        ) struct { comp_mask: ComponentMask, negative_mask: ComponentMask } {
+            var comp_mask = ComponentMask.initEmpty();
+            var negative_mask = ComponentMask.initEmpty();
+
+            for (comp_ids_list) |ids| for (ids) |id| comp_mask.set(id);
+            for (negative_ids_list) |ids| for (ids) |id| negative_mask.set(id);
+
+            return .{ .comp_mask = comp_mask, .negative_mask = negative_mask };
+        }
+
+        fn fillQuery(
+            self: Self,
+            checked_entities: []const ztg.Entity,
+            qlists: []QueryList,
+            comp_mask: ComponentMask,
+            negative_mask: ComponentMask,
+            entities_out: ?[]ztg.Entity,
+        ) usize {
+            var fq = ztg.profiler.startSection("fillQuery");
+            defer fq.end();
+
             var len: usize = 0;
             ents_loop: for (checked_entities) |ent| {
-                for (qlists) |*list| {
-                    if (!list.appendEnt(len, ent)) continue :ents_loop;
-                    if (entities_out) |eout| eout[len] = ent;
-                }
+                const ent_mask = self.entities.comp_masks[ent];
+
+                if (entPassesCompMasks(ent_mask, comp_mask, negative_mask)) {
+                    for (qlists) |*list| {
+                        switch (list.*) {
+                            .required => |req| req.out[len] = req.array.get(ent).?,
+                            .optional => |opt| opt.out[len] = opt.array.get(ent),
+                        }
+                    }
+                } else continue :ents_loop;
+
+                if (entities_out) |eout| eout[len] = ent;
                 len += 1;
             }
             return len;
+        }
+
+        inline fn entPassesCompMasks(ent_mask: ComponentMask, comp_mask: ComponentMask, negative_mask: ComponentMask) bool {
+            return ent_mask.supersetOf(comp_mask) and ent_mask.intersectWith(negative_mask).eql(ComponentMask.initEmpty());
         }
 
         fn InitParamsForSystemOut(comptime params: []const std.builtin.Type.Fn.Param) type {
@@ -1035,6 +1042,11 @@ test "creation" {
     defer world.deinit();
 }
 
+test "bad alloc" {
+    var world = MyWorld.init(std.testing.failing_allocator);
+    try std.testing.expectError(error.OutOfMemory, world);
+}
+
 test "adding/removing entities" {
     var world = try MyWorld.init(std.testing.allocator);
     defer world.deinit();
@@ -1080,12 +1092,15 @@ test "adding/removing components" {
 
     try testing.expectEqual(@as(i32, 10), ent.getComponentPtr(my_file.MyComponent).?.position);
     try testing.expect(ent.checkHas(my_file.MyComponent));
+    try testing.expect(!world.checkEntHas(ent.ent, ztg.base.Transform));
 
     try ent.removeComponent(my_file.MyComponent);
 
     try world.postSystemUpdate();
 
     try testing.expect(!ent.checkHas(my_file.MyComponent));
+
+    try std.testing.expectError(error.EntityDoesntExist, world.giveEnt(512, ztg.base.Name{"bad"}));
 }
 
 test "overwriting components" {
@@ -1123,4 +1138,36 @@ test "resources" {
     time.frames = 100;
 
     try testing.expectEqual(@as(usize, 100), world.getRes(my_file.MyResource).frames);
+}
+
+test "querying" {
+    var world = try MyWorld.init(std.testing.allocator);
+    defer world.deinit();
+
+    _ = try world.newEntWithMany(.{
+        ztg.base.Name{"ok"},
+        my_file.MyComponent{
+            .position = 10,
+            .speed = 20,
+        },
+    });
+
+    _ = try world.newEntWithMany(.{
+        ztg.base.Name{"bad"},
+        ztg.base.Transform.identity(),
+        my_file.MyComponent{
+            .position = 30,
+            .speed = 1,
+        },
+    });
+
+    var q = try world.query(std.testing.allocator, ztg.QueryOpts(.{ my_file.MyComponent, ?ztg.base.Lifetime }, .{ ztg.Without(ztg.base.Transform), ztg.With(ztg.base.Name) }));
+    defer q.deinit(std.testing.allocator);
+
+    try testing.expectEqual(@as(usize, 1), q.len);
+
+    var q2 = try world.query(std.testing.allocator, ztg.QueryOpts(.{ztg.Entity}, .{ ztg.Without(ztg.base.Transform), ztg.With(ztg.base.Name) }));
+    defer q2.deinit(std.testing.allocator);
+
+    try testing.expectEqual(@as(usize, 1), q.len);
 }

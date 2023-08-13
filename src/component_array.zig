@@ -18,8 +18,8 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
         component_id: util.CompId,
         component_name: if (builtin.mode == .Debug) []const u8 else void,
 
-        components_data: ByteArray = undefined,
-        entities: std.ArrayListUnmanaged(ztg.Entity) = undefined,
+        components_data: ByteArray,
+        entities: std.ArrayListUnmanaged(ztg.Entity) = .{},
         ent_to_comp_idx: []Index = undefined,
 
         pub fn init(alloc: Allocator, comptime T: type) !Self {
@@ -33,13 +33,11 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
                 .alloc = alloc,
                 .component_id = util.compId(T),
                 .component_name = if (builtin.mode == .Debug) @typeName(T) else void{},
+                .components_data = ByteArray.init(T),
             };
 
-            self.components_data = ByteArray.init(T);
-            errdefer self.components_data.deinit(alloc);
-
-            self.entities = std.ArrayListUnmanaged(ztg.Entity){};
             errdefer self.entities.deinit(alloc);
+            errdefer self.components_data.deinit(alloc);
 
             self.ent_to_comp_idx = try alloc.alloc(Index, max_ents);
             @memset(self.ent_to_comp_idx, null_bit);
