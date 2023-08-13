@@ -1,7 +1,7 @@
 const std = @import("std");
 const ztg = @import("init.zig");
 
-pub fn EntityArray(comptime size: usize) type {
+pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
     return struct {
         const Self = @This();
 
@@ -14,6 +14,8 @@ pub fn EntityArray(comptime size: usize) type {
         ents: [size]Index = undefined,
         idx_lookup: [size]Index = undefined,
         parent_lookup: [size]Index = undefined,
+        comp_masks: [size]ComponentMask = undefined,
+
         len: usize = 0,
 
         pub fn init() Self {
@@ -37,6 +39,7 @@ pub fn EntityArray(comptime size: usize) type {
         pub fn set(self: *Self, idx: usize, ent: ztg.Entity) void {
             self.ents[idx] = @enumFromInt(ent);
             self.idx_lookup[ent] = @enumFromInt(idx);
+            self.comp_masks[ent] = ComponentMask.initEmpty();
         }
 
         pub fn setParent(self: *Self, ent: ztg.Entity, parent: ?ztg.Entity) !void {
@@ -51,6 +54,7 @@ pub fn EntityArray(comptime size: usize) type {
             return null;
         }
 
+        /// Slow function, it's a lot easier to go up than go down
         pub fn getChildren(self: *const Self, alloc: std.mem.Allocator, ent: ztg.Entity) ![]const ztg.Entity {
             if (!self.hasEntity(ent)) return error.EntityDoesntExist;
             var children = std.ArrayList(ztg.Entity).init(alloc);
@@ -101,7 +105,8 @@ pub fn EntityArray(comptime size: usize) type {
 }
 
 test EntityArray {
-    var arr = EntityArray(10).init();
+    const CompMask = std.bit_set.StaticBitSet(0);
+    var arr = EntityArray(CompMask, 10).init();
 
     arr.append(0);
     arr.append(1);
@@ -114,9 +119,9 @@ test EntityArray {
 
     try std.testing.expect(!arr.hasEntity(1));
     try std.testing.expectEqual(@as(usize, 2), arr.constSlice().len);
-    try std.testing.expectEqualSlices(EntityArray(10).Index, &.{
-        @as(EntityArray(10).Index, @enumFromInt(0)),
-        @as(EntityArray(10).Index, @enumFromInt(2)),
+    try std.testing.expectEqualSlices(EntityArray(CompMask, 10).Index, &.{
+        @as(EntityArray(CompMask, 10).Index, @enumFromInt(0)),
+        @as(EntityArray(CompMask, 10).Index, @enumFromInt(2)),
     }, arr.constSlice());
 
     _ = arr.swapRemoveEnt(2);
