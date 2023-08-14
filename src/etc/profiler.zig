@@ -1,4 +1,19 @@
-//! This whole file is just... awful... but it works
+//! Used for recording performance and execution times of blocks of code
+//!
+//! Example:
+//! ```zig
+//! my_blk: {
+//!     var perf = ztg.profiler.startSection("my block");
+//!     defer perf.end();
+//!
+//!     doVeryExpensiveThing();
+//!     nextVeryExpensiveThing();
+//! }
+//!
+//! ztg.profiler.report(std.io.getStdOut().writer());
+//! ```
+
+// This whole file is just... awful... but it works
 
 const std = @import("std");
 const ztg = @import("../init.zig");
@@ -18,36 +33,59 @@ const ProfilerSection = struct {
     }
 };
 
+var alloc: std.mem.Allocator = undefined;
 var report_time: f32 = 0;
-var sections: std.AutoHashMap(*const anyopaque, ProfilerSection) = undefined;
+var sections: std.AutoHashMap(usize, *ProfilerSection) = undefined;
 
-pub fn init(alloc: std.mem.Allocator) void {
-    sections = std.AutoHashMap(*const anyopaque, ProfilerSection).init(alloc);
+pub fn init(_alloc: std.mem.Allocator) void {
+    alloc = _alloc;
+    sections = std.AutoHashMap(usize, *ProfilerSection).init(alloc);
 }
 
 pub fn deinit() void {
+    var value_iter = sections.valueIterator();
+    while (value_iter.next()) |sec_ptr| {
+        alloc.destroy(sec_ptr.*);
+    }
+
     sections.deinit();
 }
 
-pub fn report(writer: anytype, dt: f32) void {
+/// Reports every X seconds when called each frame
+pub fn reportTimed(writer: anytype, every_x_seconds: f32, dt: f32) void {
     report_time += dt;
-    if (report_time >= 1) {
-        writer.print("=== PROFILER ===\n", .{}) catch {};
-        var valueIter = sections.valueIterator();
-        while (valueIter.next()) |sec| {
-            const micro = @as(u64, @intCast(sec.timing_micro)) / sec.samples;
-            const secs = ztg.math.divAsFloat(f64, micro, 1000000) catch unreachable;
-            writer.print("MS: {: <6.2} :: FPS: {d: <6.2} :: {s}\n", .{ @divFloor(micro, 1000), if (micro > 0) 1.0 / secs else std.math.nan(f64), sec.name }) catch {};
-        }
-        sections.clearRetainingCapacity();
+    if (report_time >= every_x_seconds) {
+        report(writer);
         report_time = 0;
     }
 }
 
+pub fn report(writer: anytype) void {
+    writer.print("=== PROFILER ===\n", .{}) catch {};
+    var valueIter = sections.valueIterator();
+    while (valueIter.next()) |sec_ptr| {
+        const sec = sec_ptr.*;
+        defer alloc.destroy(sec);
+
+        const micro = @as(u64, @intCast(sec.timing_micro)) / sec.samples;
+        const secs = ztg.math.divAsFloat(f64, micro, 1000000) catch unreachable;
+        writer.print("MS: {d: <6.2} :: FPS: {d: <6.2} :: {s}\n", .{ secs * std.time.ms_per_s, @min(1.0 / secs, 999), sec.name }) catch {};
+    }
+    sections.clearRetainingCapacity();
+}
+
 pub fn startSection(comptime name: []const u8) *ProfilerSection {
-    sections.put(name.ptr, .{
+    if (sections.get(@intFromPtr(name.ptr))) |sec| {
+        sec.timing_micro_start = std.time.microTimestamp();
+        return sec;
+    }
+
+    const new_section = alloc.create(ProfilerSection) catch @panic("Could not allocate for profiler");
+    new_section.* = .{
         .name = name,
         .timing_micro_start = std.time.microTimestamp(),
-    }) catch {};
-    return sections.getPtr(name.ptr).?;
+    };
+
+    sections.put(@intFromPtr(name.ptr), new_section) catch @panic("Could not put for profiler");
+    return new_section;
 }
