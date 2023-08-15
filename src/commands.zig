@@ -178,7 +178,6 @@ pub fn getComponentPtr(self: Self, ent: Entity, comptime Component: type) ?*Comp
     const ptr = self.vtable.get_component_ptr(self.ctx, ent, util.compId(Component)) catch |err| switch (err) {
         error.UnregisteredComponent => panicOnUnregistered(Component),
     };
-    //if (ptr != null and @intFromPtr(ptr.?) % @alignOf(Component) != 0) std.debug.panic("Incorrect alignment of {s} in getComponentPtr. Expected {}, found {}", .{ @typeName(Component), @alignOf(Component), @intFromPtr(ptr.?) });
     return if (ptr) |p| @ptrCast(@alignCast(p)) else null;
 }
 
