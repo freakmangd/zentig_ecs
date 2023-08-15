@@ -130,6 +130,7 @@ pub fn World(comptime wb: WorldBuilder) type {
                 inline for (wb.comp_types.types, 0..) |CT, i| {
                     @setEvalBranchQuota(20_000);
                     self.comp_arrays[util.compId(CT)] = try ComponentArray.init(alloc, CT);
+                    std.debug.print("{s} has compId {}\n", .{ @typeName(CT), util.compId(CT) });
                     last_successful_init_loop = i;
                 }
             }
@@ -438,7 +439,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             return commandsCastConst(ptr).getEntParent(ent);
         }
 
-        /// Returns a caller-owned slice of the entity's children.
+        /// Returns a caller-owned slice of the entity's children.worl
         pub fn getEntChildren(self: *const Self, alloc: std.mem.Allocator, ent: ztg.Entity) ![]const ztg.Entity {
             return self.entities.getChildren(alloc, ent);
         }
@@ -837,7 +838,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             defer fq.end();
 
             var len: usize = 0;
-            ents_loop: for (checked_entities) |ent| {
+            for (checked_entities) |ent| {
                 const ent_mask = self.entities.comp_masks[ent];
 
                 if (entPassesCompMasks(ent_mask, comp_mask, negative_mask)) {
@@ -847,15 +848,16 @@ pub fn World(comptime wb: WorldBuilder) type {
                             .optional => |opt| opt.out[len] = opt.array.get(ent),
                         }
                     }
-                } else continue :ents_loop;
 
-                if (entities_out) |eout| eout[len] = ent;
-                len += 1;
+                    if (entities_out) |eout| eout[len] = ent;
+                    len += 1;
+                }
             }
             return len;
         }
 
         inline fn entPassesCompMasks(ent_mask: ComponentMask, comp_mask: ComponentMask, negative_mask: ComponentMask) bool {
+            //std.debug.print("{}\n{}\n{}\n{}\n\n", .{ ent_mask, comp_mask, negative_mask, ent_mask.supersetOf(comp_mask) and ent_mask.intersectWith(negative_mask).eql(ComponentMask.initEmpty()) });
             return ent_mask.supersetOf(comp_mask) and ent_mask.intersectWith(negative_mask).eql(ComponentMask.initEmpty());
         }
 

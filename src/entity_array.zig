@@ -36,10 +36,10 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
             return @intFromEnum(self.ents[idx]);
         }
 
-        pub fn set(self: *Self, idx: usize, ent: ztg.Entity) void {
+        pub fn set(self: *Self, idx: usize, ent: ztg.Entity, comp_mask: ComponentMask) void {
             self.ents[idx] = @enumFromInt(ent);
             self.idx_lookup[ent] = @enumFromInt(idx);
-            self.comp_masks[ent] = ComponentMask.initEmpty();
+            self.comp_masks[ent] = comp_mask;
         }
 
         pub fn setParent(self: *Self, ent: ztg.Entity, parent: ?ztg.Entity) !void {
@@ -63,7 +63,7 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
         }
 
         pub fn append(self: *Self, ent: ztg.Entity) void {
-            self.set(self.len, ent);
+            self.set(self.len, ent, ComponentMask.initEmpty());
             self.len += 1;
         }
 
@@ -76,13 +76,15 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
             const idx = self.getIndexOf(ent) orelse return false;
 
             if (idx != self.len - 1) {
-                self.set(idx, self.getEntityAt(self.len - 1).?);
+                const rep = self.getEntityAt(self.len - 1).?;
+                self.set(idx, rep, self.comp_masks[rep]);
             } else {
                 self.ents[idx] = Index.NULL;
             }
 
             self.len -= 1;
             self.idx_lookup[ent] = Index.NULL;
+            self.comp_masks[ent] = ComponentMask.initEmpty();
             return true;
         }
 
