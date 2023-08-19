@@ -76,8 +76,8 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
             const idx = self.getIndexOf(ent) orelse return false;
 
             if (idx != self.len - 1) {
-                const last_mask = self.pop();
-                self.set(idx, last_mask[0], last_mask[1]);
+                const popped = self.pop();
+                self.set(idx, popped.ent, popped.mask);
             } else {
                 self.ents[idx] = Index.NULL;
                 self.len -= 1;
@@ -88,7 +88,7 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
             return true;
         }
 
-        pub fn pop(self: *Self) struct { ztg.Entity, ComponentMask } {
+        pub fn pop(self: *Self) struct { ent: ztg.Entity, mask: ComponentMask } {
             const last = self.getEntityAt(self.len - 1).?;
             self.idx_lookup[last] = Index.NULL;
             const mask = self.comp_masks[last];
@@ -96,7 +96,7 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
 
             self.len -= 1;
 
-            return .{ last, mask };
+            return .{ .ent = last, .mask = mask };
         }
 
         pub fn hasEntity(self: *const Self, ent: ztg.Entity) bool {
