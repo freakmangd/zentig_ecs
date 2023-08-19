@@ -68,7 +68,7 @@ pub fn report(writer: anytype) void {
         defer alloc.destroy(sec);
 
         const micro = @as(u64, @intCast(sec.timing_micro)) / sec.samples;
-        const secs = ztg.math.divAsFloat(f64, micro, 1000000) catch unreachable;
+        const secs = ztg.math.div(f64, micro, 1000000) catch unreachable;
         writer.print("MS: {d: <6.2} :: FPS: {d: <6.2} :: {s}\n", .{ secs * std.time.ms_per_s, @min(1.0 / secs, 999), sec.name }) catch {};
     }
     sections.clearRetainingCapacity();

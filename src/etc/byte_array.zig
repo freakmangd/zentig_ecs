@@ -173,5 +173,5 @@ test "data" {
     try std.testing.expectEqual(@as(f32, 100.0), arr.getAs(Data, 0).xd);
 
     arr.swapRemove(0);
-    try std.testing.expectEqual(@as(usize, 0), arr.len());
+    try std.testing.expectEqual(@as(usize, 0), arr.len);
 }

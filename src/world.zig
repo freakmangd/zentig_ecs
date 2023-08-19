@@ -450,7 +450,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             return commandsCastConst(ptr).getEntParent(ent);
         }
 
-        /// Returns a caller-owned slice of the entity's children.worl
+        /// Returns a caller-owned slice of the entity's children.
         pub fn getEntChildren(self: *const Self, alloc: std.mem.Allocator, ent: ztg.Entity) ![]const ztg.Entity {
             return self.entities.getChildren(alloc, ent);
         }
