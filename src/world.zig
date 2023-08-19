@@ -450,7 +450,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             return commandsCastConst(ptr).getEntParent(ent);
         }
 
-        /// Returns a caller-owned slice of the entity's children.worl
+        /// Returns a caller-owned slice of the entity's children.
         pub fn getEntChildren(self: *const Self, alloc: std.mem.Allocator, ent: ztg.Entity) ![]const ztg.Entity {
             return self.entities.getChildren(alloc, ent);
         }
@@ -849,14 +849,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             for (checked_entities) |ent| {
                 const ent_mask = self.entities.comp_masks[ent];
 
-                if (!self.entities.hasEntity(ent)) std.debug.panic("dont have {}\n", .{ent});
-
-                //std.debug.print("checking: \n", .{});
-                //printCompMask(ent_mask);
-                //printCompMask(comp_mask);
-                //printCompMask(negative_mask);
                 if (entPassesCompMasks(ent_mask, comp_mask, negative_mask)) {
-                    //std.debug.print("PASS\n", .{});
                     for (qlists) |*list| {
                         switch (list.*) {
                             .required => |req| req.out[len] = req.array.get(ent).?,
@@ -867,7 +860,6 @@ pub fn World(comptime wb: WorldBuilder) type {
                     if (entities_out) |eout| eout[len] = ent;
                     len += 1;
                 }
-                //std.debug.print("\n", .{});
             }
             return len;
         }

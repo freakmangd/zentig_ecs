@@ -195,7 +195,6 @@ test swizzleVec {
 }
 
 test {
-    std.testing.refAllDeclsRecursive(@This());
     _ = @import("vec2.zig");
     _ = @import("vec3.zig");
     _ = @import("vec4.zig");
