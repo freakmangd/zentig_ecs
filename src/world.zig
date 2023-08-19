@@ -286,14 +286,14 @@ pub fn World(comptime wb: WorldBuilder) type {
 
             for (children) |c| try self.removeEntAndAssociatedComponents(c);
 
-            _ = self.entities.swapRemoveEnt(ent);
-
             for (&self.comp_arrays) |*list| {
                 if (list.get(ent)) |comp| {
                     try self.invokeOnRemoveForComponentById(comp, list.component_id);
                     _ = list.swapRemove(ent);
                 }
             }
+
+            _ = self.entities.swapRemoveEnt(ent);
         }
 
         fn invokeOnRemoveForComponent(self: *Self, comptime T: type, comp: *T) anyerror!void {
@@ -342,6 +342,18 @@ pub fn World(comptime wb: WorldBuilder) type {
             self.changes_list.clearAndFree();
             self.event_pools.clear();
             if (!self.frame_arena.reset(.{ .retain_with_limit = 10_000 })) ztg.log.err("Failed to reset frame arena.", .{});
+        }
+
+        fn printCompMask(mask: ComponentMask) void {
+            if (mask.eql(ComponentMask.initEmpty())) {
+                std.debug.print("empty\n", .{});
+                return;
+            }
+
+            inline for (wb.comp_types.types, 0..) |T, i| {
+                if (mask.isSet(i)) std.debug.print("{s}, ", .{@typeName(T)});
+            }
+            std.debug.print("\n", .{});
         }
 
         /// Returns the next free index for components. Invalidated after hitting the entity limit,
@@ -837,7 +849,14 @@ pub fn World(comptime wb: WorldBuilder) type {
             for (checked_entities) |ent| {
                 const ent_mask = self.entities.comp_masks[ent];
 
+                if (!self.entities.hasEntity(ent)) std.debug.panic("dont have {}\n", .{ent});
+
+                //std.debug.print("checking: \n", .{});
+                //printCompMask(ent_mask);
+                //printCompMask(comp_mask);
+                //printCompMask(negative_mask);
                 if (entPassesCompMasks(ent_mask, comp_mask, negative_mask)) {
+                    //std.debug.print("PASS\n", .{});
                     for (qlists) |*list| {
                         switch (list.*) {
                             .required => |req| req.out[len] = req.array.get(ent).?,
@@ -848,6 +867,7 @@ pub fn World(comptime wb: WorldBuilder) type {
                     if (entities_out) |eout| eout[len] = ent;
                     len += 1;
                 }
+                //std.debug.print("\n", .{});
             }
             return len;
         }

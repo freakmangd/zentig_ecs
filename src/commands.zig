@@ -247,14 +247,19 @@ pub const RuntimeQuery = struct {
 
 /// Invokes a query on the world, unpreferred to using arguments
 pub fn query(self: Self, alloc: std.mem.Allocator, comptime Query: type) !Query {
+    const req_ids = util.idsFromTypes(Query.req_types.types);
+    const opt_ids = util.idsFromTypes(Query.opt_types.types);
+    const with_ids = util.idsFromTypes(Query.with_types.types);
+    const without_ids = util.idsFromTypes(Query.without_types.types);
+
     var temp: RuntimeQuery = try self.vtable.query(
         self.ctx,
         alloc,
         Query.has_entities,
-        Query.req_utps,
-        Query.opt_utps,
-        Query.with_utps,
-        Query.without_utps,
+        &req_ids,
+        &opt_ids,
+        &with_ids,
+        &without_ids,
     );
     errdefer temp.deinit(alloc);
 
@@ -264,7 +269,7 @@ pub fn query(self: Self, alloc: std.mem.Allocator, comptime Query: type) !Query 
     @memcpy(&out.opt_ptrs, temp.opt_ptrs);
     out.len = temp.len;
 
-    if (comptime Query.has_entities) @memcpy(&out.entities, temp.entities);
+    if (comptime Query.has_entities) @memcpy(out.entities, temp.entities);
 
     return out;
 }

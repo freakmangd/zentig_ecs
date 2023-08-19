@@ -88,7 +88,7 @@ pub inline fn getScale(self: Self) ztg.Vec3 {
     return self.__data.scale;
 }
 
-pub inline fn setScale(self: Self, new_scale: ztg.Vec3) void {
+pub inline fn setScale(self: *Self, new_scale: ztg.Vec3) void {
     self.__data.scale = new_scale;
     self.__data.basis_isdirty = true;
 }
