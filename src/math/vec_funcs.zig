@@ -177,11 +177,11 @@ pub fn init(comptime Self: type) type {
         }
 
         pub inline fn lerp(a: Self, b: Self, t: f32) Self {
-            return ztg.math.lerpVec(a.intoSimd(), b.intoSimd(), t);
+            return fromSimd(ztg.math.lerpVec(a.intoSimd(), b.intoSimd(), t));
         }
 
         pub inline fn lerpUnclamped(a: Self, b: Self, t: f32) Self {
-            return ztg.math.lerpUnclampedVec(a.intoSimd(), b.intoSimd(), t);
+            return fromSimd(ztg.math.lerpUnclampedVec(a.intoSimd(), b.intoSimd(), t));
         }
 
         /// Returns `orig` moved by an amount no greater than `max_dist` in the

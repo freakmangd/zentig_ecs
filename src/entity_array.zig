@@ -36,10 +36,10 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
             return @intFromEnum(self.ents[idx]);
         }
 
-        pub fn set(self: *Self, idx: usize, ent: ztg.Entity) void {
+        pub fn set(self: *Self, idx: usize, ent: ztg.Entity, comp_mask: ComponentMask) void {
             self.ents[idx] = @enumFromInt(ent);
             self.idx_lookup[ent] = @enumFromInt(idx);
-            self.comp_masks[ent] = ComponentMask.initEmpty();
+            self.comp_masks[ent] = comp_mask;
         }
 
         pub fn setParent(self: *Self, ent: ztg.Entity, parent: ?ztg.Entity) !void {
@@ -63,7 +63,7 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
         }
 
         pub fn append(self: *Self, ent: ztg.Entity) void {
-            self.set(self.len, ent);
+            self.set(self.len, ent, ComponentMask.initEmpty());
             self.len += 1;
         }
 
@@ -76,14 +76,27 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
             const idx = self.getIndexOf(ent) orelse return false;
 
             if (idx != self.len - 1) {
-                self.set(idx, self.getEntityAt(self.len - 1).?);
+                const last_mask = self.pop();
+                self.set(idx, last_mask[0], last_mask[1]);
             } else {
                 self.ents[idx] = Index.NULL;
+                self.len -= 1;
             }
 
-            self.len -= 1;
             self.idx_lookup[ent] = Index.NULL;
+            self.comp_masks[ent] = ComponentMask.initEmpty();
             return true;
+        }
+
+        pub fn pop(self: *Self) struct { ztg.Entity, ComponentMask } {
+            const last = self.getEntityAt(self.len - 1).?;
+            self.idx_lookup[last] = Index.NULL;
+            const mask = self.comp_masks[last];
+            self.comp_masks[last] = ComponentMask.initEmpty();
+
+            self.len -= 1;
+
+            return .{ last, mask };
         }
 
         pub fn hasEntity(self: *const Self, ent: ztg.Entity) bool {

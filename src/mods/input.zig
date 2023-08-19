@@ -5,7 +5,7 @@ const log = std.log.scoped(.zentig_input);
 const Options = struct {
     max_controllers: usize = 4,
     update_stage: struct {
-        stage: @TypeOf(.enum_literal) = .update,
+        stage: @TypeOf(.enum_literal) = .pre_update,
         label: @TypeOf(.enum_literal) = .body,
         order: ztg.SystemOrder = .during,
     } = .{},

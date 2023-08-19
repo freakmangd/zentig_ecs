@@ -27,26 +27,89 @@ test toFloat {
     try expectEqual(@as(f32, 1.0), toFloat(f32, @as(f32, 1.0)));
 }
 
-/// Converts a and b to floats (if neeeded) and multiplies them, returning a float of type T
-pub inline fn mulAsFloat(comptime T: type, a: anytype, b: anytype) T {
-    return toFloat(T, a) * toFloat(T, b);
+inline fn toInt(comptime T: type, x: anytype) T {
+    if (T == @TypeOf(x)) return x;
+
+    return switch (@typeInfo(@TypeOf(x))) {
+        .Int => @intCast(x),
+        .Float => @intFromFloat(x),
+        .ComptimeFloat, .ComptimeInt => x,
+        else => |X| @compileError("Cannot convert " ++ @typeName(X) ++ " to a float."),
+    };
 }
 
-test mulAsFloat {
-    try expectEqual(@as(f32, 7.0), mulAsFloat(f32, 14, 0.5));
-    try expectEqual(@as(f32, 20.5), mulAsFloat(f32, @as(u1, 1), @as(f32, 20.5)));
+pub const mulAsFloat = @compileError("mulAsFloat has been renamed to mul");
+pub const divAsFloat = @compileError("divAsFloat has been renamed to mul");
+
+/// Converts a and b to T (if neeeded) and multiplies them, returning a float or integer of type T
+pub inline fn mul(comptime T: type, a: anytype, b: anytype) T {
+    if (comptime std.meta.trait.isFloat(T)) {
+        return toFloat(T, a) * toFloat(T, b);
+    } else {
+        return toInt(T, a) * toInt(T, b);
+    }
 }
 
-/// Converts a and b to floats (if neeeded) and divides them, returning a float of type T
-pub inline fn divAsFloat(comptime T: type, a: anytype, b: anytype) error{DivideByZero}!T {
+test mul {
+    try expectEqual(@as(f32, 7.0), mul(f32, 14, 0.5));
+    try expectEqual(@as(f32, 20.5), mul(f32, @as(u1, 1), @as(f32, 20.5)));
+}
+
+/// Converts a and b to T (if neeeded) and divides them, returning a float or integer of type T
+pub inline fn div(comptime T: type, a: anytype, b: anytype) error{DivideByZero}!T {
     if (b == 0) return error.DivideByZero;
-    return toFloat(T, a) / toFloat(T, b);
+
+    if (comptime std.meta.trait.isFloat(T)) {
+        return toFloat(T, a) / toFloat(T, b);
+    } else if (comptime std.meta.trait.isUnsignedInt(T)) {
+        return toInt(T, a) / toInt(T, b);
+    } else {
+        @compileError("Automatic conversion division is not available for type " ++ @typeName(T));
+    }
 }
 
-test divAsFloat {
-    try expectEqual(@as(f32, 0.13), try divAsFloat(f32, 13, 100));
-    try expectEqual(@as(f32, 0.5), try divAsFloat(f32, @as(u1, 1), @as(i32, 2)));
-    try std.testing.expectError(error.DivideByZero, divAsFloat(f32, 1_000, 0));
+test div {
+    try expectEqual(@as(f32, 0.13), try div(f32, 13, 100));
+    try expectEqual(@as(f32, 0.5), try div(f32, @as(u1, 1), @as(i32, 2)));
+    try std.testing.expectError(error.DivideByZero, div(f32, 1_000, 0));
+}
+
+/// Converts a and b to T (if neeeded) and adds them, returning a float or integer of type T
+pub inline fn add(comptime T: type, a: anytype, b: anytype) T {
+    if (comptime std.meta.trait.isFloat(T)) {
+        return toFloat(T, a) + toFloat(T, b);
+    } else {
+        return toInt(T, a) + toInt(T, b);
+    }
+}
+
+/// Converts a and b to T (if neeeded) and subtracts them, returning a float or integer of type T
+pub inline fn sub(comptime T: type, a: anytype, b: anytype) T {
+    if (comptime std.meta.trait.isFloat(T)) {
+        return toFloat(T, a) - toFloat(T, b);
+    } else {
+        return toInt(T, a) - toInt(T, b);
+    }
+}
+
+// Converts a and b to f32 and adds them
+pub inline fn addf32(a: anytype, b: anytype) f32 {
+    return add(f32, a, b);
+}
+
+// Converts a and b to f32 and subtracts them
+pub inline fn subf32(a: anytype, b: anytype) f32 {
+    return sub(f32, a, b);
+}
+
+// Converts a and b to f32 and multiplies them
+pub inline fn mulf32(a: anytype, b: anytype) f32 {
+    return mul(f32, a, b);
+}
+
+// Converts a and b to f32 and divides them
+pub inline fn divf32(a: anytype, b: anytype) error{DivideByZero}!f32 {
+    return div(f32, a, b);
 }
 
 /// Clamps v between 0 and 1

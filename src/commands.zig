@@ -102,14 +102,19 @@ pub fn newEntWithMany(self: Self, components: anytype) !ztg.EntityHandle {
     return ent;
 }
 
+/// Returns the entity's parent if it has one
+/// Can error if the entity doesn't exist
 pub fn getEntParent(self: Self, ent: ztg.Entity) !?ztg.Entity {
     return self.vtable.get_ent_parent(self.ctx, ent);
 }
 
+/// Sets the entity's parent or removes it depending on the null-ness of `parent`
+/// Can error if the entity doesn't exist or the parent isnt null but doesnt exist
 pub fn setEntParent(self: Self, ent: ztg.Entity, parent: ?ztg.Entity) !void {
     return self.vtable.set_ent_parent(self.ctx, ent, parent);
 }
 
+/// Inverse of setEntParent
 pub fn giveEntChild(self: Self, ent: ztg.Entity, child: ztg.Entity) !void {
     return self.vtable.set_ent_parent(self.ctx, child, ent);
 }
@@ -136,7 +141,7 @@ pub fn giveEnt(self: Self, ent: Entity, component: anytype) !void {
         }
     }
 
-    self.vtable.add_component(self.ctx, ent, util.compId(Component), @alignOf(Component), if (has_onAdded and needs_mut) &mutable_comp else &component) catch |err| switch (err) {
+    self.vtable.add_component(self.ctx, ent, util.compId(Component), @alignOf(Component), if (comptime has_onAdded and needs_mut) &mutable_comp else &component) catch |err| switch (err) {
         error.UnregisteredComponent => std.debug.panic("Cannot give ent {} a component of type {s} as it has not been registered.", .{ ent, @typeName(Component) }),
         else => return err,
     };
@@ -153,6 +158,7 @@ pub fn giveEntMany(self: Self, ent: Entity, components: anytype) !void {
     }
 }
 
+/// Removes the component of type `Component` given to `ent`
 pub fn removeComponent(self: Self, ent: Entity, comptime Component: type) ca.Error!void {
     return self.vtable.remove_component(self.ctx, ent, util.compId(Component));
 }
@@ -164,7 +170,7 @@ pub fn checkEntHas(self: Self, ent: Entity, comptime Component: type) bool {
     };
 }
 
-/// Returns a pointer to the component data associated with `ent`
+/// Returns a copy of the component data associated with `ent`
 pub fn getComponent(self: Self, ent: Entity, comptime Component: type) ?Component {
     const ptr = self.vtable.get_component_ptr(self.ctx, ent, util.compId(Component)) catch |err| switch (err) {
         error.UnregisteredComponent => panicOnUnregistered(Component),
@@ -178,7 +184,6 @@ pub fn getComponentPtr(self: Self, ent: Entity, comptime Component: type) ?*Comp
     const ptr = self.vtable.get_component_ptr(self.ctx, ent, util.compId(Component)) catch |err| switch (err) {
         error.UnregisteredComponent => panicOnUnregistered(Component),
     };
-    //if (ptr != null and @intFromPtr(ptr.?) % @alignOf(Component) != 0) std.debug.panic("Incorrect alignment of {s} in getComponentPtr. Expected {}, found {}", .{ @typeName(Component), @alignOf(Component), @intFromPtr(ptr.?) });
     return if (ptr) |p| @ptrCast(@alignCast(p)) else null;
 }
 
@@ -195,6 +200,7 @@ pub fn getResPtr(self: Self, comptime T: type) *T {
     return @ptrCast(@alignCast(ptr));
 }
 
+/// Returns whether or not the world included the type `Namespace` in the `WorldBuilder`
 pub fn hasIncluded(self: Self, comptime Namespace: type) bool {
     return self.vtable.has_included(ztg.meta.utpOf(Namespace));
 }
@@ -239,15 +245,21 @@ pub const RuntimeQuery = struct {
     }
 };
 
+/// Invokes a query on the world, unpreferred to using arguments
 pub fn query(self: Self, alloc: std.mem.Allocator, comptime Query: type) !Query {
+    const req_ids = util.idsFromTypes(Query.req_types.types);
+    const opt_ids = util.idsFromTypes(Query.opt_types.types);
+    const with_ids = util.idsFromTypes(Query.with_types.types);
+    const without_ids = util.idsFromTypes(Query.without_types.types);
+
     var temp: RuntimeQuery = try self.vtable.query(
         self.ctx,
         alloc,
         Query.has_entities,
-        Query.req_utps,
-        Query.opt_utps,
-        Query.with_utps,
-        Query.without_utps,
+        &req_ids,
+        &opt_ids,
+        &with_ids,
+        &without_ids,
     );
     errdefer temp.deinit(alloc);
 
@@ -257,7 +269,7 @@ pub fn query(self: Self, alloc: std.mem.Allocator, comptime Query: type) !Query 
     @memcpy(&out.opt_ptrs, temp.opt_ptrs);
     out.len = temp.len;
 
-    if (comptime Query.has_entities) @memcpy(&out.entities, temp.entities);
+    if (comptime Query.has_entities) @memcpy(out.entities, temp.entities);
 
     return out;
 }

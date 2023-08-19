@@ -4,6 +4,7 @@ const Self = @This();
 
 entry_size: usize,
 bytes: std.ArrayListUnmanaged(u8),
+len: usize = 0,
 
 pub fn init(comptime T: type) Self {
     return .{
@@ -26,19 +27,23 @@ pub fn deinit(self: *Self, alloc: std.mem.Allocator) void {
 pub fn append(self: *Self, alloc: std.mem.Allocator, entry: anytype) !void {
     if (@sizeOf(@TypeOf(entry)) != self.entry_size) @panic("Wrong type.");
     try self.bytes.appendSlice(alloc, std.mem.asBytes(&entry));
+    self.len += 1;
 }
 
 pub fn appendAssumeCapacity(self: *Self, entry: anytype) void {
     if (@sizeOf(@TypeOf(entry)) != self.entry_size) @panic("Wrong type.");
     self.bytes.appendSliceAssumeCapacity(std.mem.asBytes(&entry));
+    self.len += 1;
 }
 
 pub fn appendPtr(self: *Self, alloc: std.mem.Allocator, bytes_start: *const anyopaque) !void {
     try self.bytes.appendSlice(alloc, @as([*]const u8, @ptrCast(bytes_start))[0..self.entry_size]);
+    self.len += 1;
 }
 
 pub fn appendPtrAssumeCapacity(self: *Self, bytes_start: *const anyopaque) void {
     self.bytes.appendSliceAssumeCapacity(@as([*]const u8, @ptrCast(bytes_start))[0..self.entry_size]);
+    self.len += 1;
 }
 
 pub fn getCapacity(self: Self) usize {
@@ -76,11 +81,15 @@ pub fn pop(self: *Self) []const u8 {
 
     const out = self.getAsBytes(self.bytes.items.len / self.entry_size - 1);
     self.bytes.items.len -= self.entry_size;
+    self.len -= 1;
     return out;
 }
 
 pub fn swapRemove(self: *Self, index: usize) void {
-    if (self.entry_size == 0) return;
+    if (self.entry_size == 0) {
+        self.len -= 1;
+        return;
+    }
 
     if ((self.bytes.items.len / self.entry_size) - 1 == index) {
         _ = self.pop();
@@ -89,11 +98,6 @@ pub fn swapRemove(self: *Self, index: usize) void {
 
     var bytes = self.pop();
     self.set(index, bytes.ptr);
-}
-
-pub fn len(self: Self) usize {
-    if (self.entry_size == 0) return 0;
-    return self.bytes.items.len / self.entry_size;
 }
 
 inline fn cast(comptime T: type, data: *anyopaque) *T {

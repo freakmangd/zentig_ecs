@@ -67,7 +67,7 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
 
         fn appendBytes(self: *Self, ent: ztg.Entity, bytes_start: *const anyopaque) !void {
             try self.entities.append(self.alloc, ent);
-            self.ent_to_comp_idx[ent] = @as(Index, @intCast(self.components_data.len()));
+            self.ent_to_comp_idx[ent] = @as(Index, @intCast(self.components_data.len));
             try self.components_data.appendPtr(self.alloc, bytes_start);
         }
 
