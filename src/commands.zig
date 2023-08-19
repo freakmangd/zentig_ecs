@@ -102,14 +102,19 @@ pub fn newEntWithMany(self: Self, components: anytype) !ztg.EntityHandle {
     return ent;
 }
 
+/// Returns the entity's parent if it has one
+/// Can error if the entity doesn't exist
 pub fn getEntParent(self: Self, ent: ztg.Entity) !?ztg.Entity {
     return self.vtable.get_ent_parent(self.ctx, ent);
 }
 
+/// Sets the entity's parent or removes it depending on the null-ness of `parent`
+/// Can error if the entity doesn't exist or the parent isnt null but doesnt exist
 pub fn setEntParent(self: Self, ent: ztg.Entity, parent: ?ztg.Entity) !void {
     return self.vtable.set_ent_parent(self.ctx, ent, parent);
 }
 
+/// Inverse of setEntParent
 pub fn giveEntChild(self: Self, ent: ztg.Entity, child: ztg.Entity) !void {
     return self.vtable.set_ent_parent(self.ctx, child, ent);
 }
@@ -136,7 +141,7 @@ pub fn giveEnt(self: Self, ent: Entity, component: anytype) !void {
         }
     }
 
-    self.vtable.add_component(self.ctx, ent, util.compId(Component), @alignOf(Component), if (has_onAdded and needs_mut) &mutable_comp else &component) catch |err| switch (err) {
+    self.vtable.add_component(self.ctx, ent, util.compId(Component), @alignOf(Component), if (comptime has_onAdded and needs_mut) &mutable_comp else &component) catch |err| switch (err) {
         error.UnregisteredComponent => std.debug.panic("Cannot give ent {} a component of type {s} as it has not been registered.", .{ ent, @typeName(Component) }),
         else => return err,
     };
@@ -153,6 +158,7 @@ pub fn giveEntMany(self: Self, ent: Entity, components: anytype) !void {
     }
 }
 
+/// Removes the component of type `Component` given to `ent`
 pub fn removeComponent(self: Self, ent: Entity, comptime Component: type) ca.Error!void {
     return self.vtable.remove_component(self.ctx, ent, util.compId(Component));
 }
@@ -164,7 +170,7 @@ pub fn checkEntHas(self: Self, ent: Entity, comptime Component: type) bool {
     };
 }
 
-/// Returns a pointer to the component data associated with `ent`
+/// Returns a copy of the component data associated with `ent`
 pub fn getComponent(self: Self, ent: Entity, comptime Component: type) ?Component {
     const ptr = self.vtable.get_component_ptr(self.ctx, ent, util.compId(Component)) catch |err| switch (err) {
         error.UnregisteredComponent => panicOnUnregistered(Component),
@@ -194,6 +200,7 @@ pub fn getResPtr(self: Self, comptime T: type) *T {
     return @ptrCast(@alignCast(ptr));
 }
 
+/// Returns whether or not the world included the type `Namespace` in the `WorldBuilder`
 pub fn hasIncluded(self: Self, comptime Namespace: type) bool {
     return self.vtable.has_included(ztg.meta.utpOf(Namespace));
 }
@@ -238,6 +245,7 @@ pub const RuntimeQuery = struct {
     }
 };
 
+/// Invokes a query on the world, unpreferred to using arguments
 pub fn query(self: Self, alloc: std.mem.Allocator, comptime Query: type) !Query {
     var temp: RuntimeQuery = try self.vtable.query(
         self.ctx,
