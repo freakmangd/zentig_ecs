@@ -17,6 +17,13 @@ fn Bind(comptime _label: ztg.meta.EnumLiteral, comptime f: anytype, comptime off
     };
 }
 
+fn BindingGroup(comptime _label: ztg.meta.EnumLiteral, comptime groups: anytype) type {
+    return struct {
+        comptime label: ztg.meta.EnumLiteral = _label,
+        comptime groups: @TypeOf(groups) = groups,
+    };
+}
+
 /// Equivelent to calling `before`, `during`, or `after` depending on the `offset` parameter
 pub fn ordered(comptime _label: ztg.meta.EnumLiteral, comptime f: anytype, comptime offset: SystemOrder) Bind(_label, f, offset) {
     return .{};
@@ -34,5 +41,9 @@ pub fn during(comptime _label: ztg.meta.EnumLiteral, comptime f: anytype) Bind(_
 
 /// Makes the system `f` invoke _after_ the specified label
 pub fn after(comptime _label: ztg.meta.EnumLiteral, comptime f: anytype) Bind(_label, f, .after) {
+    return .{};
+}
+
+pub fn orderGroup(comptime _label: ztg.meta.EnumLiteral, comptime groups: anytype) BindingGroup(_label, groups) {
     return .{};
 }
