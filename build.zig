@@ -96,15 +96,15 @@ pub fn build(b: *std.Build) void {
 }
 
 const ZentigModule = struct {
-    zentig_mod: *std.build.Module,
-    zmath_mod: *std.build.Module,
-    zmath_options_mod: *std.build.Module,
+    zentig_mod: *std.Build.Module,
+    zmath_mod: *std.Build.Module,
+    zmath_options_mod: *std.Build.Module,
 
     target: std.zig.CrossTarget,
     optimize: std.builtin.OptimizeMode,
 
     b: *std.Build,
-    exe: *std.build.Step.Compile,
+    exe: *std.Build.Step.Compile,
 };
 
 pub fn addAsLocalModule(settings: struct {
