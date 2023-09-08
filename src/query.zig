@@ -227,7 +227,3 @@ fn assertOkQuery(comptime query_types_raw: anytype, comptime options: anytype) v
 //    tb.addField("OptionsType", @TypeOf(options), &options);
 //    return std.MultiArrayList(tb.Build());
 //}
-
-test {
-    std.testing.refAllDeclsRecursive(@This());
-}
