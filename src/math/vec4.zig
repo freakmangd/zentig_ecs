@@ -24,11 +24,11 @@ pub const Vec4 = extern struct {
         };
     }
 
-    pub inline fn set(self: *Self, x: f32, y: f32, z: f32, w: f32) void {
-        self.x = x;
-        self.y = y;
-        self.z = z;
-        self.w = w;
+    pub inline fn set(self: *Self, x: anytype, y: anytype, z: anytype, w: anytype) void {
+        self.x = if (comptime @typeInfo(@TypeOf(x)) == .Int) @floatFromInt(x) else x;
+        self.y = if (comptime @typeInfo(@TypeOf(y)) == .Int) @floatFromInt(y) else y;
+        self.z = if (comptime @typeInfo(@TypeOf(z)) == .Int) @floatFromInt(z) else z;
+        self.w = if (comptime @typeInfo(@TypeOf(w)) == .Int) @floatFromInt(w) else w;
     }
 
     /// Shorthand for .{ .w = 1 }
@@ -49,6 +49,7 @@ pub const Vec4 = extern struct {
     /// Returns T with all of it's components set to the original vector's
     /// T's only required components must be `x`, `y`, `z`, and `w`
     pub inline fn into(self: Self, comptime T: type) T {
+        if (@typeInfo(T).Struct.layout == .Extern) return @bitCast(self);
         return .{ .x = self.x, .y = self.y, .z = self.z, .w = self.w };
     }
 
@@ -76,7 +77,7 @@ pub const Vec4 = extern struct {
         } else if (comptime std.meta.trait.isIntegral(T)) {
             return .{ @intFromFloat(self.x), @intFromFloat(self.y), @intFromFloat(self.z), @intFromFloat(self.w) };
         } else {
-            @compileError("Cannot turn self into a vector of " ++ @typeName(T));
+            util.compileError("Cannot turn self into a vector of `{s}`", .{@typeName(T)});
         }
     }
 
@@ -88,6 +89,7 @@ pub const Vec4 = extern struct {
 
     /// Creates a Vec4 from other, other must have `x`, `y`, `z`, and `w` components
     pub inline fn from(other: anytype) Self {
+        if (@typeInfo(@TypeOf(other)).Struct.layout == .Extern) return @bitCast(other);
         return .{ .x = other.x, .y = other.y, .z = other.z, .w = other.w };
     }
 
@@ -173,8 +175,7 @@ pub const Vec4 = extern struct {
         };
     }
 
-    pub fn format(value: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = options;
-        try writer.print("Vec4({" ++ fmt ++ "}, {" ++ fmt ++ "}, {" ++ fmt ++ "}, {" ++ fmt ++ "})", .{ value.x, value.y, value.z, value.w });
+    pub fn format(value: Vec4, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        try writer.print(std.fmt.comptimePrint("Vec4({{{s}}}, {{{s}}}, {{{s}}}, {{{s}}})", .{ fmt, fmt, fmt, fmt }), .{ value.x, value.y, value.z, value.w });
     }
 };
