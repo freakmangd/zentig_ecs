@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const ztg = @import("init.zig");
+const util = @import("util.zig");
 const world = @import("world.zig");
 
 const TypeMap = ztg.meta.TypeMap;
@@ -19,7 +20,7 @@ const StageLabel = struct {
 
 pub const StageDef = struct {
     name: []const u8,
-    labels: ztg.meta.ComptimeList(StageLabel),
+    labels: ztg.ComptimeList(StageLabel),
 };
 
 const default_stages = struct {
@@ -37,7 +38,7 @@ const default_stages = struct {
 warnings: []const u8 = "",
 
 max_entities: usize = 100_000,
-stage_defs: ztg.meta.ComptimeList(StageDef) = .{},
+stage_defs: ztg.ComptimeList(StageDef) = .{},
 
 comp_types: TypeMap = .{},
 event_types: TypeMap = .{},
@@ -81,7 +82,7 @@ pub fn init(comptime includes: []const type) Self {
     for (@typeInfo(default_stages).Struct.decls) |decl| {
         self.stage_defs.append(.{
             .name = decl.name,
-            .labels = ztg.meta.ComptimeList(StageLabel).fromSlice(&.{.{ .name = "body" }}),
+            .labels = ztg.ComptimeList(StageLabel).fromSlice(&.{.{ .name = "body" }}),
         });
     }
 
@@ -116,18 +117,17 @@ pub fn include(comptime self: *Self, comptime includes: []const type) void {
 
             const ti = @typeInfo(@TypeOf(TI.include));
 
-            if (comptime !(ti.Fn.params.len == 1 and ti.Fn.params[0].type.? == *Self)) {
-                @compileError(@typeName(TI) ++ "'s include function's signature must be fn(*WorldBuilder) (!)void");
-            }
+            if (comptime !(ti.Fn.params.len == 1 and ti.Fn.params[0].type.? == *Self))
+                util.compileError("{s}'s include function's signature must be fn(*WorldBuilder) (!)void", .{@typeName(TI)});
 
             if (comptime ztg.meta.canReturnError(@TypeOf(TI.include))) {
-                TI.include(self) catch |err| @compileError("Cound not build world, error in include. Error: " ++ err);
+                TI.include(self) catch |err| util.compileError("Cound not build world, error in include. Error: {}", .{err});
             } else {
                 TI.include(self);
             }
             self.included.append(TI);
         } else {
-            @compileError("Struct " ++ @typeName(TI) ++ " does not have an fn include, it should not be passed to include.");
+            util.compileError("Struct {s} does not have an fn include, it should not be passed to include.", .{@typeName(TI)});
         }
     }
 }
@@ -149,14 +149,14 @@ pub fn include(comptime self: *Self, comptime includes: []const type) void {
 pub fn addStage(comptime self: *Self, comptime stage_name: ztg.meta.EnumLiteral) void {
     for (self.stage_defs.items) |sdef| {
         if (std.mem.eql(u8, sdef.name, @tagName(stage_name))) {
-            self.warn("Tried to add stage `" ++ sdef.name ++ "` to world more than once.");
+            self.warn(std.fmt.comptimePrint("Tried to add stage `{s}` to world more than once.", .{sdef.name}));
             return;
         }
     }
 
     self.stage_defs.append(.{
         .name = @tagName(stage_name),
-        .labels = ztg.meta.ComptimeList(StageLabel).fromSlice(&.{.{ .name = "body" }}),
+        .labels = ztg.ComptimeList(StageLabel).fromSlice(&.{.{ .name = "body" }}),
     });
 }
 
@@ -170,14 +170,14 @@ fn stageIndexFromName(comptime self: Self, comptime stage_name: []const u8) usiz
         }
     }
 
-    @compileError("Stage " ++ stage_name ++ " is not in world. Consider adding it with WorldBuilder.addStage");
+    util.compileError("Stage `{s}` is not in world. Consider adding it with WorldBuilder.addStage", .{stage_name});
 }
 
 fn labelIndexFromName(comptime stage: StageDef, comptime label_name: []const u8) usize {
     for (stage.labels.items, 0..) |label, i| {
         if (std.mem.eql(u8, label.name, label_name)) return i;
     }
-    @compileError("Cannot find label " ++ label_name ++ " within stage " ++ stage.name ++ ". Consider adding it with WorldBuilder.addLabel");
+    util.compileError("Cannot find label `{s}` within stage `{s}`. Consider adding it with WorldBuilder.addLabel", .{ label_name, stage.name });
 }
 
 /// Adds a new label named `label_name` to the system named `stage_name`.
@@ -210,7 +210,7 @@ pub fn addLabel(comptime self: *Self, comptime stage_name: ztg.meta.EnumLiteral,
     stage.labels.insert(index, .{
         .name = @tagName(label_name),
     });
-    self.stage_defs.replace(stage_index, stage);
+    self.stage_defs.set(stage_index, stage);
 }
 
 /// After you add a component, you can then query for it in your systems:
@@ -231,8 +231,8 @@ pub fn addLabel(comptime self: *Self, comptime stage_name: ztg.meta.EnumLiteral,
 /// }
 /// ```
 pub fn addComponents(comptime self: *Self, comptime comps: []const type) void {
-    inline for (comps) |T| {
-        if (comptime self.comp_types.has(T)) @compileError("Attempted to add type `" ++ @typeName(T) ++ "` to worldbuilder more than once.");
+    for (comps) |T| {
+        if (comptime self.comp_types.has(T)) util.compileError("Attempted to add type `{s}` to worldbuilder more than once.", .{@typeName(T)});
     }
     self.comp_types.appendSlice(comps);
 }
@@ -258,7 +258,7 @@ pub fn addResource(comptime self: *Self, comptime T: type, comptime default_valu
     if (comptime std.meta.trait.isContainer(T) and (@hasDecl(T, "IsQueryType") or @hasDecl(T, "EventSendType") or @hasDecl(T, "EventRecvType"))) @compileError("Queries and Events cannot be resources.");
 
     if (self.added_resources.has(T)) {
-        self.warn("Tried to add resource type `" ++ @typeName(T) ++ "` to world more than once.");
+        self.warn(std.fmt.comptimePrint("Tried to add resource type `{s}` to world more than once.", .{@typeName(T)}));
         return;
     }
 
@@ -288,7 +288,7 @@ pub fn addResource(comptime self: *Self, comptime T: type, comptime default_valu
 /// ```
 pub fn addEvent(comptime self: *Self, comptime T: type) void {
     if (self.event_types.has(T)) {
-        self.warn("Tried to add event type `" ++ @typeName(T) ++ "` to world more than once.");
+        self.warn(std.fmt.comptimePrint("Tried to add event type `{s}` to world more than once.", .{@typeName(T)}));
         return;
     }
 
@@ -303,7 +303,7 @@ pub fn addEvent(comptime self: *Self, comptime T: type) void {
 /// // or for multiple
 /// wb.addSystemsToStage(.draw, .{ drawPlayer, drawEnemy });
 /// ```
-pub fn addSystemsToStage(comptime self: *Self, comptime stage_tag: @TypeOf(.enum_literal), systems: anytype) void {
+pub fn addSystemsToStage(comptime self: *Self, comptime stage_tag: ztg.meta.EnumLiteral, systems: anytype) void {
     self.addSystemsToStageByName(@tagName(stage_tag), systems);
 }
 
@@ -316,10 +316,25 @@ pub fn addSystemsToStageByName(comptime self: *Self, comptime stage_name: []cons
         switch (@typeInfo(@TypeOf(sys))) {
             .Fn => self.appendToStageLabel(stage_index, "body", .during, sys),
             .Struct => {
-                if (!@hasField(@TypeOf(sys), "label")) @compileError("Passed unsupported struct type to addSystems, the only supported structs come from ztg.before(), ztg.during(), and ztg.after().");
-                self.appendToStageLabel(stage_index, @tagName(sys.label), sys.offset, sys.f);
+                if (!@hasField(@TypeOf(sys), "label")) @compileError("Passed unsupported struct type to addSystems, the only supported structs come from ztg.before(), ztg.during(), ztg.after(), and ztg.orderGroup().");
+
+                if (@hasField(@TypeOf(sys), "groups")) {
+                    for (std.meta.fields(@TypeOf(sys.groups))) |group_field| {
+                        const group_raw = @field(sys.groups, group_field.name);
+                        const group = if (comptime !std.meta.trait.isTuple(@TypeOf(group_raw))) .{group_raw} else group_raw;
+
+                        for (group) |s| {
+                            const ordering = std.meta.stringToEnum(ztg.SystemOrder, group_field.name) orelse
+                                util.compileError("{s} is not a supported label group, supported label groups are .before, .during, and .after", .{group_field.name});
+
+                            self.appendToStageLabel(stage_index, @tagName(sys.label), ordering, s);
+                        }
+                    }
+                } else {
+                    self.appendToStageLabel(stage_index, @tagName(sys.label), sys.offset, sys.f);
+                }
             },
-            else => @compileError("addSystems expected a tuple of supported types, a member of that tuple was of type `" ++ @typeName(@TypeOf(sys)) ++ "` which is not supported."),
+            else => util.compileError("addSystems expected a tuple of supported types, a member of that tuple was of type `{s}` which is not supported.", .{@typeName(@TypeOf(sys))}),
         }
     }
 }
@@ -336,8 +351,8 @@ fn appendToStageLabel(comptime self: *Self, comptime stage_index: usize, comptim
         .after => label.after.appendTupleFieldExtra(@TypeOf(sys), sys, true, 0),
     }
 
-    stage.labels.replace(label_index, label);
-    self.stage_defs.replace(stage_index, stage);
+    stage.labels.set(label_index, label);
+    self.stage_defs.set(stage_index, stage);
 }
 
 /// Useful for adding systems to multiple stages.
@@ -351,8 +366,8 @@ fn appendToStageLabel(comptime self: *Self, comptime stage_index: usize, comptim
 /// });
 /// ```
 pub fn addSystems(comptime self: *Self, system_lists: anytype) void {
-    inline for (std.meta.fields(@TypeOf(system_lists))) |list_field| {
-        if (!self.hasStageName(list_field.name)) @compileError("Cannot add systems to stage " ++ list_field.name ++ " as it does not exist.");
+    for (std.meta.fields(@TypeOf(system_lists))) |list_field| {
+        if (!self.hasStageName(list_field.name)) util.compileError("Cannot add systems to stage `{s}` as it does not exist.", .{list_field.name});
         const list = @field(system_lists, list_field.name);
         self.addSystemsToStageByName(list_field.name, list);
     }
@@ -361,25 +376,10 @@ pub fn addSystems(comptime self: *Self, system_lists: anytype) void {
 /// Checks whether a stage with the name `stage_name` has been added
 /// to the worldbuilder.
 pub fn hasStageName(comptime self: *const Self, comptime stage_name: []const u8) bool {
-    inline for (self.stage_defs.items) |sdef| {
+    for (self.stage_defs.items) |sdef| {
         if (std.mem.eql(u8, sdef.name, stage_name)) return true;
     }
     return false;
-}
-
-/// Shorthand for `addSystemsToStage(.load, ...)`
-pub fn addLoadSystems(comptime self: *Self, systems: anytype) void {
-    addSystemsToStage(self, .load, systems);
-}
-
-/// Shorthand for `addSystemsToStage(.update, ...)`
-pub fn addUpdateSystems(comptime self: *Self, systems: anytype) void {
-    addSystemsToStage(self, .update, systems);
-}
-
-/// Shorthand for `addSystemsToStage(.draw, ...)`
-pub fn addDrawSystems(comptime self: *Self, systems: anytype) void {
-    addSystemsToStage(self, .draw, systems);
 }
 
 fn defaultCrash(com: ztg.Commands, r: ztg.CrashReason) anyerror!void {
@@ -393,14 +393,14 @@ pub fn Build(comptime self: Self) type {
 }
 
 fn warn(comptime self: *Self, comptime message: []const u8) void {
-    self.warnings = self.warnings ++ message ++ "\n";
+    self.warnings = std.fmt.comptimePrint("{s}{s}\n", .{ self.warnings, message });
 }
 
 fn TestWorld(comptime namespace: type) type {
     return Self.init(&.{namespace}).Build();
 }
 
-fn testWorld(comptime namespace: type) !*TestWorld(namespace) {
+fn testWorld(comptime namespace: type) !TestWorld(namespace) {
     return TestWorld(namespace).init(std.testing.allocator);
 }
 
@@ -458,15 +458,12 @@ test addStage {
 
 test "adding systems" {
     const namespace = struct {
-        var stages_were_run: [6]bool = .{false} ** 6;
+        var stages_were_run = [_]bool{false} ** 5;
 
         pub fn include(comptime wb: *Self) void {
             wb.addSystemsToStage(.load, sys0);
             wb.addSystemsToStageByName("load", sys1);
-            wb.addSystems(.{ .load = sys2 });
-            wb.addLoadSystems(load);
-            wb.addUpdateSystems(update);
-            wb.addDrawSystems(draw);
+            wb.addSystems(.{ .load = load, .update = update, .draw = draw });
         }
 
         fn sys0() void {
@@ -477,20 +474,16 @@ test "adding systems" {
             stages_were_run[1] = true;
         }
 
-        fn sys2() void {
+        fn load() void {
             stages_were_run[2] = true;
         }
 
-        fn load() void {
+        fn update() void {
             stages_were_run[3] = true;
         }
 
-        fn update() void {
-            stages_were_run[4] = true;
-        }
-
         fn draw() void {
-            stages_were_run[5] = true;
+            stages_were_run[4] = true;
         }
     };
 
@@ -506,7 +499,6 @@ test "adding systems" {
     try std.testing.expect(namespace.stages_were_run[2]);
     try std.testing.expect(namespace.stages_were_run[3]);
     try std.testing.expect(namespace.stages_were_run[4]);
-    try std.testing.expect(namespace.stages_were_run[5]);
 }
 
 test addLabel {
