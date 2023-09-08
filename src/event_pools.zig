@@ -1,5 +1,6 @@
 const std = @import("std");
 const ztg = @import("init.zig");
+const util = @import("util.zig");
 
 pub fn EventPools(comptime event_tm: ztg.meta.TypeMap) type {
     const Inner = blk: {
@@ -30,7 +31,7 @@ pub fn EventPools(comptime event_tm: ztg.meta.TypeMap) type {
         }
 
         pub fn getPtr(self: *Self, comptime EventType: type) *std.ArrayListUnmanaged(EventType) {
-            const field_name = comptime std.fmt.comptimePrint("{}", .{event_tm.indexOf(EventType) orelse @compileError("Event `" ++ @typeName(EventType) ++ "` was not registered.")});
+            const field_name = comptime std.fmt.comptimePrint("{}", .{event_tm.indexOf(EventType) orelse util.compileError("Event `{s}` was not registered.", .{@typeName(EventType)})});
             return &@field(self.inner, field_name);
         }
 

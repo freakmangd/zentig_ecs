@@ -1,5 +1,10 @@
 const std = @import("std");
+const util = @import("../util.zig");
+
 const expectEqual = std.testing.expectEqual;
+
+const isFloat = std.meta.trait.isFloat;
+const isIntegral = std.meta.trait.isIntegral;
 
 /// Alias for `f32`, used to clarify input parameters for
 /// functions that take angles in radians
@@ -9,14 +14,15 @@ pub const Radians = f32;
 /// functions that take angles in degrees
 pub const Degrees = f32;
 
-inline fn toFloat(comptime T: type, x: anytype) T {
+pub inline fn toFloat(comptime T: type, x: anytype) T {
     if (T == @TypeOf(x)) return x;
+    if (comptime !isFloat(T)) @compileError("toInt requires it's first argument `T` to be an Integral type to convert `x` to.");
 
     return switch (@typeInfo(@TypeOf(x))) {
         .Int => @floatFromInt(x),
         .Float => @floatCast(x),
         .ComptimeFloat, .ComptimeInt => x,
-        else => |X| @compileError("Cannot convert " ++ @typeName(X) ++ " to a float."),
+        else => util.compileError("Cannot convert `{s}` to a float.", .{@typeName(@TypeOf(x))}),
     };
 }
 
@@ -25,28 +31,77 @@ test toFloat {
     try expectEqual(@as(f32, 1.0), toFloat(f32, 1.0));
     try expectEqual(@as(f32, 1.0), toFloat(f32, @as(i32, 1)));
     try expectEqual(@as(f32, 1.0), toFloat(f32, @as(f32, 1.0)));
+    try expectEqual(@as(f32, 1.0), toFloat(f32, @as(f16, 1.0)));
 }
 
-inline fn toInt(comptime T: type, x: anytype) T {
-    if (T == @TypeOf(x)) return x;
+pub inline fn toInt(comptime T: type, x: anytype) T {
+    if (comptime T == @TypeOf(x)) return x;
+    if (comptime !isIntegral(T)) @compileError("toInt requires it's first argument `T` to be an Integral type to convert `x` to.");
 
     return switch (@typeInfo(@TypeOf(x))) {
         .Int => @intCast(x),
         .Float => @intFromFloat(x),
         .ComptimeFloat, .ComptimeInt => x,
-        else => |X| @compileError("Cannot convert " ++ @typeName(X) ++ " to a float."),
+        else => util.compileError("Cannot convert `{s}` to an int.", .{@typeName(@TypeOf(x))}),
     };
 }
 
+test toInt {
+    try expectEqual(@as(i32, 1), toInt(i32, 1));
+    try expectEqual(@as(i32, 1), toInt(i32, 1.0));
+    try expectEqual(@as(i32, 1), toInt(i32, @as(i32, 1)));
+    try expectEqual(@as(i32, 1), toInt(i32, @as(f32, 1.0)));
+    try expectEqual(@as(i32, 1), toInt(i32, @as(i16, 1)));
+    try expectEqual(@as(i32, 1), toInt(i32, @as(u16, 1)));
+}
+
 pub const mulAsFloat = @compileError("mulAsFloat has been renamed to mul");
-pub const divAsFloat = @compileError("divAsFloat has been renamed to mul");
+pub const divAsFloat = @compileError("divAsFloat has been renamed to div");
+
+inline fn checkUnnecessary(comptime name: []const u8, comptime T: type, comptime A: type, comptime B: type) void {
+    if (comptime isFloat(T) and isFloat(A) and isFloat(B)) {
+        @compileError(std.fmt.comptimePrint("Unnecessary use of automatic conversion {s}, both types are floats", .{name}));
+    } else if (comptime isIntegral(T) and isIntegral(A) and isIntegral(B)) {
+        @compileError(std.fmt.comptimePrint("Unnecessary use of automatic conversion {s}, both types are ints", .{name}));
+    }
+}
+
+/// Converts a and b to T (if neeeded) and adds them, returning a float or integer of type T
+pub inline fn add(comptime T: type, a: anytype, b: anytype) T {
+    comptime checkUnnecessary("add", T, @TypeOf(a), @TypeOf(b));
+
+    if (comptime isFloat(T)) {
+        return toFloat(T, a) + toFloat(T, b);
+    } else if (comptime isIntegral(T)) {
+        return toInt(T, a) + toInt(T, b);
+    } else {
+        util.compileError("Automatic conversion addition is not available for type `{s}`", .{@typeName(T)});
+    }
+}
+
+/// Converts a and b to T (if neeeded) and subtracts them, returning a float or integer of type T
+pub inline fn sub(comptime T: type, a: anytype, b: anytype) T {
+    comptime checkUnnecessary("sub", T, @TypeOf(a), @TypeOf(b));
+
+    if (comptime isFloat(T)) {
+        return toFloat(T, a) - toFloat(T, b);
+    } else if (comptime isIntegral(T)) {
+        return toInt(T, a) - toInt(T, b);
+    } else {
+        util.compileError("Automatic conversion subtraction is not available for type `{s}`", .{@typeName(T)});
+    }
+}
 
 /// Converts a and b to T (if neeeded) and multiplies them, returning a float or integer of type T
 pub inline fn mul(comptime T: type, a: anytype, b: anytype) T {
-    if (comptime std.meta.trait.isFloat(T)) {
+    comptime checkUnnecessary("mul", T, @TypeOf(a), @TypeOf(b));
+
+    if (comptime isFloat(T)) {
         return toFloat(T, a) * toFloat(T, b);
-    } else {
+    } else if (comptime isIntegral(T)) {
         return toInt(T, a) * toInt(T, b);
+    } else {
+        util.compileError("Automatic conversion multiplication is not available for type `{s}`", .{@typeName(T)});
     }
 }
 
@@ -57,14 +112,15 @@ test mul {
 
 /// Converts a and b to T (if neeeded) and divides them, returning a float or integer of type T
 pub inline fn div(comptime T: type, a: anytype, b: anytype) error{DivideByZero}!T {
+    comptime checkUnnecessary("div", T, @TypeOf(a), @TypeOf(b));
     if (b == 0) return error.DivideByZero;
 
-    if (comptime std.meta.trait.isFloat(T)) {
+    if (comptime isFloat(T)) {
         return toFloat(T, a) / toFloat(T, b);
-    } else if (comptime std.meta.trait.isUnsignedInt(T)) {
+    } else if (comptime isIntegral(T)) {
         return toInt(T, a) / toInt(T, b);
     } else {
-        @compileError("Automatic conversion division is not available for type " ++ @typeName(T));
+        util.compileError("Automatic conversion division is not available for type `{s}`", .{@typeName(T)});
     }
 }
 
@@ -72,24 +128,6 @@ test div {
     try expectEqual(@as(f32, 0.13), try div(f32, 13, 100));
     try expectEqual(@as(f32, 0.5), try div(f32, @as(u1, 1), @as(i32, 2)));
     try std.testing.expectError(error.DivideByZero, div(f32, 1_000, 0));
-}
-
-/// Converts a and b to T (if neeeded) and adds them, returning a float or integer of type T
-pub inline fn add(comptime T: type, a: anytype, b: anytype) T {
-    if (comptime std.meta.trait.isFloat(T)) {
-        return toFloat(T, a) + toFloat(T, b);
-    } else {
-        return toInt(T, a) + toInt(T, b);
-    }
-}
-
-/// Converts a and b to T (if neeeded) and subtracts them, returning a float or integer of type T
-pub inline fn sub(comptime T: type, a: anytype, b: anytype) T {
-    if (comptime std.meta.trait.isFloat(T)) {
-        return toFloat(T, a) - toFloat(T, b);
-    } else {
-        return toInt(T, a) - toInt(T, b);
-    }
 }
 
 // Converts a and b to f32 and adds them
