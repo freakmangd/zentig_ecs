@@ -1,3 +1,4 @@
+const std = @import("std");
 const ztg = @import("init.zig");
 const Entity = ztg.Entity;
 const EntityHandle = @This();
@@ -5,12 +6,10 @@ const EntityHandle = @This();
 com: ztg.Commands,
 ent: Entity,
 
-pub fn give(self: EntityHandle, comp: anytype) !void {
-    try self.com.giveEnt(self.ent, comp);
-}
+pub const give = @compileError("EntityHandle.give has been renamed to giveComponents to be more in line with the Commands interface.");
 
-pub fn giveMany(self: EntityHandle, comps: anytype) !void {
-    try self.com.giveEntMany(self.ent, comps);
+pub fn giveComponents(self: EntityHandle, comps: anytype) !void {
+    try self.com.giveComponents(self.ent, comps);
 }
 
 pub fn removeComponent(self: EntityHandle, comptime Comp: type) !void {
@@ -35,7 +34,7 @@ pub fn setParent(self: EntityHandle, parent: anytype) !void {
         Entity, ?Entity => try self.com.setEntParent(self.ent, parent),
         EntityHandle => try self.com.setEntParent(self.ent, parent.ent),
         @TypeOf(null) => try self.com.setEntParent(self.ent, null),
-        else => |T| @compileError("Type " ++ @typeName(T) ++ " not supported for setParent. Accepted types are: ?Entity, EntityHandle, and @TypeOf(null)"),
+        else => |T| @compileError(std.fmt.comptimePrint("Type `{s}` not supported for setParent. Accepted types are: ?Entity, EntityHandle, and @TypeOf(null)", .{@typeName(T)})),
     }
 }
 
@@ -44,12 +43,12 @@ pub fn giveChild(self: EntityHandle, child: anytype) !void {
     switch (@TypeOf(child)) {
         Entity, ?Entity => try self.com.giveEntChild(self.ent, child),
         EntityHandle => try self.com.giveEntChild(self.ent, child.ent),
-        else => |T| @compileError("Type " ++ @typeName(T) ++ " not supported for giveChild. Accepted types are: ?Entity and EntityHandle"),
+        else => |T| @compileError(std.fmt.comptimePrint("Type `{s}` not supported for giveChild. Accepted types are: ?Entity, EntityHandle", .{@typeName(T)})),
     }
 }
 
 pub fn newChildWith(self: EntityHandle, child_components: anytype) !EntityHandle {
-    const child = try self.com.newEntWithMany(child_components);
+    const child = try self.com.newEntWith(child_components);
     try self.giveChild(child);
     return child;
 }

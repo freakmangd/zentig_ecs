@@ -35,7 +35,7 @@ pub fn fromPos(pos: ztg.Vec3) Self {
     return init(pos, ztg.Vec4.identity(), ztg.Vec3.one());
 }
 
-pub fn fromRot(rot: ztg.Vec3) Self {
+pub fn fromRot(rot: ztg.Vec4) Self {
     return init(ztg.Vec3.zero(), rot, ztg.Vec3.one());
 }
 
@@ -43,6 +43,7 @@ pub fn fromScale(_scale: ztg.Vec3) Self {
     return init(ztg.Vec3.zero(), ztg.Vec4.identity(), _scale);
 }
 
+pub const default = identity;
 pub fn identity() Self {
     return init(ztg.Vec3.zero(), ztg.Vec4.identity(), ztg.Vec3.one());
 }
@@ -52,9 +53,10 @@ pub fn getPos(self: Self) ztg.Vec3 {
 }
 
 pub inline fn setPos(self: *Self, new_pos: ztg.Vec3) void {
-    self.basis[3][0] = new_pos.x;
-    self.basis[3][1] = new_pos.y;
-    self.basis[3][2] = new_pos.z;
+    zmath.storeArr4(&self.basis[3], new_pos.intoZMath());
+    //self.basis[3][0] = new_pos.x;
+    //self.basis[3][1] = new_pos.y;
+    //self.basis[3][2] = new_pos.z;
 }
 
 pub inline fn translate(self: *Self, by: ztg.Vec3) void {
@@ -115,7 +117,7 @@ pub fn getUpdatedBasis(self: *Self) zmath.Mat {
 }
 
 pub fn onAdded(ent: ztg.Entity, com: ztg.Commands) !void {
-    if (!com.checkEntHas(ent, ztg.base.GlobalTransform)) try com.giveEnt(ent, ztg.base.GlobalTransform.identity());
+    if (!com.checkEntHas(ent, ztg.base.GlobalTransform)) try com.giveComponents(ent, .{ztg.base.GlobalTransform.identity()});
 }
 
 test {

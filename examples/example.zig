@@ -34,6 +34,9 @@ const player = struct {
     // A "Bundle" is just a name for a predetermined list of Components,
     // it's really just so you dont forget to add something when making entities
     // and/or for creating helper functions for these groups of compontents.
+    //
+    // if you want named fields (i.e. `player: Player,`) the bundle struct needs
+    // a pub is_component_bundle decl.
     pub const PlayerBundle = struct {
         Player,
         ztg.base.Transform,
@@ -41,15 +44,15 @@ const player = struct {
 
     pub fn spawn(com: ztg.Commands) !void {
         // Use the PlayerBundle struct as a blueprint
-        const plr_ent = try com.newEntWithMany(player.PlayerBundle{
+        const plr_ent = try com.newEntWith(player.PlayerBundle{
             .{ .name = "Player" },
             ztg.base.Transform.initWith(.{ .pos = ztg.vec3(10, 10, 0) }),
         });
 
-        try plr_ent.give(Mover{
+        try plr_ent.giveComponents(.{Mover{
             .speed = 5,
             .dir = ztg.Vec3.right(),
-        });
+        }});
     }
 
     // A basic system
@@ -76,7 +79,7 @@ const Mover = struct {
         // A default transform is provided in case the entity doesnt have one.
         // The defaults of a transform place it at { 0, 0, 0 } with a scale of
         // { 1, 1, 1 } and a rotation of 0.
-        if (!com.checkEntHas(ent, ztg.base.Transform)) try com.giveEnt(ent, ztg.base.Transform.identity());
+        if (!com.checkEntHas(ent, ztg.base.Transform)) try com.giveComponents(ent, .{ztg.base.Transform.identity()});
     }
 
     pub fn include(comptime wb: *ztg.WorldBuilder) void {
