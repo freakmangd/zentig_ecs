@@ -3,7 +3,6 @@ const Type = std.builtin.Type;
 
 const Self = @This();
 
-// TODO: eventually turn this into a []Type.StructField?
 fields: []const Type.StructField = &.{},
 is_tuple: bool = false,
 layout: Type.ContainerLayout = .Auto,

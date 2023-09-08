@@ -1,7 +1,8 @@
 const std = @import("std");
+const util = @import("../util.zig");
 
-pub const TypeBuilder = @import("etc/type_builder.zig");
-pub const TypeMap = @import("etc/type_map.zig");
+pub const TypeBuilder = @import("type_builder.zig");
+pub const TypeMap = @import("type_map.zig");
 
 pub const EnumLiteral = @TypeOf(.enum_literal);
 
@@ -20,7 +21,7 @@ pub const MemberFnType = enum {
 /// Returns whether a function is a member function
 /// and whether it takes by value, ptr, or const ptr
 pub fn memberFnType(comptime Container: type, comptime fn_name: []const u8) MemberFnType {
-    if (!@hasDecl(Container, fn_name)) @compileError("Function " ++ fn_name ++ " is not part of the " ++ @typeName(Container) ++ " namespace.");
+    if (!@hasDecl(Container, fn_name)) util.compileError("Function `{s}` is not part of the `{s}` namespace.", .{ fn_name, @typeName(Container) });
 
     const params = @typeInfo(@TypeOf(@field(Container, fn_name))).Fn.params;
     if (comptime params.len == 0) return .non_member;
@@ -50,51 +51,69 @@ pub fn ReturnType(comptime f: anytype) type {
     return @typeInfo(@TypeOf(f)).Fn.return_type.?;
 }
 
-/// A structure for making lists of comptime only objects.
-/// To be only used at comptime.
-pub fn ComptimeList(comptime T: type) type {
-    return struct {
-        const Self = @This();
+/// Combines two struct types by their fields,
+/// returning a new type that contains all of the fields
+/// of the types passed in.
+///
+/// Example:
+/// ```zig
+/// const A = struct { a: i32, b: i16 };
+/// const B = struct { c: f32, d: f16 };
+///
+/// const C = CombineStructTypes(&.{ A, B });
+/// // C == struct { a: i32, b: i16, c: f32, d: f16 };
+/// ```
+pub fn CombineStructTypes(comptime types: []const type) type {
+    var field_count: usize = 0;
 
-        items: []const T = &.{},
+    for (types) |T| {
+        field_count += @typeInfo(T).Struct.fields.len;
+    }
 
-        pub fn fromSlice(comptime items: []const T) Self {
-            return .{ .items = items };
+    var field_types: [field_count]std.builtin.Type.StructField = undefined;
+    var field_types_i: usize = 0;
+
+    for (types) |T| {
+        for (std.meta.fields(T)) |field| {
+            field_types[field_types_i] = field;
+            field_types_i += 1;
         }
+    }
 
-        pub fn append(comptime self: *Self, comptime t: T) void {
-            self.items = self.items ++ .{t};
-        }
-
-        pub fn insert(comptime self: *Self, comptime index: usize, comptime t: T) void {
-            var items: [self.items.len + 1]T = undefined;
-
-            @memcpy(items[0..index], self.items[0..index]);
-            @memcpy(items[index + 1 ..], self.items[index..]);
-            items[index] = t;
-
-            self.items = &items;
-        }
-
-        pub fn replace(comptime self: *Self, comptime index: usize, comptime t: T) void {
-            var items: [self.items.len]T = undefined;
-            @memcpy(&items, self.items);
-
-            items[index] = t;
-
-            self.items = &items;
-        }
-    };
+    return @Type(.{ .Struct = std.builtin.Type.Struct{
+        .fields = &field_types,
+        .decls = &.{},
+        .layout = .Auto,
+        .is_tuple = false,
+    } });
 }
 
-test ComptimeList {
-    const list = comptime blk: {
-        var list = ComptimeList(usize).fromSlice(&.{ 1, 2, 3 });
-        list.append(4);
-        list.replace(0, 5);
-        break :blk list;
-    };
-    try std.testing.expectEqualSlices(usize, &.{ 5, 2, 3, 4 }, list.items);
+test CombineStructTypes {
+    const A = struct { a: i32, b: i16 };
+    const B = struct { c: f32, d: f16 };
+    const C = CombineStructTypes(&.{ A, B });
+
+    try std.testing.expectEqualDeep(std.meta.fieldNames(C), &.{ "a", "b", "c", "d" });
+    try std.testing.expectEqual(i32, std.meta.FieldType(C, .a));
+    try std.testing.expectEqual(i16, std.meta.FieldType(C, .b));
+    try std.testing.expectEqual(f32, std.meta.FieldType(C, .c));
+    try std.testing.expectEqual(f16, std.meta.FieldType(C, .d));
+}
+
+fn DeclsToTuple(comptime T: type) type {
+    var types: [std.meta.declarations(T).len]type = undefined;
+    for (&types, std.meta.declarations(T)) |*o, decl| {
+        o.* = @TypeOf(@field(T, decl.name));
+    }
+    return std.meta.Tuple(&types);
+}
+
+pub fn declsToTuple(comptime T: type) DeclsToTuple(T) {
+    var out: DeclsToTuple(T) = undefined;
+    for (std.meta.declarations(T), 0..) |decl, i| {
+        out[i] = @field(T, decl.name);
+    }
+    return out;
 }
 
 pub const Utp = *const opaque {};

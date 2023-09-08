@@ -1,5 +1,5 @@
 //! Functions used internally by zentig that either shouldnt be exposed
-//! or are too specific to be of any use outsize zentig.
+//! or are too specific to be of any use outside zentig.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -15,6 +15,10 @@ pub fn ArrayHashMapElem(comptime T: type) type {
     return @typeInfo(T.KV).Struct.fields[1].type;
 }
 
+pub fn compileError(comptime format: []const u8, comptime args: anytype) noreturn {
+    @compileError(std.fmt.comptimePrint(format, args));
+}
+
 pub fn assertOkOnAddedFunction(comptime Container: type) void {
     const member_type = comptime ztg.meta.memberFnType(Container, "onAdded");
     const fn_info = @typeInfo(@TypeOf(Container.onAdded)).Fn;
@@ -25,9 +29,9 @@ pub fn assertOkOnAddedFunction(comptime Container: type) void {
     }
 
     if (comptime member_type == .non_member and (fn_info.params[0].type.? != ztg.Entity or fn_info.params[1].type.? != ztg.Commands)) {
-        @compileError("non-member onAdded function from type " ++ @typeName(Container) ++ " does not follow the form fn (Entity, Commands) (!)void");
+        compileError("non-member onAdded function from type `{s}` does not follow the form fn (Entity, Commands) (!)void", .{@typeName(Container)});
     } else if (comptime member_type != .non_member and (fn_info.params[1].type.? != ztg.Entity or fn_info.params[2].type.? != ztg.Commands)) {
-        @compileError("member onAdded function from type " ++ @typeName(Container) ++ " does not follow the form fn (Self|*const Self|*Self, Entity, Commands) (!)void");
+        compileError("member onAdded function from type `{s}` does not follow the form fn (Self|*const Self|*Self, Entity, Commands) (!)void", .{@typeName(Container)});
     }
 }
 

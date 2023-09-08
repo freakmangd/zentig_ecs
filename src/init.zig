@@ -14,7 +14,9 @@ pub usingnamespace @import("system_order.zig");
 pub const math = @import("math/init.zig");
 pub const zmath = @import("zmath");
 
-pub const StateMachine = @import("state_machine.zig");
+pub const StateMachine = @import("etc/state_machine.zig");
+pub const ComptimeList = @import("etc/comptime_list.zig").ComptimeList;
+pub const Timer = @import("etc/timer.zig");
 
 pub const Vec2 = @import("math/vec2.zig").Vec2;
 pub const Vec3 = @import("math/vec3.zig").Vec3;
@@ -22,10 +24,8 @@ pub const Vec4 = @import("math/vec4.zig").Vec4;
 
 /// Shorthand for ztg.Vec2.init
 pub const vec2 = Vec2.init;
-
 /// Shorthand for ztg.Vec3.init
 pub const vec3 = Vec3.init;
-
 /// Shorthand for ztg.Vec4.init
 pub const vec4 = Vec4.init;
 
@@ -41,7 +41,7 @@ pub const input = @import("mods/input.zig");
 /// Zentig's scoped logging functions
 pub const log = std.log.scoped(.zentig);
 
-pub const meta = @import("meta.zig");
+pub const meta = @import("etc/meta.zig");
 pub const profiler = @import("etc/profiler.zig");
 
 /// A resource that can be requested, represents an arena allocator that gets reset each frame
@@ -62,4 +62,6 @@ test {
     _ = input;
     _ = meta;
     _ = profiler;
+    _ = StateMachine;
+    _ = ComptimeList;
 }
