@@ -7,10 +7,15 @@ pub fn build(b: *std.Build) void {
 
     const zmath_pkg = zmath.package(b, target, optimize, .{});
 
+    const zigfsm_mod = b.createModule(.{
+        .source_file = std.Build.FileSource.relative("deps/zigfsm/src/main.zig"),
+    });
+
     const zentig_mod = b.addModule("zentig", .{
         .source_file = std.Build.FileSource.relative("src/init.zig"),
         .dependencies = &[_]std.Build.ModuleDependency{
             .{ .name = "zmath", .module = zmath_pkg.zmath },
+            .{ .name = "zigfsm", .module = zigfsm_mod },
         },
     });
 
@@ -116,6 +121,7 @@ pub fn addAsLocalModule(settings: struct {
     optimize: std.builtin.OptimizeMode,
     import_zmath_as: ?[]const u8 = null,
     import_zmath_options_as: ?[]const u8 = null,
+    import_zigfsm_as: ?[]const u8 = null,
 }) ZentigModule {
     const zmath_pkg = zmath.package(settings.build, settings.target, settings.optimize, .{});
 
