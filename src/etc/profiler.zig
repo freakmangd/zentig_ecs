@@ -20,7 +20,7 @@ const ztg = @import("../init.zig");
 const builtin = @import("builtin");
 const Self = @This();
 
-const ProfilerSection = struct {
+pub const ProfilerSection = struct {
     name: []const u8,
     timing_micro: i64 = 0,
     samples: usize = 0,

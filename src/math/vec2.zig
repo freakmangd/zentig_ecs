@@ -1,8 +1,8 @@
 const std = @import("std");
-const ztg_maybe = @import("root");
 const testing = std.testing;
 
 const ztg = @import("../init.zig");
+const util = @import("../util.zig");
 const math = std.math;
 
 /// A vector of 2 `f32`s
@@ -20,14 +20,15 @@ pub const Vec2 = extern struct {
         };
     }
 
-    pub inline fn set(self: *Vec2, x: f32, y: f32) void {
-        self.x = x;
-        self.y = y;
+    pub inline fn set(self: *Vec2, x: anytype, y: anytype) void {
+        self.x = if (comptime @typeInfo(@TypeOf(x)) == .Int) @floatFromInt(x) else x;
+        self.y = if (comptime @typeInfo(@TypeOf(y)) == .Int) @floatFromInt(y) else y;
     }
 
     /// Returns T with all of it's components set to the original vector's
     /// T's only required components must be `x`, and `y`
     pub inline fn into(self: Vec2, comptime T: type) T {
+        if (@typeInfo(T).Struct.layout == .Extern) return @bitCast(self);
         return .{ .x = self.x, .y = self.y };
     }
 
@@ -43,7 +44,7 @@ pub const Vec2 = extern struct {
         } else if (comptime std.meta.trait.isIntegral(T)) {
             return .{ @as(T, @intFromFloat(self.x)), @as(T, @intFromFloat(self.y)) };
         } else {
-            @compileError("Cannot turn self into a vector of " ++ @typeName(T));
+            util.compileError("Cannot turn self into a vector of `{s}`", .{@typeName(T)});
         }
     }
 
@@ -64,7 +65,7 @@ pub const Vec2 = extern struct {
         try testing.expectEqual(std.math.degreesToRadians(ztg.math.Radians, 180), init(-1, 0).intoDirAngle());
     }
 
-    /// Converts angle theta to a vector representation
+    /// Converts angle theta to a unit vector representation
     /// starting at .{ 1, 0 } and going ccw towards .{ 0, 1 }
     pub inline fn fromDirAngle(theta: ztg.math.Radians) Vec2 {
         return .{
@@ -90,6 +91,7 @@ pub const Vec2 = extern struct {
 
     /// Creates a new Vec2 from the components of other
     pub inline fn from(other: anytype) Vec2 {
+        if (@typeInfo(@TypeOf(other)).Struct.layout == .Extern) return @bitCast(other);
         return .{ .x = other.x, .y = other.y };
     }
 
@@ -154,9 +156,13 @@ pub const Vec2 = extern struct {
         };
     }
 
+    test perpendicular {
+        try init(-1, 0).expectApproxEqAbs(init(0, 1).perpendicular());
+    }
+
     /// Returns a new copy of the vector rotated ccw by `angle` radians
     pub inline fn getRotated(self: Vec2, angle: ztg.math.Radians) Vec2 {
-        return .{
+        return Vec2{
             .x = @mulAdd(f32, std.math.cos(angle), self.x, -std.math.sin(angle) * self.y),
             .y = @mulAdd(f32, std.math.sin(angle), self.x, std.math.cos(angle) * self.y),
         };
@@ -171,8 +177,7 @@ pub const Vec2 = extern struct {
         self.* = self.getRotated(angle);
     }
 
-    pub fn format(value: Vec2, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = options;
-        try writer.print("Vec2({" ++ fmt ++ "}, {" ++ fmt ++ "})", .{ value.x, value.y });
+    pub fn format(value: Vec2, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        try writer.print(std.fmt.comptimePrint("Vec2({{{s}}}, {{{s}}})", .{ fmt, fmt }), .{ value.x, value.y });
     }
 };

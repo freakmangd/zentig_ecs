@@ -132,9 +132,9 @@ Lets make a system to do just that:
 Add to line 17:
 ```zig
 17: fn spawnEntities(com: ztg.Commands) !void {
-18:     _ = try com.newEntWith(Name{"Mark"});
-19:     _ = try com.newEntWith(Name{"Steve"});
-20:     _ = try com.newEntWith(Name{"Alice"});
+18:     _ = try com.newEntWith(.{Name{"Mark"}});
+19:     _ = try com.newEntWith(.{Name{"Steve"}});
+20:     _ = try com.newEntWith(.{Name{"Alice"}});
 21: }
 ```
 
@@ -202,8 +202,8 @@ Our program is now complete, but try adding a `Score` component to each entity w
 that increments it by one and reports the total and the entity's name.
 Then try running `.update` multiple times until it reports a score of `3` for each.
 
-> Hint: You can either use `Commands.newEntWithMany` and pass an annonymous tuple of type `struct { Name, Score }`, or
-> you can assign that `EntityHandle` to a local and use `EntityHandle.give` to give the entity a `Score` as well.
+> Hint: You can either use `Commands.newEntWith` and pass an annonymous tuple of type `struct { Name, Score }`, or
+> you can assign that `EntityHandle` to a local and use `EntityHandle.giveComponents` to give the entity a `Score` as well.
 
 The answer and the whole file we just created is in `examples/hello_world.zig`.
 

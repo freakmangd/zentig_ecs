@@ -129,10 +129,6 @@ pub fn iterator(self: *Self) ByteIterator {
     };
 }
 
-test "decls" {
-    std.testing.refAllDecls(@This());
-}
-
 const Data = struct {
     lmao: u32,
     uhh: bool = false,
@@ -174,4 +170,29 @@ test "data" {
 
     arr.swapRemove(0);
     try std.testing.expectEqual(@as(usize, 0), arr.len);
+}
+
+test "iterator" {
+    const alloc = std.testing.allocator;
+
+    var arr = Self.init(Data);
+    defer arr.deinit(alloc);
+
+    try arr.append(alloc, Data{ .lmao = 10 });
+    try arr.append(alloc, Data{ .lmao = 20 });
+    try arr.append(alloc, Data{ .lmao = 30 });
+    try arr.append(alloc, Data{ .lmao = 40 });
+
+    const expected = [_]Data{
+        Data{ .lmao = 10 },
+        Data{ .lmao = 20 },
+        Data{ .lmao = 30 },
+        Data{ .lmao = 40 },
+    };
+
+    var i: usize = 0;
+    var iter = arr.iterator();
+    while (iter.nextAs(Data)) |data| : (i += 1) {
+        try std.testing.expectEqual(expected[i], data.*);
+    }
 }

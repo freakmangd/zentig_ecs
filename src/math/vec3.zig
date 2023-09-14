@@ -20,15 +20,16 @@ pub const Vec3 = extern struct {
         };
     }
 
-    pub inline fn set(self: *Vec3, x: f32, y: f32, z: f32) void {
-        self.x = x;
-        self.y = y;
-        self.z = z;
+    pub inline fn set(self: *Vec3, x: anytype, y: anytype, z: anytype) void {
+        self.x = if (comptime @typeInfo(@TypeOf(x)) == .Int) @floatFromInt(x) else x;
+        self.y = if (comptime @typeInfo(@TypeOf(y)) == .Int) @floatFromInt(y) else y;
+        self.z = if (comptime @typeInfo(@TypeOf(z)) == .Int) @floatFromInt(z) else z;
     }
 
     /// Returns T with all of it's components set to the original vector's
     /// T's only required components must be `x`, `y`, and `z`
     pub inline fn into(self: Vec3, comptime T: type) T {
+        if (@typeInfo(T).Struct.layout == .Extern) return @bitCast(self);
         return .{ .x = self.x, .y = self.y, .z = self.z };
     }
 
@@ -50,7 +51,7 @@ pub const Vec3 = extern struct {
         } else if (comptime std.meta.trait.isIntegral(T)) {
             return .{ @intFromFloat(self.x), @intFromFloat(self.y), @intFromFloat(self.z) };
         } else {
-            @compileError("Cannot turn self into a vector of " ++ @typeName(T));
+            util.compileError("Cannot turn self into a vector of `{s}`", .{@typeName(T)});
         }
     }
 
@@ -71,6 +72,7 @@ pub const Vec3 = extern struct {
 
     /// Creates a Vec3 from other, other must have `x`, `y`, and `z` components
     pub inline fn from(other: anytype) Vec3 {
+        if (@typeInfo(@TypeOf(other)).Struct.layout == .Extern) return @bitCast(other);
         return .{ .x = other.x, .y = other.y, .z = other.z };
     }
 
@@ -135,8 +137,7 @@ pub const Vec3 = extern struct {
         return Vec3.fromSimd(rand_vec);
     }
 
-    pub fn format(value: Vec3, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = options;
-        try writer.print("Vec3({" ++ fmt ++ "}, {" ++ fmt ++ "}, {" ++ fmt ++ "})", .{ value.x, value.y, value.z });
+    pub fn format(value: Vec3, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        try writer.print(std.fmt.comptimePrint("Vec3({{{s}}}, {{{s}}}, {{{s}}})", .{ fmt, fmt, fmt }), .{ value.x, value.y, value.z });
     }
 };

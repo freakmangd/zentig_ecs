@@ -30,9 +30,9 @@ fn updateScore(q: ztg.Query(.{ Name, Score })) void {
 }
 
 fn spawnEntities(com: ztg.Commands) !void {
-    _ = try com.newEntWithMany(.{ Name{"Mark"}, Score{} });
-    _ = try com.newEntWithMany(.{ Name{"Steve"}, Score{} });
-    _ = try com.newEntWithMany(.{ Name{"Alice"}, Score{} });
+    _ = try com.newEntWith(.{ Name{"Mark"}, Score{} });
+    _ = try com.newEntWith(.{ Name{"Steve"}, Score{} });
+    _ = try com.newEntWith(.{ Name{"Alice"}, Score{} });
 }
 
 pub fn main() !void {

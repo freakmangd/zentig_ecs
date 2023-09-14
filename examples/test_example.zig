@@ -41,9 +41,11 @@ const player_file = struct {
     };
 
     pub const PlayerBundle = struct {
-        Player,
-        ztg.base.Transform,
-        game_file.Sprite,
+        pub const is_component_bundle = true;
+
+        player: Player,
+        transform: ztg.base.Transform,
+        sprite: game_file.Sprite,
     };
 
     pub const Jetpack = struct {
@@ -55,22 +57,22 @@ const player_file = struct {
     };
 
     fn playerSpawn(com: ztg.Commands) !void {
-        // "GiveMany" functions can be called with either a struct that defines
-        // all the types. (PlayerBundle)
-        const plr = try com.newEntWithMany(PlayerBundle{
-            .{ .name = "Player" },
-            ztg.base.Transform.initWith(.{ .pos = ztg.vec3(10, 10, 0) }),
-            .{ .img = 0 },
+        // "Give" functions can be called with either a struct that defines
+        // all the types and has a public is_component_bundle decl. (PlayerBundle)
+        const plr = try com.newEntWith(PlayerBundle{
+            .player = .{ .name = "Player" },
+            .transform = ztg.base.Transform.fromPos(ztg.vec3(10, 10, 0)),
+            .sprite = .{ .img = 0 },
         });
 
-        // Or an anonymous tuple.
-        try plr.giveMany(.{
+        // Or an anonymous/named tuple.
+        try plr.giveComponents(.{
             Jetpack{ .thrust = 100 },
             Backpack{ .space = 20 },
         });
 
         // this could be also written as:
-        // try com.giveEntMany(plr.ent, .{ ... });
+        // try com.giveComponents(plr.ent, .{ ... });
     }
 
     fn playerSpeach(q: ztg.Query(.{ Player, ztg.base.Transform })) !void {

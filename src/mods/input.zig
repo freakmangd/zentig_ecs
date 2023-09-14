@@ -5,8 +5,8 @@ const log = std.log.scoped(.zentig_input);
 const Options = struct {
     max_controllers: usize = 4,
     update_stage: struct {
-        stage: @TypeOf(.enum_literal) = .pre_update,
-        label: @TypeOf(.enum_literal) = .body,
+        stage: ztg.meta.EnumLiteral = .pre_update,
+        label: ztg.meta.EnumLiteral = .body,
         order: ztg.SystemOrder = .during,
     } = .{},
 };
@@ -370,17 +370,17 @@ fn ControllerBuilder(
 
 fn EnumFromLiterals(comptime literals: anytype) type {
     return comptime blk: {
-        var enum_fields: []const std.builtin.Type.EnumField = &.{};
+        var enum_fields: [literals.len]std.builtin.Type.EnumField = undefined;
 
-        inline for (literals, 0..) |lit, i| {
-            enum_fields = enum_fields ++ [1]std.builtin.Type.EnumField{.{
+        for (literals, &enum_fields, 0..) |lit, *field, i| {
+            field.* = .{
                 .name = @tagName(lit),
                 .value = i,
-            }};
+            };
         }
 
         break :blk @Type(std.builtin.Type{ .Enum = .{
-            .fields = enum_fields,
+            .fields = &enum_fields,
             .is_exhaustive = true,
             .tag_type = std.math.IntFittingRange(0, literals.len),
             .decls = &.{},

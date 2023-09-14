@@ -1,5 +1,5 @@
 const std = @import("std");
-const meta = @import("../meta.zig");
+const meta = @import("meta.zig");
 
 const Self = @This();
 

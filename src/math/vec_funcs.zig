@@ -4,6 +4,7 @@
 
 const std = @import("std");
 const ztg = @import("../init.zig");
+const util = @import("../util.zig");
 const math = std.math;
 
 pub fn init(comptime Self: type) type {
@@ -129,12 +130,16 @@ pub fn init(comptime Self: type) type {
             return @bitCast(self);
         }
 
+        pub inline fn abs(v: Self) Self {
+            return fromSimd(@fabs(v.toSimd()));
+        }
+
         /// Returns the angle between to vectors in radians
         pub inline fn angle(a: Self, b: Self) ztg.math.Radians {
             const denominator = math.sqrt(Self.sqrLength(a) * Self.sqrLength(b));
             if (math.approxEqAbs(f32, denominator, 0, 1e-15)) return 0;
 
-            const vec_dot = math.clamp(Self.dot(a, b) / denominator, -1, 1);
+            const vec_dot = math.clamp(dot(a, b) / denominator, -1, 1);
             return math.acos(vec_dot);
         }
 
@@ -147,14 +152,18 @@ pub fn init(comptime Self: type) type {
 
         /// Returns a normalized vector that points from `orig` to `to`
         pub inline fn directionTo(orig: Self, to: Self) Self {
-            return Self.sub(to, orig).getNormalized();
+            return sub(to, orig).getNormalized();
         }
 
         pub inline fn distance(a: Self, b: Self) f32 {
-            return Self.length(Self.sub(a, b));
+            return length(sub(a, b));
         }
 
-        pub inline fn dot(a: Vec2, b: Vec2) f32 {
+        pub inline fn sqrDistance(a: Self, b: Self) f32 {
+            return sqrLength(sub(a, b));
+        }
+
+        pub inline fn dot(a: Self, b: Self) f32 {
             return ztg.math.dotVec(a.intoSimd(), b.intoSimd());
         }
 
@@ -164,7 +173,7 @@ pub fn init(comptime Self: type) type {
             return Self.div(self, m);
         }
 
-        pub inline fn setNormalized(self: *Vec2) void {
+        pub inline fn setNormalized(self: *Self) void {
             self.* = self.getNormalized();
         }
 
@@ -233,10 +242,23 @@ pub fn init(comptime Self: type) type {
         /// ```zig
         /// const a = Vec2.init(10, 20);
         /// const b = a.swizzle(.{ .y, .x });
-        /// try b.expectEqual(.{ 20, 10 });
+        /// try b.expectEqual(.{ .x = 20, .y = 10 });
         /// ```
         pub inline fn swizzle(self: Self, comptime comps: [vec_len]Component) Self {
             return fromSimd(@shuffle(f32, self.intoSimd(), undefined, @as(@Vector(vec_len, i32), @bitCast(comps))));
+        }
+
+        /// Returns a vector with components chosen from a and b based on `comps`.
+        /// Behaves similarly to `@shuffle`
+        /// Example:
+        /// ```zig
+        /// const a = Vec2.init(10, 20);
+        /// const b = Vec2.init(20, 10);vecf
+        /// const c = Vec2.shuffle(a, b, .{ -1, 1 });
+        /// try c.expectEqual(.{ .x = 20, .y = 20 });
+        /// ```
+        pub inline fn shuffle(a: Self, b: Self, comptime comps: @Vector(vec_len, i32)) Self {
+            return fromSimd(@shuffle(f32, a.intoSimd(), b.intoSimd(), comps));
         }
 
         /// Returns a copy of `vec` with it's length clamped to max_len
@@ -312,7 +334,7 @@ pub fn convertFieldToF32(obj: anytype, comptime field_name: []const u8, default:
         .Float => @floatCast(@field(obj, field_name)),
         .ComptimeFloat => @field(obj, field_name),
         .ComptimeInt => @field(obj, field_name),
-        else => @compileError("Cannot convert type " ++ @typeName(FieldType) ++ " to f32."),
+        else => util.compileError("Cannot convert type `{s}` to f32.", .{@typeName(FieldType)}),
     };
 }
 
@@ -321,11 +343,14 @@ const Vec2 = @import("vec2.zig").Vec2;
 test "angle" {
     const v = Vec2.right();
 
-    try std.testing.expectApproxEqRel(math.degreesToRadians(f32, 90), v.angle(Vec2.down()), std.math.floatEps(f32));
-    try std.testing.expectApproxEqRel(math.degreesToRadians(f32, -90), v.angleSigned(Vec2.down()), std.math.floatEps(f32));
+    const between_down = v.angle(Vec2.down());
+    try std.testing.expectApproxEqRel(math.degreesToRadians(f32, 90), between_down, std.math.floatEps(f32));
+
+    const between_down_signed = v.angleSigned(Vec2.down());
+    try std.testing.expectApproxEqRel(math.degreesToRadians(f32, -90), between_down_signed, std.math.floatEps(f32));
 }
 
-test "direction" {
+test "directionTo" {
     const v0 = Vec2.zero();
     const v1 = Vec2.right();
 
@@ -333,8 +358,8 @@ test "direction" {
 }
 
 test "getNormalized" {
-    const v = Vec2.init(10, 20);
-    _ = v;
+    const v = Vec2.init(3, 4);
+    try Vec2.expectApproxEqRel(Vec2.init(0.6, 0.8), v.getNormalized());
 }
 
 test "swizzle" {
@@ -342,4 +367,11 @@ test "swizzle" {
     try Vec2.expectEqual(Vec2.init(20, 10), vec.swizzle(.{ .y, .x }));
     try Vec2.expectEqual(Vec2.init(10, 10), vec.swizzle(.{ .x, .x }));
     try Vec2.expectEqual(Vec2.init(20, 20), vec.swizzle(.{ .y, .y }));
+}
+
+test "shuffle" {
+    const a = Vec2{ .x = 10, .y = 20 };
+    const b = Vec2{ .x = 20, .y = 10 };
+    const c = Vec2.shuffle(a, b, .{ -1, 1 });
+    try Vec2.expectEqual(.{ .x = 20, .y = 20 }, c);
 }

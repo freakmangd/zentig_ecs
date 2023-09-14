@@ -5,24 +5,19 @@ const util = @import("util.zig");
 const ByteArray = @import("etc/byte_array.zig");
 const Allocator = std.mem.Allocator;
 
-pub const Error = error{ OutOfMemory, Overflow };
-
-pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
-    const null_bit = 1 << (@typeInfo(Index).Int.bits - 1);
-
+/// Stores component data as bytes on the heap
+pub fn ComponentArray(comptime Index: type) type {
     return struct {
         const Self = @This();
-
-        alloc: std.mem.Allocator,
 
         component_id: util.CompId,
         component_name: if (builtin.mode == .Debug) []const u8 else void,
 
         components_data: ByteArray,
         entities: std.ArrayListUnmanaged(ztg.Entity) = .{},
-        ent_to_comp_idx: []Index = undefined,
+        ent_to_comp_idx: std.AutoHashMapUnmanaged(ztg.Entity, Index) = .{},
 
-        pub fn init(alloc: Allocator, comptime T: type) !Self {
+        pub fn init(comptime T: type) Self {
             //const max_cap = comptime blk: {
             //    if (std.meta.trait.isContainer(T) and @hasDecl(T, "max_entities")) break :blk T.max_entities;
             //    break :blk max_ents;
@@ -30,45 +25,33 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
             //_ = max_cap;
 
             var self = Self{
-                .alloc = alloc,
                 .component_id = util.compId(T),
                 .component_name = if (builtin.mode == .Debug) @typeName(T) else void{},
                 .components_data = ByteArray.init(T),
             };
 
-            errdefer self.entities.deinit(alloc);
-            errdefer self.components_data.deinit(alloc);
-
-            self.ent_to_comp_idx = try alloc.alloc(Index, max_ents);
-            @memset(self.ent_to_comp_idx, null_bit);
-
             return self;
         }
 
-        fn initForTests(comptime T: type) !Self {
-            return init(std.testing.allocator, T);
+        pub fn deinit(self: *Self, alloc: std.mem.Allocator) void {
+            self.components_data.deinit(alloc);
+            self.entities.deinit(alloc);
+            self.ent_to_comp_idx.deinit(alloc);
         }
 
-        pub fn deinit(self: *Self) void {
-            self.components_data.deinit(self.alloc);
-            self.entities.deinit(self.alloc);
-            self.alloc.free(self.ent_to_comp_idx);
-        }
-
-        pub fn assign(self: *Self, ent: ztg.Entity, entry: anytype) !void {
+        pub fn assign(self: *Self, alloc: std.mem.Allocator, ent: ztg.Entity, entry: anytype) !void {
             self.assertType(@TypeOf(entry));
-
-            try self.appendBytes(ent, std.mem.asBytes(&entry));
+            try self.appendBytes(alloc, ent, std.mem.asBytes(&entry));
         }
 
-        pub fn assignData(self: *Self, ent: ztg.Entity, data: *const anyopaque) !void {
-            try self.appendBytes(ent, data);
+        pub fn assignData(self: *Self, alloc: std.mem.Allocator, ent: ztg.Entity, data: *const anyopaque) !void {
+            try self.appendBytes(alloc, ent, data);
         }
 
-        fn appendBytes(self: *Self, ent: ztg.Entity, bytes_start: *const anyopaque) !void {
-            try self.entities.append(self.alloc, ent);
-            self.ent_to_comp_idx[ent] = @as(Index, @intCast(self.components_data.len));
-            try self.components_data.appendPtr(self.alloc, bytes_start);
+        fn appendBytes(self: *Self, alloc: std.mem.Allocator, ent: ztg.Entity, bytes_start: *const anyopaque) !void {
+            try self.entities.append(alloc, ent);
+            try self.ent_to_comp_idx.put(alloc, ent, @intCast(self.components_data.len));
+            try self.components_data.appendPtr(alloc, bytes_start);
         }
 
         pub fn willResize(self: *const Self) bool {
@@ -78,8 +61,9 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
         pub fn reassign(self: *Self, old: ztg.Entity, new: ztg.Entity) void {
             const old_ent_idx = self.indexOfEntityInEnts(old);
             self.entities.items[old_ent_idx] = new;
-            self.ent_to_comp_idx[new] = self.ent_to_comp_idx[old];
-            self.ent_to_comp_idx[old] |= null_bit;
+            const comp_idx = self.ent_to_comp_idx.get(old).?;
+            _ = self.ent_to_comp_idx.remove(old);
+            self.ent_to_comp_idx.putAssumeCapacity(new, comp_idx);
         }
 
         pub fn swapRemove(self: *Self, ent: ztg.Entity) void {
@@ -91,27 +75,24 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
             const index_of_rem = self.indexOfEntityInEnts(ent);
             _ = self.entities.swapRemove(index_of_rem);
 
-            self.components_data.swapRemove(self.ent_to_comp_idx[ent]);
-            self.ent_to_comp_idx[ent] |= null_bit;
+            self.components_data.swapRemove(self.ent_to_comp_idx.get(ent).?);
+            _ = self.ent_to_comp_idx.remove(ent);
 
             // were removing the end of the array, so no need to reassign the last_ent's value
             if (index_of_rem == self.entities.items.len) return;
 
             // ... so we can assign that here
-            self.ent_to_comp_idx[last_ent] = @as(Index, @intCast(index_of_rem));
+            self.ent_to_comp_idx.putAssumeCapacity(last_ent, @intCast(index_of_rem));
         }
 
         fn indexOfEntityInEnts(self: *const Self, ent: ztg.Entity) usize {
             // since entities and components are always added in pairs,
             // ent_to_comp_idx also functions as an ent_to_ent_idx
-            const index = self.ent_to_comp_idx[ent];
-            if (index & null_bit != 0) return std.debug.panic("Could not find entity {} in entities.", .{ent});
-            return index;
+            return self.ent_to_comp_idx.get(ent) orelse std.debug.panic("Could not find entity {} in entities.", .{ent});
         }
 
         pub fn get(self: *const Self, ent: ztg.Entity) ?*anyopaque {
-            const index = self.ent_to_comp_idx[ent];
-            if (index & null_bit != 0) return null;
+            const index = self.ent_to_comp_idx.get(ent) orelse return null;
             return self.components_data.get(index);
         }
 
@@ -123,7 +104,7 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
         }
 
         pub inline fn contains(self: *const Self, ent: ztg.Entity) bool {
-            return self.ent_to_comp_idx[ent] & null_bit == 0;
+            return self.ent_to_comp_idx.contains(ent);
         }
 
         pub inline fn len(self: *const Self) usize {
@@ -153,7 +134,9 @@ pub fn ComponentArray(comptime Index: type, comptime max_ents: usize) type {
     };
 }
 
-const CAT = ComponentArray(usize, 10);
+fn initForTests(comptime Index: type, comptime T: type) ComponentArray(Index) {
+    return ComponentArray(Index).init(T);
+}
 
 const Data = struct {
     val: u32,
@@ -163,12 +146,12 @@ const Data = struct {
 };
 
 test "simple test" {
-    var arr = try CAT.initForTests(u32);
-    defer arr.deinit();
+    var arr = initForTests(usize, u32);
+    defer arr.deinit(std.testing.allocator);
 
-    try arr.assign(0, @as(u32, 1));
-    try arr.assign(1, @as(u32, 1));
-    try arr.assign(2, @as(u32, 1));
+    try arr.assign(std.testing.allocator, 0, @as(u32, 1));
+    try arr.assign(std.testing.allocator, 1, @as(u32, 1));
+    try arr.assign(std.testing.allocator, 2, @as(u32, 1));
 
     _ = arr.swapRemove(2);
 
@@ -178,11 +161,11 @@ test "simple test" {
 }
 
 test "data" {
-    var arr = try CAT.initForTests(Data);
-    defer arr.deinit();
+    var arr = initForTests(usize, Data);
+    defer arr.deinit(std.testing.allocator);
 
-    try arr.assign(2, Data{ .val = 100_000 });
-    try arr.assignData(5, &Data{ .val = 20_000 });
+    try arr.assign(std.testing.allocator, 2, Data{ .val = 100_000 });
+    try arr.assignData(std.testing.allocator, 5, &Data{ .val = 20_000 });
 
     try std.testing.expectEqual(@as(u32, 100_000), arr.getAs(Data, 2).?.val);
     try std.testing.expectEqual(@as(u32, 20_000), arr.getAs(Data, 5).?.val);
@@ -199,11 +182,11 @@ test "data" {
 }
 
 test "remove" {
-    var arr = try CAT.initForTests(usize);
-    defer arr.deinit();
+    var arr = initForTests(usize, usize);
+    defer arr.deinit(std.testing.allocator);
 
-    try arr.assign(1, @as(usize, 100));
-    try arr.assign(2, @as(usize, 200));
+    try arr.assign(std.testing.allocator, 1, @as(usize, 100));
+    try arr.assign(std.testing.allocator, 2, @as(usize, 200));
 
     arr.swapRemove(2);
 
@@ -212,11 +195,11 @@ test "remove" {
 }
 
 test "reassign" {
-    var arr = try CAT.initForTests(usize);
-    defer arr.deinit();
+    var arr = initForTests(usize, usize);
+    defer arr.deinit(std.testing.allocator);
 
-    try arr.assign(0, @as(usize, 10));
-    try arr.assign(1, @as(usize, 20));
+    try arr.assign(std.testing.allocator, 0, @as(usize, 10));
+    try arr.assign(std.testing.allocator, 1, @as(usize, 20));
 
     try std.testing.expectEqual(@as(usize, 10), arr.getAs(usize, 0).?.*);
     try std.testing.expectEqual(@as(usize, 20), arr.getAs(usize, 1).?.*);
@@ -229,9 +212,9 @@ test "reassign" {
 }
 
 test "capacity" {
-    var arr = try ComponentArray(usize, 2).initForTests(usize);
-    defer arr.deinit();
+    var arr = initForTests(usize, usize);
+    defer arr.deinit(std.testing.allocator);
 
-    try arr.assign(0, @as(usize, 10));
-    try arr.assign(1, @as(usize, 20));
+    try arr.assign(std.testing.allocator, 0, @as(usize, 10));
+    try arr.assign(std.testing.allocator, 1, @as(usize, 20));
 }
