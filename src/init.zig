@@ -1,5 +1,17 @@
 const std = @import("std");
 
+// zmath doesnt have a way to use it with the package manager currently,
+// but even if it did, theres no way to fetch packages for a local
+// dependency
+/// Vendored version of https://github.com/michal-z/zig-gamedev
+pub const zmath = @import("zmath");
+
+// there isnt a way to fetch packages for a local dependency currently,
+// so vendoring this allows people to use Zentig as a local dependency
+// more easily
+/// Vendored version of https://github.com/cryptocode/zigfsm
+pub const zigfsm = @import("zigfsm");
+
 /// A unique ID that is assigned to each entity
 pub const Entity = usize;
 
@@ -12,9 +24,7 @@ pub usingnamespace @import("query.zig");
 pub usingnamespace @import("system_order.zig");
 
 pub const math = @import("math/init.zig");
-pub const zmath = @import("zmath");
 
-pub const StateMachine = @import("etc/state_machine.zig");
 pub const ComptimeList = @import("etc/comptime_list.zig").ComptimeList;
 pub const Timer = @import("etc/timer.zig");
 
@@ -62,6 +72,5 @@ test {
     _ = input;
     _ = meta;
     _ = profiler;
-    _ = StateMachine;
     _ = ComptimeList;
 }

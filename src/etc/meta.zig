@@ -116,6 +116,24 @@ pub fn declsToTuple(comptime T: type) DeclsToTuple(T) {
     return out;
 }
 
+pub fn EnumFromLiterals(literals: []const EnumLiteral) type {
+    var fields: [literals.len]std.builtin.Type.EnumField = undefined;
+
+    for (&fields, literals, 0..) |*o, lit, i| {
+        o.* = std.builtin.Type.EnumField{
+            .name = @tagName(lit),
+            .value = i,
+        };
+    }
+
+    return @Type(.{ .Enum = std.builtin.Type.Enum{
+        .fields = &fields,
+        .decls = &.{},
+        .tag_type = std.math.IntFittingRange(0, literals.len),
+        .is_exhaustive = true,
+    } });
+}
+
 pub const Utp = *const opaque {};
 pub const utpOf = struct {
     inline fn utpOf(comptime T: type) Utp {

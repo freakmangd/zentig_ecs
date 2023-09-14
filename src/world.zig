@@ -14,6 +14,7 @@ const TypeBuilder = ztg.meta.TypeBuilder;
 pub const CommandsComponentError = error{UnregisteredComponent};
 pub const CommandsGiveRemoveComponentError = CommandsComponentError || error{EntityDoesntExist} || Allocator.Error;
 
+/// Used for storing pointer-stable objects on the heap
 const WorldInfo = struct {
     alloc: std.mem.Allocator,
     frame_arena: std.heap.ArenaAllocator = undefined,
@@ -39,7 +40,7 @@ pub fn World(comptime wb: WorldBuilder) type {
     if (wb.max_entities == 0) @compileError("Cannot have max_ents == 0.");
 
     const Resources = wb.resources.Build();
-    const MinEntityIndex = std.meta.Int(.unsigned, @typeInfo(std.math.IntFittingRange(0, wb.max_entities)).Int.bits + 1);
+    const MinEntityIndex = std.math.IntFittingRange(0, wb.max_entities);
     const comp_types_len = wb.comp_types.types.len;
 
     return struct {
@@ -47,7 +48,7 @@ pub fn World(comptime wb: WorldBuilder) type {
 
         const StagesList = @import("stages.zig").Init(wb.stage_defs.items, Self);
 
-        const ComponentArray = ca.ComponentArray(MinEntityIndex, wb.max_entities);
+        const ComponentArray = ca.ComponentArray(MinEntityIndex);
         const ComponentMask = std.bit_set.StaticBitSet(wb.comp_types.types.len);
         const EntityArray = ea.EntityArray(ComponentMask, wb.max_entities);
 
@@ -126,7 +127,7 @@ pub fn World(comptime wb: WorldBuilder) type {
                 util.resetCompIds();
                 inline for (wb.comp_types.types, 0..) |CT, i| {
                     @setEvalBranchQuota(20_000);
-                    self.comp_arrays[util.compId(CT)] = try ComponentArray.init(info.alloc, CT);
+                    self.comp_arrays[util.compId(CT)] = ComponentArray.init(CT);
                     last_successful_init_loop = i;
                 }
             }
@@ -350,8 +351,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             if (!self.frame_arena.reset(.{ .retain_with_limit = 5_000_000 })) ztg.log.err("Failed to reset frame arena.", .{});
         }
 
-        /// Returns the next free index for components. Invalidated after hitting the entity limit,
-        /// in which all entity ID's are reassigned and condensed. You shouldnt need to store this.
+        /// Returns the next free index for components. This will be valid for the entity's lifetime.
         ///
         /// If the entity limit is exceeded and no open spaces can be found, there are a few outcomes
         /// depending on your `WorldBuilder.on_ent_overflow` option:
