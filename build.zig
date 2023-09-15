@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) void {
     const zmath_pkg = zmath.package(b, target, optimize, .{});
 
     const zigfsm_mod = b.createModule(.{
-        .source_file = std.Build.FileSource.relative("deps/zigfsm/src/main.zig"),
+        .source_file = std.Build.FileSource.relative("deps/zigfsm.zig"),
     });
 
     const zentig_mod = b.addModule("zentig", .{
