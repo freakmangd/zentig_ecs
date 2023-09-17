@@ -59,7 +59,7 @@ pub fn Init(comptime stage_defs: []const StageDef, comptime World: type) type {
             inline for (systems) |sys| {
                 const System = @TypeOf(sys);
                 const params = @typeInfo(System).Fn.params;
-                const args = if (comptime params.len == 0) .{} else try world.initParamsForSystem(world.frame_alloc, params);
+                const args = try world.initParamsForSystem(world.frame_alloc, params);
 
                 if (comptime ztg.meta.canReturnError(System)) {
                     @call(.auto, sys, args) catch |err| {

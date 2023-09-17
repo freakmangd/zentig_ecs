@@ -844,7 +844,8 @@ pub fn World(comptime wb: WorldBuilder) type {
         /// @call(.auto, myFunction, params);
         /// ```
         pub fn initParamsForSystem(self: *Self, alloc: std.mem.Allocator, comptime params: []const std.builtin.Type.Fn.Param) !ParamsForSystem(params) {
-            if (comptime params.len == 0) @compileError("Use an empty tuple if the params list is empty.");
+            if (comptime params.len == 0) return ParamsForSystem(params){};
+
             var out: ParamsForSystem(params) = undefined;
             inline for (out, 0..) |param, i| {
                 out[i] = try self.initParam(alloc, @TypeOf(param));
@@ -1138,4 +1139,57 @@ test "querying" {
     defer q2.deinit(std.testing.allocator);
 
     try testing.expectEqual(@as(usize, 1), q.len);
+}
+
+test "callbacks" {
+    const systems = struct {
+        var run: bool = false;
+
+        fn load() void {
+            run = true;
+        }
+
+        fn addAndRemove(com: ztg.Commands) !void {
+            const ent = try com.newEntWith(.{Thing{}});
+            try com.removeEnt(ent.ent);
+        }
+
+        const Thing = struct {
+            var run_on_added: bool = false;
+            var run_on_removed: bool = false;
+
+            pub fn onAdded(_: ztg.Entity, _: ztg.Commands) void {
+                run_on_added = true;
+            }
+            pub fn onRemoved() void {
+                run_on_removed = true;
+            }
+        };
+    };
+
+    const EmptyCbWorld = comptime blk: {
+        var wb = WorldBuilder.init(&.{});
+        wb.addComponents(&.{systems.Thing});
+        wb.addSystemsToStage(.load, .{ systems.load, systems.addAndRemove });
+        break :blk wb.Build();
+    };
+
+    var world = try EmptyCbWorld.init(std.testing.allocator);
+    defer world.deinit();
+
+    try world.runStage(.load);
+
+    const ent = try world.newEntWith(.{systems.Thing{}});
+    try world.removeEnt(ent);
+
+    try world.postSystemUpdate();
+
+    try std.testing.expect(systems.run);
+    try std.testing.expect(systems.Thing.run_on_added);
+    try std.testing.expect(systems.Thing.run_on_removed);
+
+    const q = try world.query(std.testing.allocator, ztg.Query(.{ztg.Entity}));
+    defer q.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), q.len);
 }
