@@ -635,7 +635,7 @@ pub fn World(comptime wb: WorldBuilder) type {
 
         fn commands_getResPtr(ptr: *anyopaque, utp: ztg.meta.Utp) error{UnregisteredResource}!*anyopaque {
             inline for (wb.added_resources.types, 0..) |T, i| {
-                if (ztg.meta.utpOf(T) == utp) return &@field(commandsCast(ptr).resources, std.fmt.comptimePrint("{}", .{i}));
+                if (ztg.meta.utpOf(T) == utp) return @ptrCast(&@field(commandsCast(ptr).resources, std.fmt.comptimePrint("{}", .{i})));
             }
             return error.UnregisteredResource;
         }
