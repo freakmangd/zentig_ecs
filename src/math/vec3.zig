@@ -30,13 +30,13 @@ pub const Vec3 = extern struct {
     /// T's only required components must be `x`, `y`, and `z`
     pub inline fn into(self: Vec3, comptime T: type) T {
         if (@typeInfo(T).Struct.layout == .Extern) return @bitCast(self);
-        return .{ .x = self.x, .y = self.y, .z = self.z };
+        return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z) };
     }
 
     /// Returns T with it's x and y components set to the original vector's x and y
     /// T's only required components must be `x` and `y`
     pub inline fn intoVec2(self: Vec3, comptime T: type) T {
-        return .{ .x = self.x, .y = self.y };
+        return .{ .x = @floatCast(self.x), .y = @floatCast(self.y) };
     }
 
     /// Converts the Vector into a @Vector object of type `T`, doing
@@ -73,12 +73,12 @@ pub const Vec3 = extern struct {
     /// Creates a Vec3 from other, other must have `x`, `y`, and `z` components
     pub inline fn from(other: anytype) Vec3 {
         if (@typeInfo(@TypeOf(other)).Struct.layout == .Extern) return @bitCast(other);
-        return .{ .x = other.x, .y = other.y, .z = other.z };
+        return .{ .x = @floatCast(other.x), .y = @floatCast(other.y), .z = @floatCast(other.z) };
     }
 
     /// Creates a Vec3 from other, other must have `x` and `y` components
     pub inline fn fromVec2(vec2: anytype, z: f32) Vec3 {
-        return .{ .x = vec2.x, .y = vec2.y, .z = z };
+        return .{ .x = @floatCast(vec2.x), .y = @floatCast(vec2.y), .z = z };
     }
 
     /// Will try to convert vec to a `Vec3`
@@ -99,7 +99,7 @@ pub const Vec3 = extern struct {
 
     /// Creates a `T`, which must have `x`, `y`, `z`, and `w` components, from self and sets the `w` component
     pub inline fn extendInto(self: Vec3, comptime T: type, w: f32) T {
-        return .{ .x = self.x, .y = self.y, .z = self.z, .w = w };
+        return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z), .w = w };
     }
 
     /// Returns a `Vec2` from self, discarding the `z` component
@@ -109,7 +109,7 @@ pub const Vec3 = extern struct {
 
     /// Creates a `T`, which must have `x` and `y` components, from self and discards the `z` component
     pub inline fn flattenInto(self: Vec3, comptime T: type) T {
-        return .{ .x = self.x, .y = self.y };
+        return .{ .x = @floatCast(self.x), .y = @floatCast(self.y) };
     }
 
     /// Calculates the cross product of two vectors

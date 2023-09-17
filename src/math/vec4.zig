@@ -50,19 +50,19 @@ pub const Vec4 = extern struct {
     /// T's only required components must be `x`, `y`, `z`, and `w`
     pub inline fn into(self: Self, comptime T: type) T {
         if (@typeInfo(T).Struct.layout == .Extern) return @bitCast(self);
-        return .{ .x = self.x, .y = self.y, .z = self.z, .w = self.w };
+        return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z), .w = @floatCast(self.w) };
     }
 
     /// Returns T with it's x and y components set to the original vector's x and y
     /// T's only required components must be `x` and `y`
     pub inline fn intoVec2(self: Self, comptime T: type) T {
-        return .{ .x = self.x, .y = self.y };
+        return .{ .x = @floatCast(self.x), .y = @floatCast(self.y) };
     }
 
     /// Returns T with it's x and y components set to the original vector's x, y and z
     /// T's only required components must be `x`, `y`, and `z`
     pub inline fn intoVec3(self: Self, comptime T: type) T {
-        return .{ .x = self.x, .y = self.y, .z = self.z };
+        return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z) };
     }
 
     /// Converts the Vector into a @Vector object of type `T`, doing
@@ -90,17 +90,17 @@ pub const Vec4 = extern struct {
     /// Creates a Vec4 from other, other must have `x`, `y`, `z`, and `w` components
     pub inline fn from(other: anytype) Self {
         if (@typeInfo(@TypeOf(other)).Struct.layout == .Extern) return @bitCast(other);
-        return .{ .x = other.x, .y = other.y, .z = other.z, .w = other.w };
+        return .{ .x = @floatCast(other.x), .y = @floatCast(other.y), .z = @floatCast(other.z), .w = @floatCast(other.w) };
     }
 
     /// Creates a Vec4 from other, other must have `x`, and `y` components
     pub inline fn fromVec2(vec2: anytype, z: f32, w: f32) Self {
-        return .{ .x = vec2.x, .y = vec2.y, .z = z, .w = w };
+        return .{ .x = @floatCast(vec2.x), .y = @floatCast(vec2.y), .z = z, .w = w };
     }
 
     /// Creates a Vec4 from other, other must have `x`, `y`, and `z` components
     pub inline fn fromVec3(vec3: anytype, w: f32) Self {
-        return .{ .x = vec3.x, .y = vec3.y, .z = vec3.z, .w = w };
+        return .{ .x = @floatCast(vec3.x), .y = @floatCast(vec3.y), .z = @floatCast(vec3.z), .w = w };
     }
 
     /// Will try to convert vec to a Vec4
@@ -122,7 +122,7 @@ pub const Vec4 = extern struct {
 
     /// Creates a `T`, which must have `x`, `y`, and `z` components, from self and discards the `w` component
     pub inline fn flattenInto(self: Self, comptime T: type) T {
-        return .{ .x = self.x, .y = self.y, .z = self.z };
+        return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z) };
     }
 
     pub inline fn quatMultiply(v0: Self, v1: Self) Self {
