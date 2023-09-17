@@ -49,12 +49,12 @@ test "running systems" {
   var world = MyWorld.init(testing.allocator);
   defer world.deinit();
 
-  world.runStage(.load);
-  world.runUpdateStages();
-  world.runStage(.draw);
+  try world.runStage(.load);
+  try world.runUpdateStages();
+  try world.runStage(.draw);
   
   // Support for user defined stages
-  world.runStageList(&.{ .post_process, .pre_reset, .post_mortem });
+  try world.runStageList(&.{ .post_process, .pre_reset, .post_mortem });
 }
 ```
 
