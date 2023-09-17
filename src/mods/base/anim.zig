@@ -156,7 +156,7 @@ fn Builder(
                             for (frame_groups) |frame_group| frames_count += frame_group.slice_indexes.len;
 
                             if (durations_info.len != frames_count)
-                                util.compileError("The amount of durations must match the amount of frames for an animation. Frames len: {}, durations len: {}", .{ frame_groups.len, durations_info.len });
+                                util.compileError("The amount of durations must match the amount of frames for an animation. Frames len: {}, durations len: {}", .{ frames_count, durations_info.len });
 
                             break :blk .{ .per_frame = &durations_info };
                         } else {
