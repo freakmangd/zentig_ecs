@@ -177,6 +177,16 @@ pub inline fn sqrLengthVec(vec: anytype) f32 {
     return @reduce(.Add, vec * vec);
 }
 
+/// Returns the distance between the a and b vectors
+pub inline fn distanceVec(a: anytype, b: anytype) f32 {
+    return lengthVec(a - b);
+}
+
+/// Returns the square distance between the a and b vectors
+pub inline fn sqrDistanceVec(a: anytype, b: anytype) f32 {
+    return sqrLengthVec(a - b);
+}
+
 /// Lerps between two @Vector objects by a scalar t clamped between 0 and 1
 pub inline fn lerpVec(a: anytype, b: anytype, t: f32) @TypeOf(a, b) {
     const t_clamped = clamp01(t);
