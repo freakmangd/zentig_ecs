@@ -116,7 +116,7 @@ pub fn declsToTuple(comptime T: type) DeclsToTuple(T) {
     return out;
 }
 
-pub fn EnumFromLiterals(literals: []const EnumLiteral) type {
+pub fn EnumFromLiterals(comptime literals: []const EnumLiteral) type {
     var fields: [literals.len]std.builtin.Type.EnumField = undefined;
 
     for (&fields, literals, 0..) |*o, lit, i| {
