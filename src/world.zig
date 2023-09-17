@@ -793,7 +793,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             for (comp_ids_list) |ids| for (ids) |id| comp_mask.set(id);
             for (negative_ids_list) |ids| for (ids) |id| negative_mask.set(id);
 
-            return .{ .comp_mask = comp_mask, .negative_mask = negative_mask };
+            return .{ comp_mask, negative_mask };
         }
 
         fn fillQuery(

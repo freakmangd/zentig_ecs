@@ -46,8 +46,13 @@ pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type
             break :blk false;
         };
 
-        pub const req_types, pub const opt_types = getRawTypesInfo(query_types);
-        pub const with_types, pub const without_types = getOptionsInfo(options);
+        const raw_types_info = getRawTypesInfo(query_types);
+        pub const req_types = raw_types_info[0];
+        pub const opt_types = raw_types_info[1];
+
+        const options_info = getOptionsInfo(options);
+        pub const with_types = options_info[0];
+        pub const without_types = options_info[1];
 
         comp_ptrs: [req_types.types.len][]*anyopaque = undefined,
         opt_ptrs: [opt_types.types.len][]?*anyopaque = undefined,
