@@ -348,6 +348,13 @@ pub fn addResource(comptime self: *Self, comptime T: type, comptime default_valu
     if (comptime T == ztg.Commands) @compileError("`Commands` cannot be a resource type.");
     if (comptime std.meta.trait.isContainer(T) and (@hasDecl(T, "IsQueryType") or @hasDecl(T, "EventSendType") or @hasDecl(T, "EventRecvType"))) @compileError("Queries and Events cannot be resources.");
 
+    {
+        const DT = DerefTypeUntilNonPtr(T);
+        for (self.added_resources.types) |ART| {
+            if (DT == DerefTypeUntilNonPtr(ART)) @compileError("Cannot add a pointer to a type and the type as different resources, ie a resource of *u32 and u32 cannot exist at the same time. Use a wrapper.");
+        }
+    }
+
     if (self.added_resources.has(T)) {
         self.warn(std.fmt.comptimePrint("Tried to add resource type `{s}` to world more than once.", .{@typeName(T)}));
         return;
@@ -356,6 +363,14 @@ pub fn addResource(comptime self: *Self, comptime T: type, comptime default_valu
     self.added_resources.append(T);
     const idx = self.added_resources.indexOf(T).?;
     self.resources.addField(std.fmt.comptimePrint("{}", .{idx}), T, @ptrCast(&default_value));
+}
+
+fn DerefTypeUntilNonPtr(comptime T: type) type {
+    var CT = T;
+    while (std.meta.trait.isSingleItemPtr(CT)) {
+        CT = ztg.meta.DerefType(CT);
+    }
+    return CT;
 }
 
 test addResource {
@@ -372,16 +387,38 @@ test addResource {
         try std.testing.expectEqual(@as(i32, 10), w.getRes(MyResource).data);
     }
 
+    // allow resources to be pointers
     {
+        const test_namespace = struct {
+            fn initResource(alloc: std.mem.Allocator, res: **u32) !void {
+                res.* = try alloc.create(u32);
+                res.*.* = 10;
+            }
+
+            fn deinitResource(alloc: std.mem.Allocator, res: *u32) void {
+                alloc.destroy(res);
+            }
+
+            fn requestResource(res: *u32) !void {
+                try std.testing.expectEqual(@as(u32, 10), res.*);
+            }
+        };
+
         const MyWorld = comptime blk: {
             var wb = Self.init(&.{});
-            wb.addResource(u32, 0);
             wb.addResource(*u32, undefined);
+            wb.addSystems(.{
+                .init = test_namespace.initResource,
+                .deinit = test_namespace.deinitResource,
+                .load = test_namespace.requestResource,
+            });
             break :blk wb.Build();
         };
 
         var w = try MyWorld.init(std.testing.allocator);
         defer w.deinit();
+
+        try w.runStage(.load);
     }
 }
 
