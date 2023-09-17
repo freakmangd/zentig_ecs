@@ -160,6 +160,28 @@ pub fn addStage(comptime self: *Self, comptime stage_name: ztg.meta.EnumLiteral)
     });
 }
 
+test addStage {
+    const namespace = struct {
+        var stage_was_run: bool = false;
+
+        pub fn include(comptime wb: *Self) void {
+            wb.addStage(.my_stage);
+            wb.addSystemsToStage(.my_stage, mySystem);
+            try std.testing.expect(wb.hasStageName("my_stage"));
+        }
+
+        fn mySystem() void {
+            stage_was_run = true;
+        }
+    };
+
+    var w = try testWorld(namespace);
+    defer w.deinit();
+
+    try w.runStage(.my_stage);
+    try std.testing.expect(namespace.stage_was_run);
+}
+
 fn stageIndexFromName(comptime self: Self, comptime stage_name: []const u8) usize {
     // if stage is part of DEFAULT_STAGES, we already know the index
     if (@hasDecl(default_stages, stage_name)) return @field(default_stages, stage_name);
@@ -213,6 +235,50 @@ pub fn addLabel(comptime self: *Self, comptime stage_name: ztg.meta.EnumLiteral,
     self.stage_defs.set(stage_index, stage);
 }
 
+test addLabel {
+    const namespace = struct {
+        var counter: usize = 0;
+
+        pub fn include(comptime wb: *Self) void {
+            wb.addLabel(.load, .my_label, .{ .before = .body });
+            wb.addSystems(.{
+                .load = .{
+                    load_body_during,
+                    ztg.before(.my_label, load_my_label_before),
+                    ztg.during(.my_label, load_my_label_during),
+                    ztg.after(.my_label, load_my_label_after),
+                },
+            });
+        }
+
+        fn load_my_label_before() !void {
+            try std.testing.expectEqual(@as(usize, 0), counter);
+            counter += 1;
+        }
+
+        fn load_my_label_during() !void {
+            try std.testing.expectEqual(@as(usize, 1), counter);
+            counter += 1;
+        }
+
+        fn load_my_label_after() !void {
+            try std.testing.expectEqual(@as(usize, 2), counter);
+            counter += 1;
+        }
+
+        fn load_body_during() !void {
+            try std.testing.expectEqual(@as(usize, 3), counter);
+            counter += 1;
+        }
+    };
+
+    var w = try testWorld(namespace);
+    defer w.deinit();
+
+    try w.runStage(.load);
+    try std.testing.expectEqual(@as(usize, 4), namespace.counter);
+}
+
 /// After you add a component, you can then query for it in your systems:
 ///
 /// ```zig
@@ -235,6 +301,31 @@ pub fn addComponents(comptime self: *Self, comptime comps: []const type) void {
         if (comptime self.comp_types.has(T)) util.compileError("Attempted to add type `{s}` to worldbuilder more than once.", .{@typeName(T)});
     }
     self.comp_types.appendSlice(comps);
+}
+
+test addComponents {
+    var w = try testWorld(struct {
+        pub fn include(comptime wb: *Self) void {
+            wb.addComponents(&.{ MyComponent, MyEmpty, MyEnum, MyUnion });
+        }
+
+        const MyComponent = struct {
+            value: i32,
+        };
+
+        const MyEmpty = struct {};
+
+        const MyEnum = enum {
+            a,
+            b,
+        };
+
+        const MyUnion = union(enum) {
+            a: i32,
+            b: bool,
+        };
+    });
+    defer w.deinit();
 }
 
 /// Resources are unique struct instances that you can request within your systems:
@@ -264,7 +355,34 @@ pub fn addResource(comptime self: *Self, comptime T: type, comptime default_valu
 
     self.added_resources.append(T);
     const idx = self.added_resources.indexOf(T).?;
-    self.resources.addField(std.fmt.comptimePrint("{}", .{idx}), T, &default_value);
+    self.resources.addField(std.fmt.comptimePrint("{}", .{idx}), T, @ptrCast(&default_value));
+}
+
+test addResource {
+    {
+        const MyResource = struct { data: i32 = 0 };
+
+        var w = try testWorld(struct {
+            pub fn include(comptime wb: *Self) void {
+                wb.addResource(MyResource, .{ .data = 10 });
+            }
+        });
+        defer w.deinit();
+
+        try std.testing.expectEqual(@as(i32, 10), w.getRes(MyResource).data);
+    }
+
+    {
+        const MyWorld = comptime blk: {
+            var wb = Self.init(&.{});
+            wb.addResource(u32, 0);
+            wb.addResource(*u32, undefined);
+            break :blk wb.Build();
+        };
+
+        var w = try MyWorld.init(std.testing.allocator);
+        defer w.deinit();
+    }
 }
 
 /// Registers an event that has a payload of type `T`
@@ -293,6 +411,35 @@ pub fn addEvent(comptime self: *Self, comptime T: type) void {
     }
 
     self.event_types.append(T);
+}
+
+test addEvent {
+    const MyEvent = struct { data: i32 };
+    const namespace = struct {
+        var system_was_run = false;
+
+        pub fn include(comptime wb: *Self) void {
+            wb.addEvent(MyEvent);
+            wb.addSystems(.{
+                .load = .{ sendEvent, ztg.after(.body, recvEvent) },
+            });
+        }
+
+        fn sendEvent(send: ztg.EventSender(MyEvent)) !void {
+            try send.send(.{ .data = 20 });
+        }
+
+        fn recvEvent(recv: ztg.EventReceiver(MyEvent)) !void {
+            for (recv.items) |it| try std.testing.expectEqual(@as(i32, 20), it.data);
+            system_was_run = true;
+        }
+    };
+
+    var w = try testWorld(namespace);
+    defer w.deinit();
+
+    try w.runStage(.load);
+    try std.testing.expect(namespace.system_was_run);
 }
 
 /// Adds the system to the specified stage
@@ -409,53 +556,6 @@ test Self {
     defer w.deinit();
 }
 
-test addComponents {
-    var w = try testWorld(struct {
-        pub fn include(comptime wb: *Self) void {
-            wb.addComponents(&.{ MyComponent, MyEmpty, MyEnum, MyUnion });
-        }
-
-        const MyComponent = struct {
-            value: i32,
-        };
-
-        const MyEmpty = struct {};
-
-        const MyEnum = enum {
-            a,
-            b,
-        };
-
-        const MyUnion = union(enum) {
-            a: i32,
-            b: bool,
-        };
-    });
-    defer w.deinit();
-}
-
-test addStage {
-    const namespace = struct {
-        var stage_was_run: bool = false;
-
-        pub fn include(comptime wb: *Self) void {
-            wb.addStage(.my_stage);
-            wb.addSystemsToStage(.my_stage, mySystem);
-            try std.testing.expect(wb.hasStageName("my_stage"));
-        }
-
-        fn mySystem() void {
-            stage_was_run = true;
-        }
-    };
-
-    var w = try testWorld(namespace);
-    defer w.deinit();
-
-    try w.runStage(.my_stage);
-    try std.testing.expect(namespace.stage_was_run);
-}
-
 test "adding systems" {
     const namespace = struct {
         var stages_were_run = [_]bool{false} ** 5;
@@ -499,90 +599,4 @@ test "adding systems" {
     try std.testing.expect(namespace.stages_were_run[2]);
     try std.testing.expect(namespace.stages_were_run[3]);
     try std.testing.expect(namespace.stages_were_run[4]);
-}
-
-test addLabel {
-    const namespace = struct {
-        var counter: usize = 0;
-
-        pub fn include(comptime wb: *Self) void {
-            wb.addLabel(.load, .my_label, .{ .before = .body });
-            wb.addSystems(.{
-                .load = .{
-                    load_body_during,
-                    ztg.before(.my_label, load_my_label_before),
-                    ztg.during(.my_label, load_my_label_during),
-                    ztg.after(.my_label, load_my_label_after),
-                },
-            });
-        }
-
-        fn load_my_label_before() !void {
-            try std.testing.expectEqual(@as(usize, 0), counter);
-            counter += 1;
-        }
-
-        fn load_my_label_during() !void {
-            try std.testing.expectEqual(@as(usize, 1), counter);
-            counter += 1;
-        }
-
-        fn load_my_label_after() !void {
-            try std.testing.expectEqual(@as(usize, 2), counter);
-            counter += 1;
-        }
-
-        fn load_body_during() !void {
-            try std.testing.expectEqual(@as(usize, 3), counter);
-            counter += 1;
-        }
-    };
-
-    var w = try testWorld(namespace);
-    defer w.deinit();
-
-    try w.runStage(.load);
-    try std.testing.expectEqual(@as(usize, 4), namespace.counter);
-}
-
-test addResource {
-    const MyResource = struct { data: i32 = 0 };
-
-    var w = try testWorld(struct {
-        pub fn include(comptime wb: *Self) void {
-            wb.addResource(MyResource, .{ .data = 10 });
-        }
-    });
-    defer w.deinit();
-
-    try std.testing.expectEqual(@as(i32, 10), w.getRes(MyResource).data);
-}
-
-test addEvent {
-    const MyEvent = struct { data: i32 };
-    const namespace = struct {
-        var system_was_run = false;
-
-        pub fn include(comptime wb: *Self) void {
-            wb.addEvent(MyEvent);
-            wb.addSystems(.{
-                .load = .{ sendEvent, ztg.after(.body, recvEvent) },
-            });
-        }
-
-        fn sendEvent(send: ztg.EventSender(MyEvent)) !void {
-            try send.send(.{ .data = 20 });
-        }
-
-        fn recvEvent(recv: ztg.EventReceiver(MyEvent)) !void {
-            for (recv.items) |it| try std.testing.expectEqual(@as(i32, 20), it.data);
-            system_was_run = true;
-        }
-    };
-
-    var w = try testWorld(namespace);
-    defer w.deinit();
-
-    try w.runStage(.load);
-    try std.testing.expect(namespace.system_was_run);
 }

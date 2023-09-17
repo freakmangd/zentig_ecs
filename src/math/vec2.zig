@@ -29,7 +29,7 @@ pub const Vec2 = extern struct {
     /// T's only required components must be `x`, and `y`
     pub inline fn into(self: Vec2, comptime T: type) T {
         if (@typeInfo(T).Struct.layout == .Extern) return @bitCast(self);
-        return .{ .x = self.x, .y = self.y };
+        return .{ .x = @floatCast(self.x), .y = @floatCast(self.y) };
     }
 
     /// Converts the Vector into a @Vector object of type `T`, doing
@@ -92,7 +92,7 @@ pub const Vec2 = extern struct {
     /// Creates a new Vec2 from the components of other
     pub inline fn from(other: anytype) Vec2 {
         if (@typeInfo(@TypeOf(other)).Struct.layout == .Extern) return @bitCast(other);
-        return .{ .x = other.x, .y = other.y };
+        return .{ .x = @floatCast(other.x), .y = @floatCast(other.y) };
     }
 
     /// Will try to convert vec to a Vec2
@@ -127,7 +127,7 @@ pub const Vec2 = extern struct {
 
     /// Creates a T, which must have `x`, `y`, and `z` components, from self and sets the w component
     pub inline fn extendInto(self: Vec2, comptime T: type, z: f32) T {
-        return .{ .x = self.x, .y = self.y, .z = z };
+        return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = z };
     }
 
     /// Just returns the x component

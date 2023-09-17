@@ -38,6 +38,8 @@ fn updateBasis(self: *Self, com: ztg.Commands, ent: ztg.Entity) void {
     var parent_ent = (com.getEntParent(ent) catch unreachable) orelse {
         // we dont have a parent
         self.basis = local_tr.getUpdatedBasis();
+        self.__data.rot = local_tr.getRot();
+        self.__data.scale = local_tr.getScale();
         self.__data.basis_isdirty = false;
         return;
     };
@@ -45,17 +47,20 @@ fn updateBasis(self: *Self, com: ztg.Commands, ent: ztg.Entity) void {
     var parent_gtr = com.getComponentPtr(parent_ent, ztg.base.GlobalTransform) orelse {
         // parent doesnt have a transform
         self.basis = local_tr.getUpdatedBasis();
+        self.__data.rot = local_tr.getRot();
+        self.__data.scale = local_tr.getScale();
         self.__data.basis_isdirty = false;
         return;
     };
 
     self.basis = ztg.zmath.mul(local_tr.getUpdatedBasis(), parent_gtr.getUpdatedBasis(com, parent_ent));
+    self.__data.rot = local_tr.getRot().quatMultiply(parent_gtr.getRot());
+    self.__data.scale = local_tr.getScale().scale(parent_gtr.getScale());
     self.__data.basis_isdirty = false;
 }
 
 fn getUpdatedBasis(self: *Self, com: ztg.Commands, ent: ztg.Entity) ztg.zmath.Mat {
-    if (!self.__data.basis_isdirty) return self.basis;
-    self.updateBasis(com, ent);
+    if (self.__data.basis_isdirty) self.updateBasis(com, ent);
     return self.basis;
 }
 

@@ -223,7 +223,7 @@ pub fn World(comptime wb: WorldBuilder) type {
         pub fn runStageByName(self: *Self, stage_name: []const u8) anyerror!void {
             StagesList.runStageByName(self, stage_name, false, void{}) catch |err| switch (err) {
                 error.UnknownStage => std.debug.panic("Cannot find stage {s} in stage list.", .{stage_name}),
-                else => return err,
+                else => |e| return e,
             };
         }
 
@@ -678,7 +678,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             var queryInfo = try self.initQueryLists(alloc, &req_ids, &opt_ids, &with_ids);
             defer alloc.free(queryInfo.qlists);
 
-            const masks = getCompMasks(&.{ &req_ids, &with_ids }, &.{&without_ids});
+            const comp_mask, const negative_mask = getCompMasks(&.{ &req_ids, &with_ids }, &.{&without_ids});
 
             var out = try QT.init(alloc, queryInfo.checked_entities.len);
 
@@ -693,8 +693,8 @@ pub fn World(comptime wb: WorldBuilder) type {
             out.len = self.fillQuery(
                 queryInfo.checked_entities,
                 queryInfo.qlists,
-                masks.comp_mask,
-                masks.negative_mask,
+                comp_mask,
+                negative_mask,
                 if (comptime QT.has_entities) out.entities else null,
             );
 
@@ -703,7 +703,7 @@ pub fn World(comptime wb: WorldBuilder) type {
 
         // For queries which the only required type is Entity
         fn queryJustEntities(self: *Self, alloc: std.mem.Allocator, comptime QT: type) !QT {
-            const masks = getCompMasks(
+            const comp_mask, const negative_mask = getCompMasks(
                 &.{&util.idsFromTypes(QT.with_types.types)},
                 &.{&util.idsFromTypes(QT.without_types.types)},
             );
@@ -712,7 +712,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             var out = try QT.init(alloc, self.entities.len);
 
             for (self.entities.constSlice(), 0..) |ent, i| {
-                if (!entPassesCompMasks(self.entities.comp_masks[@intFromEnum(ent)], masks.comp_mask, masks.negative_mask)) continue;
+                if (!entPassesCompMasks(self.entities.comp_masks[@intFromEnum(ent)], comp_mask, negative_mask)) continue;
                 inline for (out.opt_ptrs, QT.opt_types.types) |opt_ptrs, O| opt_ptrs[i] = self.getListOf(O).get(@intFromEnum(ent));
 
                 out.entities[len] = @intFromEnum(ent);
@@ -786,14 +786,14 @@ pub fn World(comptime wb: WorldBuilder) type {
         fn getCompMasks(
             comp_ids_list: []const []const util.CompId,
             negative_ids_list: []const []const util.CompId,
-        ) struct { comp_mask: ComponentMask, negative_mask: ComponentMask } {
+        ) struct { ComponentMask, ComponentMask } {
             var comp_mask = ComponentMask.initEmpty();
             var negative_mask = ComponentMask.initEmpty();
 
             for (comp_ids_list) |ids| for (ids) |id| comp_mask.set(id);
             for (negative_ids_list) |ids| for (ids) |id| negative_mask.set(id);
 
-            return .{ .comp_mask = comp_mask, .negative_mask = negative_mask };
+            return .{ comp_mask, negative_mask };
         }
 
         fn fillQuery(
