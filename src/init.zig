@@ -6,12 +6,6 @@ const std = @import("std");
 /// Vendored version of https://github.com/michal-z/zig-gamedev
 pub const zmath = @import("zmath");
 
-// there isnt a way to fetch packages for a local dependency currently,
-// so vendoring this allows people to use Zentig as a local dependency
-// more easily
-/// Vendored version of https://github.com/cryptocode/zigfsm
-pub const zigfsm = @import("zigfsm");
-
 /// A unique ID that is assigned to each entity
 pub const Entity = usize;
 
