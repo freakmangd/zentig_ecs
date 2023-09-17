@@ -868,11 +868,11 @@ pub fn World(comptime wb: WorldBuilder) type {
                 return .{
                     .items = self.event_pools.getPtr(T.EventRecvType).items,
                 };
-            } else if (comptime wb.added_resources.has(ztg.meta.DerefType(T))) {
-                if (comptime std.meta.trait.isSingleItemPtr(T)) {
-                    return self.getResPtr(@typeInfo(T).Pointer.child);
-                } else if (comptime wb.added_resources.has(T)) {
+            } else if (comptime wb.added_resources.has(ztg.meta.DerefType(T)) or wb.added_resources.has(T)) {
+                if (comptime wb.added_resources.has(T)) {
                     return self.getRes(T);
+                } else if (comptime std.meta.trait.isSingleItemPtr(T)) {
+                    return self.getResPtr(@typeInfo(T).Pointer.child);
                 }
             }
 
