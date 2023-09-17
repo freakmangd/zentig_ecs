@@ -54,9 +54,6 @@ pub fn getPos(self: Self) ztg.Vec3 {
 
 pub inline fn setPos(self: *Self, new_pos: ztg.Vec3) void {
     zmath.storeArr4(&self.basis[3], new_pos.intoZMath());
-    //self.basis[3][0] = new_pos.x;
-    //self.basis[3][1] = new_pos.y;
-    //self.basis[3][2] = new_pos.z;
 }
 
 pub inline fn translate(self: *Self, by: ztg.Vec3) void {

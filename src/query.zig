@@ -46,13 +46,8 @@ pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type
             break :blk false;
         };
 
-        const types_tuple = getRawTypesInfo(query_types);
-        pub const req_types = types_tuple[0];
-        pub const opt_types = types_tuple[1];
-
-        const options_tuple = getOptionsInfo(options);
-        pub const with_types = options_tuple[0];
-        pub const without_types = options_tuple[1];
+        pub const req_types, pub const opt_types = getRawTypesInfo(query_types);
+        pub const with_types, pub const without_types = getOptionsInfo(options);
 
         comp_ptrs: [req_types.types.len][]*anyopaque = undefined,
         opt_ptrs: [opt_types.types.len][]?*anyopaque = undefined,
@@ -159,10 +154,7 @@ pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type
     };
 }
 
-fn getRawTypesInfo(comptime query_types: anytype) struct {
-    TypeMap,
-    TypeMap,
-} {
+fn getRawTypesInfo(comptime query_types: anytype) struct { TypeMap, TypeMap } {
     var req: TypeMap = .{};
     var opt: TypeMap = .{};
 
