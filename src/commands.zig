@@ -4,6 +4,7 @@ const std = @import("std");
 const ztg = @import("init.zig");
 const world = @import("world.zig");
 const util = @import("util.zig");
+const builtin = @import("builtin");
 
 const Allocator = std.mem.Allocator;
 const TypeMap = ztg.meta.TypeMap;
@@ -105,6 +106,8 @@ pub fn giveEntChild(self: Self, ent: ztg.Entity, child: ztg.Entity) !void {
 
 inline fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void {
     const Component = @TypeOf(component);
+    if (Component == type) util.compileError("You have passed `{}` to giveComponents, which is of type `type`, you might have forgotten to instantiate it.", .{component});
+
     const has_onAdded = comptime @hasDecl(Component, "onAdded");
     const member_type: ?ztg.meta.MemberFnType = comptime if (has_onAdded) ztg.meta.memberFnType(Component, "onAdded") else null;
     const needs_mut = member_type == .by_ptr;
@@ -121,6 +124,10 @@ inline fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void
             var c = if (comptime needs_mut) mutable_comp else component;
             if (comptime can_err) try c.onAdded(ent, self) else c.onAdded(ent, self);
         }
+    }
+
+    if (comptime builtin.mode == .Debug) {
+        if (self.checkEntHas(ent, Component)) ztg.log.warn("Entity {} already has a component of type `{}` but you are adding it again, the data will be overwritten with this new instance.", .{ ent, Component });
     }
 
     self.vtable.add_component(self.ctx, ent, util.compId(Component), @alignOf(Component), if (comptime has_onAdded and needs_mut) &mutable_comp else &component) catch |err| switch (err) {
