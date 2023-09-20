@@ -29,7 +29,7 @@ pub const Vec3 = extern struct {
     /// Returns T with all of it's components set to the original vector's
     /// T's only required components must be `x`, `y`, and `z`
     pub inline fn into(self: Vec3, comptime T: type) T {
-        if (@typeInfo(T).Struct.layout == .Extern) return @bitCast(self);
+        if (comptime @typeInfo(T).Struct.layout == .Extern and @sizeOf(T) == @sizeOf(Vec3)) return @bitCast(self);
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z) };
     }
 
@@ -72,7 +72,7 @@ pub const Vec3 = extern struct {
 
     /// Creates a Vec3 from other, other must have `x`, `y`, and `z` components
     pub inline fn from(other: anytype) Vec3 {
-        if (@typeInfo(@TypeOf(other)).Struct.layout == .Extern) return @bitCast(other);
+        if (comptime @typeInfo(@TypeOf(other)).Struct.layout == .Extern and @sizeOf(@TypeOf(other)) == @sizeOf(Vec3)) return @bitCast(other);
         return .{ .x = @floatCast(other.x), .y = @floatCast(other.y), .z = @floatCast(other.z) };
     }
 
