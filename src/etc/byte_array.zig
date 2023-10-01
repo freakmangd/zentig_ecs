@@ -59,7 +59,7 @@ pub fn set(self: *Self, index: usize, bytes_start: *const anyopaque) void {
 }
 
 pub fn get(self: Self, index: usize) *anyopaque {
-    if (self.entry_size == 0) return undefined;
+    if (self.entry_size == 0) return @ptrFromInt(std.math.maxInt(usize));
     return &self.bytes.items[index * self.entry_size];
 }
 
