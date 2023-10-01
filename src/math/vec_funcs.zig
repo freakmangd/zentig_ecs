@@ -24,7 +24,7 @@ pub fn init(comptime Self: type) type {
             const y = b.intoSimd();
 
             if (@reduce(.And, x == y)) return true;
-            return @reduce(.And, @fabs(x - y) <= @max(@fabs(x), @fabs(y)) * @as(@Vector(vec_len, f32), @splat(tolerance)));
+            return @reduce(.And, @abs(x - y) <= @max(@abs(x), @abs(y)) * @as(@Vector(vec_len, f32), @splat(tolerance)));
         }
 
         /// Compares a and b using the same method as `std.math.approxEqAbs` with a custom tolerance
@@ -34,7 +34,7 @@ pub fn init(comptime Self: type) type {
             const y = b.intoSimd();
 
             if (@reduce(.And, x == y)) return true;
-            return @reduce(.And, @fabs(x - y) <= @as(@Vector(vec_len, f32), @splat(tolerance)));
+            return @reduce(.And, @abs(x - y) <= @as(@Vector(vec_len, f32), @splat(tolerance)));
         }
 
         /// Compares a and b using the same method as `std.math.approxEqRel`
@@ -131,7 +131,7 @@ pub fn init(comptime Self: type) type {
         }
 
         pub inline fn abs(v: Self) Self {
-            return fromSimd(@fabs(v.toSimd()));
+            return fromSimd(@abs(v.toSimd()));
         }
 
         /// Returns the angle between to vectors in radians

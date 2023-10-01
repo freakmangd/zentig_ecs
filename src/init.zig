@@ -19,8 +19,9 @@ pub usingnamespace @import("system_order.zig");
 
 pub const math = @import("math/init.zig");
 
-pub const ComptimeList = @import("etc/comptime_list.zig").ComptimeList;
 pub const Timer = @import("etc/timer.zig");
+pub const ComptimeList = @import("etc/comptime_list.zig").ComptimeList;
+pub const EnumValueSpace = @import("etc/enum_value_space.zig").EnumValueSpace;
 
 pub const Vec2 = @import("math/vec2.zig").Vec2;
 pub const Vec3 = @import("math/vec3.zig").Vec3;

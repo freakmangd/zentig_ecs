@@ -12,20 +12,23 @@ const Entity = ztg.Entity;
 
 const Self = @This();
 
+pub const ComponentError = error{UnregisteredComponent};
+pub const GiveRemoveComponentError = ComponentError || error{EntityDoesntExist} || Allocator.Error;
+
 ctx: *anyopaque,
 vtable: *const Vtable,
 
 pub const Vtable = struct {
-    new_ent: *const fn (*anyopaque) Allocator.Error!Entity,
+    new_ent: *const fn (*anyopaque) Entity,
     remove_ent: *const fn (*anyopaque, Entity) Allocator.Error!void,
 
     get_ent_parent: *const fn (*const anyopaque, ztg.Entity) error{EntityDoesntExist}!?ztg.Entity,
     set_ent_parent: *const fn (*anyopaque, ztg.Entity, ?ztg.Entity) error{ EntityDoesntExist, ParentDoesntExist }!void,
 
-    add_component: *const fn (*anyopaque, Entity, util.CompId, u29, *const anyopaque) world.CommandsGiveRemoveComponentError!void,
-    remove_component: *const fn (*anyopaque, Entity, util.CompId) world.CommandsGiveRemoveComponentError!void,
-    get_component_ptr: *const fn (*anyopaque, Entity, util.CompId) world.CommandsComponentError!?*anyopaque,
-    check_ent_has: *const fn (*anyopaque, Entity, util.CompId) world.CommandsComponentError!bool,
+    add_component: *const fn (*anyopaque, Entity, util.CompId, u29, *const anyopaque) GiveRemoveComponentError!void,
+    remove_component: *const fn (*anyopaque, Entity, util.CompId) GiveRemoveComponentError!void,
+    get_component_ptr: *const fn (*anyopaque, Entity, util.CompId) ComponentError!?*anyopaque,
+    check_ent_has: *const fn (*anyopaque, Entity, util.CompId) ComponentError!bool,
 
     run_stage: *const fn (*anyopaque, []const u8) anyerror!void,
 
@@ -74,13 +77,13 @@ pub fn runStageNameList(self: Self, stage_ids: []const []const u8) anyerror!void
 }
 
 /// Returns an EntityHandle to a new entity
-pub fn newEnt(self: Self) Allocator.Error!ztg.EntityHandle {
-    return .{ .ent = try self.vtable.new_ent(self.ctx), .com = self };
+pub fn newEnt(self: Self) ztg.EntityHandle {
+    return .{ .ent = self.vtable.new_ent(self.ctx), .com = self };
 }
 
 /// Shortcut for creating a new entity and adding components to it
 pub fn newEntWith(self: Self, components: anytype) !ztg.EntityHandle {
-    const ent = try newEnt(self);
+    const ent = newEnt(self);
     try ent.giveComponents(components);
     return ent;
 }

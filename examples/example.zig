@@ -4,7 +4,7 @@ const std = @import("std");
 const ztg = @import("zentig");
 
 // Constructing the world must be done at comptime
-// `.init(anytype)` passes `anytype` to `.include(anytype)`
+// `.init([]const type)` passes the slice of types to `.include([]const type)`
 const MyWorld = ztg.WorldBuilder.init(&.{
     ztg.base,
     player,

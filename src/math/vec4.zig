@@ -135,7 +135,7 @@ pub const Vec4 = extern struct {
 
     // Thank you unity: https://github.com/Unity-Technologies/UnityCsReference/blob/e7d9de5f09767c3320b6dab51bc2c2dc90447786/Runtime/Export/Math/Quaternion.cs#L169
     pub fn quatAngle(a: Self, b: Self) f32 {
-        const ab_dot = @min(@fabs(Self.dot(a, b)), 1.0);
+        const ab_dot = @min(@abs(Self.dot(a, b)), 1.0);
         if (ab_dot > 1.0 - std.math.floatEps(f32)) return 0.0;
         return math.acos(ab_dot) * 2.0;
     }

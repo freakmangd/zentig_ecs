@@ -52,7 +52,7 @@ pub fn main() !void {
 }
 
 fn entWithComponents(w: *World, comptime comps_bitmask: u8) !void {
-    const ent = try w.newEnt();
+    const ent = w.newEnt();
     inline for (0..8) |i| {
         if ((comps_bitmask & 1 << @intCast(i)) != 0) _ = try w.giveComponents(ent, Comps[i]{});
     }

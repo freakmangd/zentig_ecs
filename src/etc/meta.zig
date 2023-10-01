@@ -100,6 +100,33 @@ test CombineStructTypes {
     try std.testing.expectEqual(f16, std.meta.FieldType(C, .d));
 }
 
+pub fn CombineEnumTypes(comptime types: []const type) type {
+    var field_count: usize = 0;
+
+    for (types) |T| {
+        if (comptime !@typeInfo(T).Enum.is_exhaustive) @compileError("Cannot combine enums that are non-exhaustive");
+        field_count += @typeInfo(T).Enum.fields.len;
+    }
+
+    var field_types: [field_count]std.builtin.Type.EnumField = undefined;
+    var field_types_i: usize = 0;
+
+    for (types) |T| for (std.meta.fields(T)) |field| {
+        field_types[field_types_i] = std.builtin.Type.EnumField{
+            .name = field.name,
+            .value = field_types_i,
+        };
+        field_types_i += 1;
+    };
+
+    return @Type(.{ .Enum = std.builtin.Type.Enum{
+        .fields = &field_types,
+        .decls = &.{},
+        .tag_type = std.math.IntFittingRange(0, field_count),
+        .is_exhaustive = true,
+    } });
+}
+
 fn DeclsToTuple(comptime T: type) type {
     var types: [std.meta.declarations(T).len]type = undefined;
     for (&types, std.meta.declarations(T)) |*o, decl| {
