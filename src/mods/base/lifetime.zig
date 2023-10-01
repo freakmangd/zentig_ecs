@@ -7,7 +7,7 @@ max: f32,
 current: f32 = 0.0,
 is_dead: bool = false,
 
-tick_rate: TimeScale = .scaled_time,
+time_scale: TimeScale = .scaled_time,
 on_death: OnDeath = .destroy,
 
 pub const TimeScale = enum {
@@ -29,7 +29,11 @@ fn pou_lifetimes(com: ztg.Commands, q: ztg.Query(.{ ztg.Entity, Lifetime }), tim
     for (q.items(0), q.items(1)) |ent, lt| {
         if (lt.is_dead) continue;
 
-        lt.current += time.dt;
+        lt.current += switch (lt.time_scale) {
+            .scaled_time => time.dt,
+            .real_time => time.real_dt,
+        };
+
         if (lt.current >= lt.max) {
             lt.is_dead = true;
 
