@@ -28,7 +28,7 @@ pub const Vec2 = extern struct {
     /// Returns T with all of it's components set to the original vector's
     /// T's only required components must be `x`, and `y`
     pub inline fn into(self: Vec2, comptime T: type) T {
-        if (comptime @typeInfo(T).Struct.layout == .Extern and @sizeOf(T) == @sizeOf(Vec2)) return @bitCast(self);
+        if (comptime vec_funcs.isBitcastable(Vec2, T)) return @bitCast(self);
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y) };
     }
 
@@ -91,7 +91,7 @@ pub const Vec2 = extern struct {
 
     /// Creates a new Vec2 from the components of other
     pub inline fn from(other: anytype) Vec2 {
-        if (comptime @typeInfo(@TypeOf(other)).Struct.layout == .Extern and @sizeOf(@TypeOf(other)) == @sizeOf(Vec2)) return @bitCast(other);
+        if (comptime vec_funcs.isBitcastable(Vec2, @TypeOf(other))) return @bitCast(other);
         return .{ .x = @floatCast(other.x), .y = @floatCast(other.y) };
     }
 

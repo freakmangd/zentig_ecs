@@ -338,6 +338,15 @@ pub fn convertFieldToF32(obj: anytype, comptime field_name: []const u8, default:
     };
 }
 
+pub fn isBitcastable(comptime Self: type, comptime Other: type) bool {
+    return @sizeOf(Self) == @sizeOf(Other) and
+        @typeInfo(Other).Struct.layout == .Extern and
+        @typeInfo(std.meta.fieldInfo(Other, .x).type) == .Float and
+        @typeInfo(std.meta.fieldInfo(Other, .y).type) == .Float and
+        if (@hasField(Self, "z")) @typeInfo(std.meta.fieldInfo(Other, .z).type) == .Float else true and
+        if (@hasField(Self, "w")) @typeInfo(std.meta.fieldInfo(Other, .w).type) == .Float else true;
+}
+
 const Vec2 = @import("vec2.zig").Vec2;
 
 test "angle" {
