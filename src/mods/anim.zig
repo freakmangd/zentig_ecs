@@ -1,6 +1,6 @@
 const std = @import("std");
-const ztg = @import("../../init.zig");
-const util = @import("../../util.zig");
+const ztg = @import("../init.zig");
+const util = @import("../util.zig");
 
 pub fn builder(
     comptime Wrapper: type,

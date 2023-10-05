@@ -40,6 +40,7 @@ pub const WorldBuilder = @import("worldbuilder.zig");
 pub const Commands = @import("commands.zig");
 
 pub const base = @import("mods/base/init.zig");
+pub const anim = @import("mods/anim.zig");
 pub const input = @import("mods/input.zig");
 //pub const physics = @import("mods/physics.zig");
 
