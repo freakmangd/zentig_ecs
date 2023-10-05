@@ -83,9 +83,9 @@ pub fn newEnt(self: Self) ztg.EntityHandle {
 
 /// Shortcut for creating a new entity and adding components to it
 pub fn newEntWith(self: Self, components: anytype) !ztg.EntityHandle {
-    const ent = newEnt(self);
-    try ent.giveComponents(components);
-    return ent;
+    const ent = self.vtable.new_ent(self.ctx);
+    try self.giveComponents(ent, components);
+    return .{ .ent = ent, .com = self };
 }
 
 pub const newEntWithMany = @compileError("newEntWithMany is now renamed to newEntWith");
