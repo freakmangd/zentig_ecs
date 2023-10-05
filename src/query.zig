@@ -147,7 +147,7 @@ pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type
         }
 
         fn Items(comptime idx: usize) type {
-            return []const Single(idx);
+            return []Single(idx);
         }
 
         fn Single(comptime idx: usize) type {
