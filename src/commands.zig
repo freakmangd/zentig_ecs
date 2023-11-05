@@ -112,9 +112,9 @@ inline fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void
     if (Component == type) util.compileError("You have passed `{}` to giveComponents, which is of type `type`, you might have forgotten to instantiate it.", .{component});
 
     const has_onAdded = comptime @hasDecl(Component, "onAdded");
-    const member_type: ?ztg.meta.MemberFnType = comptime if (has_onAdded) ztg.meta.memberFnType(Component, "onAdded") else null;
-    const needs_mut = member_type == .by_ptr;
-    var mutable_comp: if (has_onAdded and needs_mut) Component else void = if (comptime has_onAdded and needs_mut) component else void{};
+    const member_type: if (has_onAdded) ztg.meta.MemberFnType else void = comptime if (has_onAdded) ztg.meta.memberFnType(Component, "onAdded") else {};
+    const needs_mut: if (has_onAdded) bool else void = comptime if (has_onAdded) member_type == .by_ptr else {};
+    var mutable_comp: if (has_onAdded and needs_mut) Component else void = if (comptime has_onAdded and needs_mut) component else {};
 
     if (comptime has_onAdded) {
         util.assertOkOnAddedFunction(Component);

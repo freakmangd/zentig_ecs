@@ -13,23 +13,21 @@ const TypeBuilder = ztg.meta.TypeBuilder;
 
 /// Used for storing pointer-stable objects on the heap
 const WorldInfo = struct {
-    alloc: std.mem.Allocator,
-    frame_arena: std.heap.ArenaAllocator = undefined,
+    frame_arena: std.heap.ArenaAllocator,
     rng: std.rand.DefaultPrng,
 
     fn init(alloc: std.mem.Allocator) !*WorldInfo {
         var self = try alloc.create(WorldInfo);
         self.* = .{
-            .alloc = alloc,
             .rng = std.rand.DefaultPrng.init(@bitCast(std.time.milliTimestamp())),
+            .frame_arena = std.heap.ArenaAllocator.init(alloc),
         };
-        self.frame_arena = std.heap.ArenaAllocator.init(alloc);
         return self;
     }
 
-    fn deinit(self: *WorldInfo) void {
+    fn deinit(self: *WorldInfo, alloc: std.mem.Allocator) void {
         self.frame_arena.deinit();
-        self.alloc.destroy(self);
+        alloc.destroy(self);
     }
 };
 
@@ -91,7 +89,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             }
 
             var info = try WorldInfo.init(user_allocator);
-            errdefer info.deinit();
+            errdefer info.deinit(user_allocator);
 
             try StagesList.init(user_allocator);
             errdefer StagesList.deinit();
@@ -99,7 +97,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             const frame_alloc = info.frame_arena.allocator();
 
             var self = Self{
-                .alloc = info.alloc,
+                .alloc = user_allocator,
                 .info = info,
                 .frame_arena = &info.frame_arena,
                 .frame_alloc = frame_alloc,
@@ -109,14 +107,14 @@ pub fn World(comptime wb: WorldBuilder) type {
                 .changes_queue = ChangeQueue.init(frame_alloc),
             };
 
-            self.entities = try info.alloc.create(EntityArray);
+            self.entities = try user_allocator.create(EntityArray);
             self.entities.* = EntityArray.init();
-            errdefer info.alloc.destroy(self.entities);
+            errdefer user_allocator.destroy(self.entities);
 
             if (comptime wb.comp_types.types.len > 0) {
                 var last_successful_init_loop: usize = 0;
                 errdefer for (self.comp_arrays[0..last_successful_init_loop]) |*arr| {
-                    arr.deinit(info.alloc);
+                    arr.deinit(user_allocator);
                 };
 
                 util.resetCompIds();
@@ -171,8 +169,8 @@ pub fn World(comptime wb: WorldBuilder) type {
             self.event_pools.deinit(self.frame_alloc);
             self.changes_queue.deinit();
 
-            self.info.alloc.destroy(self.entities);
-            self.info.deinit();
+            self.alloc.destroy(self.entities);
+            self.info.deinit(self.alloc);
             //self.alloc.destroy(self);
         }
 
