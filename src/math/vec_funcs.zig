@@ -106,7 +106,7 @@ pub fn init(comptime Self: type) type {
             return .{ .y = -1 };
         }
 
-        pub usingnamespace if (vec_len > 2) struct {
+        const extra_funcs = struct {
             /// Shorthand for .{ .z = 1 }
             pub inline fn forward() Self {
                 return .{ .z = 1 };
@@ -116,7 +116,10 @@ pub fn init(comptime Self: type) type {
             pub inline fn backward() Self {
                 return .{ .z = -1 };
             }
-        } else struct {};
+        };
+
+        pub const forward = if (vec_len > 2) forward else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `forward` method");
+        pub const backward = if (vec_len > 2) backward else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `backward` method");
 
         pub inline fn copy(self: Self) Self {
             return self;

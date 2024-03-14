@@ -12,10 +12,25 @@ pub const Entity = usize;
 /// An Entity and a Commands grouped together for acting on a specific entity
 pub const EntityHandle = @import("entity_handle.zig");
 
-pub usingnamespace @import("events.zig");
-pub usingnamespace @import("query_modifiers.zig");
-pub usingnamespace @import("query.zig");
-pub usingnamespace @import("system_order.zig");
+pub const events = @import("events.zig");
+pub const EventSender = events.EventSender;
+pub const EventReceiver = events.EventReceiver;
+
+pub const query_modifiers = @import("query_modifiers.zig");
+pub const With = query_modifiers.With;
+pub const Without = query_modifiers.Without;
+
+pub const query = @import("query.zig");
+pub const Query = query.Query;
+pub const QueryOpts = query.QueryOpts;
+
+pub const system_order = @import("system_order.zig");
+pub const after = system_order.after;
+pub const before = system_order.before;
+pub const during = system_order.during;
+pub const ordered = system_order.ordered;
+pub const orderGroup = system_order.orderGroup;
+pub const SystemOrder = system_order.SystemOrder;
 
 pub const math = @import("math/init.zig");
 

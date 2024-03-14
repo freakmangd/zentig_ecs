@@ -255,6 +255,7 @@ fn Animator(
 
     return struct {
         const Self = @This();
+        pub const mixin = if (@hasDecl(Wrapper, "mixin")) Wrapper.mixin else @compileError("Wrapper has no mixin, but you are trying to access it");
 
         pub const AnimationTag = BuilderType.AnimationTag;
         pub const ImageTag = BuilderType.ImageTag;
@@ -340,8 +341,6 @@ fn Animator(
                 }
             }
         }
-
-        pub usingnamespace if (@hasDecl(Wrapper, "mixin")) Wrapper.mixin else struct {};
     };
 }
 
