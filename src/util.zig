@@ -19,6 +19,13 @@ pub fn compileError(comptime format: []const u8, comptime args: anytype) noretur
     @compileError(std.fmt.comptimePrint(format, args));
 }
 
+pub fn isContainer(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Struct, .Union, .ErrorSet, .Enum => true,
+        else => false,
+    };
+}
+
 pub fn assertOkOnAddedFunction(comptime Container: type) void {
     const member_type = comptime ztg.meta.memberFnType(Container, "onAdded");
     const fn_info = @typeInfo(@TypeOf(Container.onAdded)).Fn;

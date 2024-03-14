@@ -42,13 +42,13 @@ pub const Vec3 = extern struct {
     /// Converts the Vector into a @Vector object of type `T`, doing
     /// the necessary conversions.
     pub inline fn intoVectorOf(self: Vec3, comptime T: type) @Vector(3, T) {
-        if (comptime std.meta.trait.isFloat(T)) {
+        if (@typeInfo(T) == .Float or @typeInfo(T) == .ComptimeFloat) {
             if (comptime T == f32) {
                 return self.intoSimd();
             } else {
                 return .{ @floatCast(self.x), @floatCast(self.y), @floatCast(self.z) };
             }
-        } else if (comptime std.meta.trait.isIntegral(T)) {
+        } else if (@typeInfo(T) == .Int) {
             return .{ @intFromFloat(self.x), @intFromFloat(self.y), @intFromFloat(self.z) };
         } else {
             util.compileError("Cannot turn self into a vector of `{s}`", .{@typeName(T)});

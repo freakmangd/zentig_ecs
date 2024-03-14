@@ -161,14 +161,16 @@ inline fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void
 pub fn giveComponents(self: Self, ent: Entity, components: anytype) !void {
     const Components = @TypeOf(components);
 
-    if (comptime !std.meta.trait.isContainer(Components))
-        @compileError("Non-container type passed to giveComponents, if you want to give an entity a single component wrap it in an anonymous tuple.");
-
-    if (comptime !std.meta.trait.isTuple(Components) and !@hasDecl(Components, "is_component_bundle"))
-        @compileError("Struct passed to giveComponents does not have a public is_component_bundle decl, if it is not a bundle wrap it in an anonymous tuple.");
+    if (@typeInfo(Components) != .Struct) {
+        if (!@typeInfo(Components).Struct.is_tuple) {
+            util.compileError("Non-tuple type {} passed to giveComponents", .{Components});
+        } else if (!@hasDecl(Components, "is_component_bundle")) {
+            @compileError("Struct passed to giveComponents does not have a public is_component_bundle decl, if it is not a bundle wrap it in an anonymous tuple.");
+        }
+    }
 
     inline for (std.meta.fields(Components)) |field| {
-        if (comptime std.meta.trait.isContainer(field.type) and @hasDecl(field.type, "is_component_bundle")) {
+        if (comptime util.isContainer(field.type) and @hasDecl(field.type, "is_component_bundle")) {
             try giveComponents(self, ent, @field(components, field.name));
         } else {
             try giveComponentSingle(self, ent, @field(components, field.name));

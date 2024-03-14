@@ -24,13 +24,11 @@ pub fn ComponentArray(comptime Index: type) type {
             //};
             //_ = max_cap;
 
-            var self = Self{
+            return .{
                 .component_id = if (builtin.mode == .Debug) util.compId(T) else {},
                 .component_name = if (builtin.mode == .Debug) @typeName(T) else {},
                 .components_data = ByteArray.init(T),
             };
-
-            return self;
         }
 
         pub fn deinit(self: *Self, alloc: std.mem.Allocator) void {
@@ -93,7 +91,7 @@ pub fn ComponentArray(comptime Index: type) type {
         pub fn getAs(self: *const Self, comptime T: type, ent: ztg.Entity) ?*T {
             self.assertType(T);
 
-            var g = self.get(ent) orelse return null;
+            const g = self.get(ent) orelse return null;
             return cast(T, g);
         }
 

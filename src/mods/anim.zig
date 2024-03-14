@@ -4,10 +4,11 @@ const util = @import("../util.zig");
 
 pub fn builder(
     comptime Wrapper: type,
+    comptime serialize_as: []const u8,
     comptime ImageTag: type,
     comptime AnimationTag: type,
     comptime transitions: anytype,
-) Builder(Wrapper, ImageTag, AnimationTag, transitions) {
+) Builder(Wrapper, serialize_as, ImageTag, AnimationTag, transitions) {
     return .{};
 }
 
@@ -38,6 +39,7 @@ const Durations = union(enum) {
 
 fn Builder(
     comptime Wrapper: type,
+    comptime _serialize_as: []const u8,
     comptime _ImageTag: type,
     comptime _AnimationTag: type,
     comptime transitions: anytype,
@@ -46,6 +48,7 @@ fn Builder(
         const Self = @This();
         const AnimationTag = _AnimationTag;
         const ImageTag = _ImageTag;
+        pub const zentig_serialize = _serialize_as;
 
         image_defaults: std.EnumMap(ImageTag, ImageDefault) = .{},
         animations: std.EnumMap(AnimationTag, Animation) = .{},
@@ -152,12 +155,16 @@ fn Builder(
                 return .{
                     .frame_groups = &frame_groups,
                     .durations = blk: {
-                        if (comptime std.meta.trait.isFloat(@TypeOf(durations_info)) or std.meta.trait.isIntegral(@TypeOf(durations_info))) {
-                            break :blk .{ .single = durations_info };
-                        } else if (comptime std.meta.trait.isTuple(@TypeOf(durations_info))) {
-                            break :blk .{ .per_frame = &durations_info };
-                        } else {
-                            util.compileError("Animation expected either a number (0.4) or tuple of numbers (.{{ 0.1, 0.2, 0.6 }}) for durations, found {s}", .{@typeName(@TypeOf(durations_info))});
+                        const ti = @typeInfo(@TypeOf(durations_info));
+                        switch (ti) {
+                            .Float, .ComptimeFloat, .Int, .ComptimeInt => break :blk .{ .single = durations_info },
+                            else => {
+                                if (ti == .Struct and ti.Struct.is_tuple) {
+                                    break :blk .{ .per_frame = &durations_info };
+                                } else {
+                                    util.compileError("Animation expected either a number (0.4) or tuple of numbers (.{{ 0.1, 0.2, 0.6 }}) for durations, found {s}", .{@typeName(@TypeOf(durations_info))});
+                                }
+                            },
                         }
                     },
                 };

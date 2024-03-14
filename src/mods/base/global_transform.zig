@@ -35,7 +35,7 @@ pub inline fn getScale(self: Self) ztg.Vec3 {
 fn updateBasis(self: *Self, com: ztg.Commands, ent: ztg.Entity) void {
     var local_tr = com.getComponentPtr(ent, ztg.base.Transform).?;
 
-    var parent_ent = (com.getEntParent(ent) catch unreachable) orelse {
+    const parent_ent = (com.getEntParent(ent) catch unreachable) orelse {
         // we dont have a parent
         self.basis = local_tr.getUpdatedBasis();
         self.__data.rot = local_tr.getRot();

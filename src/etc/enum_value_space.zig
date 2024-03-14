@@ -15,7 +15,8 @@ pub fn EnumValueSpace(comptime Enum: type, comptime dimensions: usize, comptime 
                     break :getPtr_blk map.getPtr(tag).?;
                 };
 
-                if (std.meta.trait.isTuple(@TypeOf(@field(defs, field.name)[0]))) {
+                const ti = @typeInfo(@TypeOf(@field(defs, field.name)[0]));
+                if (ti == .Struct and ti.Struct.is_tuple) {
                     for (@field(defs, field.name)) |vec| {
                         ptr.append(vec);
                     }

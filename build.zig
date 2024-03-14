@@ -8,19 +8,19 @@ pub fn build(b: *std.Build) void {
     const zmath_pkg = zmath.package(b, target, optimize, .{});
 
     const zentig_mod = b.addModule("zentig", .{
-        .source_file = std.Build.FileSource.relative("src/init.zig"),
-        .dependencies = &[_]std.Build.ModuleDependency{
+        .root_source_file = std.Build.LazyPath.relative("src/init.zig"),
+        .imports = &.{
             .{ .name = "zmath", .module = zmath_pkg.zmath },
         },
     });
 
     const autodoc_test = b.addTest(.{
-        .root_source_file = std.Build.FileSource.relative("src/init.zig"),
+        .root_source_file = std.Build.LazyPath.relative("src/init.zig"),
         .target = target,
         .optimize = optimize,
     });
-    autodoc_test.addModule("zentig", zentig_mod);
-    autodoc_test.addModule("zmath", zmath_pkg.zmath);
+    autodoc_test.root_module.addImport("zentig", zentig_mod);
+    autodoc_test.root_module.addImport("zmath", zmath_pkg.zmath);
 
     const install_docs = b.addInstallDirectory(.{
         .source_dir = autodoc_test.getEmittedDocs(),
@@ -42,8 +42,8 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    all_tests.addModule("zentig", zentig_mod);
-    all_tests.addModule("zmath", zmath_pkg.zmath);
+    all_tests.root_module.addImport("zentig", zentig_mod);
+    all_tests.root_module.addImport("zmath", zmath_pkg.zmath);
 
     const run_all_tests = b.addRunArtifact(all_tests);
 
@@ -65,7 +65,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
 
-        example.addModule("zentig", zentig_mod);
+        example.root_module.addImport("zentig", zentig_mod);
 
         const run_example_cmd = b.addRunArtifact(example);
 
@@ -85,8 +85,8 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         });
-        t.addModule("zentig", zentig_mod);
-        t.addModule("zmath", zmath_pkg.zmath);
+        t.root_module.addImport("zentig", zentig_mod);
+        t.root_module.addImport("zmath", zmath_pkg.zmath);
 
         const run_tests = b.addRunArtifact(t);
 

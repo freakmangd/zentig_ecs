@@ -17,7 +17,7 @@ const WorldInfo = struct {
     rng: std.rand.DefaultPrng,
 
     fn init(alloc: std.mem.Allocator) !*WorldInfo {
-        var self = try alloc.create(WorldInfo);
+        const self = try alloc.create(WorldInfo);
         self.* = .{
             .rng = std.rand.DefaultPrng.init(@bitCast(std.time.milliTimestamp())),
             .frame_arena = std.heap.ArenaAllocator.init(alloc),
@@ -472,7 +472,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             const member_type: if (has_onAdded) ztg.meta.MemberFnType else void = comptime if (has_onAdded) ztg.meta.memberFnType(Component, "onAdded") else void{};
             const needs_mut: bool = comptime if (has_onAdded) member_type == .by_ptr else false;
             const can_err = comptime has_onAdded and ztg.meta.canReturnError(@TypeOf(Component.onAdded));
-            var mutable_comp: if (has_onAdded and needs_mut) Component else void = if (comptime has_onAdded and needs_mut) comp else void{};
+            const mutable_comp: if (has_onAdded and needs_mut) Component else void = if (comptime has_onAdded and needs_mut) comp else void{};
 
             if (comptime has_onAdded) {
                 if (comptime member_type == .non_member) {
@@ -512,14 +512,16 @@ pub fn World(comptime wb: WorldBuilder) type {
 
             if (comptime wb.comp_types.types.len == 0) @compileError("World has no registered components and cannot add components");
 
-            if (comptime !std.meta.trait.isContainer(Components))
-                @compileError("Non-container type passed to giveComponents, if you want to give an entity a single component wrap it in an anonymous tuple.");
-
-            if (comptime !std.meta.trait.isTuple(Components) and !@hasDecl(Components, "is_component_bundle"))
-                @compileError("Struct passed to giveComponents does not have a public is_component_bundle decl, if it is not a bundle wrap it in an anonymous tuple.");
+            if (@typeInfo(Components) != .Struct) {
+                if (comptime !@typeInfo(Components).Struct.is_tuple) {
+                    util.compileError("Non-tuple type {} passed to giveComponents", .{Components});
+                } else if (!@hasDecl(Components, "is_component_bundle")) {
+                    @compileError("Struct passed to giveComponents does not have a public is_component_bundle decl, if it is not a bundle wrap it in an anonymous tuple.");
+                }
+            }
 
             inline for (std.meta.fields(Components)) |field| {
-                if (comptime std.meta.trait.isContainer(field.type) and @hasDecl(field.type, "is_component_bundle")) {
+                if (comptime util.isContainer(field.type) and @hasDecl(field.type, "is_component_bundle")) {
                     try giveComponents(self, ent, @field(components, field.name));
                 } else {
                     try giveComponentSingle(self, ent, @field(components, field.name));
@@ -548,7 +550,7 @@ pub fn World(comptime wb: WorldBuilder) type {
                 // only because we have an alignment at runtime instead of comptime :,(
                 //
                 // TODO: amortize this
-                var alloced_data = self.frame_alloc.rawAlloc(arr.components_data.entry_size, std.math.log2_int(u29, alignment), @returnAddress()) orelse return error.OutOfMemory;
+                const alloced_data = self.frame_alloc.rawAlloc(arr.components_data.entry_size, std.math.log2_int(u29, alignment), @returnAddress()) orelse return error.OutOfMemory;
                 @memcpy(alloced_data, @as([*]const u8, @ptrCast(data))[0..arr.components_data.entry_size]);
                 try self.changes_queue.append(.{ .added_component = .{
                     .ent = ent,
@@ -673,7 +675,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             const with_ids = util.idsFromTypes(QT.with_types.types);
             const without_ids = util.idsFromTypes(QT.without_types.types);
 
-            const checked_entities, var qlists = try self.initQueryLists(alloc, &req_ids, &opt_ids, &with_ids);
+            const checked_entities, const qlists = try self.initQueryLists(alloc, &req_ids, &opt_ids, &with_ids);
             defer alloc.free(qlists);
 
             const comp_mask, const negative_mask = getCompMasks(&.{ &req_ids, &with_ids }, &.{&without_ids});
@@ -821,7 +823,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             return ent_mask.supersetOf(comp_mask) and ent_mask.intersectWith(negative_mask).eql(ComponentMask.initEmpty());
         }
 
-        pub fn ParamsForSystem(comptime params: []const std.builtin.Type.Fn.Param) type {
+        fn ParamsForSystem(comptime params: []const std.builtin.Type.Fn.Param) type {
             var types: [params.len]type = undefined;
             for (params, &types) |p, *t| t.* = p.type.?;
             return std.meta.Tuple(&types);
@@ -848,7 +850,7 @@ pub fn World(comptime wb: WorldBuilder) type {
         }
 
         inline fn initParam(self: *Self, alloc: std.mem.Allocator, comptime T: type) !T {
-            const is_container = comptime std.meta.trait.isContainer(T);
+            const is_container = comptime util.isContainer(T);
 
             if (comptime T == ztg.Commands) {
                 return self.commands();
@@ -866,7 +868,7 @@ pub fn World(comptime wb: WorldBuilder) type {
             } else if (comptime wb.added_resources.has(ztg.meta.DerefType(T)) or wb.added_resources.has(T)) {
                 if (comptime wb.added_resources.has(T)) {
                     return self.getRes(T);
-                } else if (comptime std.meta.trait.isSingleItemPtr(T)) {
+                } else if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) {
                     return self.getResPtr(@typeInfo(T).Pointer.child);
                 }
             }
@@ -963,9 +965,11 @@ const my_file = struct {
         score: usize = 0,
     };
 
+    const MyEmpty = struct {};
+
     pub fn include(comptime wb: *WorldBuilder) void {
         // Registering components
-        wb.addComponents(&.{MyComponent});
+        wb.addComponents(&.{ MyComponent, MyEmpty });
 
         // Adding systems
         wb.addSystemsToStage(.update, .{up_MyComponent});
@@ -998,7 +1002,7 @@ test "creation" {
 }
 
 test "bad alloc" {
-    var world = MyWorld.init(std.testing.failing_allocator);
+    const world = MyWorld.init(std.testing.failing_allocator);
     try std.testing.expectError(error.OutOfMemory, world);
 }
 
@@ -1008,10 +1012,13 @@ test "adding/removing entities" {
 
     // Generally, youd do this by requesting a Commands argument in your system
     const ent = world.newEnt();
-    try world.giveComponents(ent, .{my_file.MyComponent{
-        .position = 0,
-        .speed = 100,
-    }});
+    try world.giveComponents(ent, .{
+        my_file.MyComponent{
+            .position = 0,
+            .speed = 100,
+        },
+        my_file.MyEmpty{},
+    });
 
     try world.runStage(.update);
 
@@ -1038,10 +1045,13 @@ test "adding/removing components" {
 
     const com = world.commands();
 
-    const ent = try com.newEntWith(.{my_file.MyComponent{
-        .position = 10,
-        .speed = 20,
-    }});
+    const ent = try com.newEntWith(.{
+        my_file.MyComponent{
+            .position = 10,
+            .speed = 20,
+        },
+        my_file.MyEmpty{},
+    });
 
     try world.postSystemUpdate();
 
@@ -1064,10 +1074,13 @@ test "overwriting components" {
 
     const com = world.commands();
 
-    const ent = try com.newEntWith(.{my_file.MyComponent{
-        .position = 10,
-        .speed = 20,
-    }});
+    const ent = try com.newEntWith(.{
+        my_file.MyComponent{
+            .position = 10,
+            .speed = 20,
+        },
+        my_file.MyEmpty{},
+    });
 
     try ent.giveComponents(.{my_file.MyComponent{
         .position = -10,

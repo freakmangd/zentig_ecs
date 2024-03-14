@@ -63,7 +63,8 @@ pub fn addEventTransition(self: *Self, event: anytype, from: anytype, to: anytyp
 }
 
 pub fn convertTo(self: Self, comptime t: enum { state, event }, value: anytype) !usize {
-    if (comptime !(std.meta.trait.is(.Enum)(@TypeOf(value)) or std.meta.trait.is(.Int)(@TypeOf(value))))
+    const ti = @typeInfo(@TypeOf(value));
+    if (comptime !(ti == .Enum or ti == .Int))
         @compileError(std.fmt.comptimePrint("Expected integer or enum as argument, found {s}", .{@typeName(@TypeOf(value))}));
 
     const converted: usize = if (comptime @typeInfo(@TypeOf(value)) == .Enum) @intFromEnum(value) else value;

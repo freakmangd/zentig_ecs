@@ -112,7 +112,7 @@ pub fn init(comptime includes: []const type) Self {
 /// ```
 pub fn include(comptime self: *Self, comptime includes: []const type) void {
     for (includes) |TI| {
-        if (comptime std.meta.trait.hasFn("include")(TI)) {
+        if (comptime std.meta.hasFn(TI, "include")) {
             if (comptime self.included.has(TI)) continue; // silent fail
 
             const ti = @typeInfo(@TypeOf(TI.include));
@@ -346,7 +346,7 @@ test addComponents {
 /// ```
 pub fn addResource(comptime self: *Self, comptime T: type, comptime default_value: T) void {
     if (comptime T == ztg.Commands) @compileError("`Commands` cannot be a resource type.");
-    if (comptime std.meta.trait.isContainer(T) and (@hasDecl(T, "IsQueryType") or @hasDecl(T, "EventSendType") or @hasDecl(T, "EventRecvType"))) @compileError("Queries and Events cannot be resources.");
+    if (comptime util.isContainer(T) and (@hasDecl(T, "IsQueryType") or @hasDecl(T, "EventSendType") or @hasDecl(T, "EventRecvType"))) @compileError("Queries and Events cannot be resources.");
 
     {
         const DT = DerefTypeUntilNonPtr(T);
@@ -367,8 +367,8 @@ pub fn addResource(comptime self: *Self, comptime T: type, comptime default_valu
 
 fn DerefTypeUntilNonPtr(comptime T: type) type {
     var CT = T;
-    while (std.meta.trait.isSingleItemPtr(CT)) {
-        CT = ztg.meta.DerefType(CT);
+    while (@typeInfo(CT) == .Pointer) {
+        CT = @typeInfo(CT).Pointer.child;
     }
     return CT;
 }
@@ -493,7 +493,8 @@ pub fn addSystemsToStage(comptime self: *Self, comptime stage_tag: ztg.meta.Enum
 
 /// Same as `addSystemsToStage` but with a string instead of an enum literal
 pub fn addSystemsToStageByName(comptime self: *Self, comptime stage_name: []const u8, _systems: anytype) void {
-    const systems = if (comptime !std.meta.trait.isTuple(@TypeOf(_systems))) .{_systems} else _systems;
+    const _systems_ti = @typeInfo(@TypeOf(_systems));
+    const systems = if (comptime !(_systems_ti == .Struct and _systems_ti.Struct.is_tuple)) .{_systems} else _systems;
     const stage_index = comptime self.stageIndexFromName(stage_name);
 
     for (systems) |sys| {
@@ -505,7 +506,8 @@ pub fn addSystemsToStageByName(comptime self: *Self, comptime stage_name: []cons
                 if (@hasField(@TypeOf(sys), "groups")) {
                     for (std.meta.fields(@TypeOf(sys.groups))) |group_field| {
                         const group_raw = @field(sys.groups, group_field.name);
-                        const group = if (comptime !std.meta.trait.isTuple(@TypeOf(group_raw))) .{group_raw} else group_raw;
+                        const group_raw_ti = @typeInfo(@TypeOf(group_raw));
+                        const group = if (comptime !(group_raw_ti == .Struct and group_raw_ti.Struct.is_tuple)) .{group_raw} else group_raw;
 
                         for (group) |s| {
                             const ordering = std.meta.stringToEnum(ztg.SystemOrder, group_field.name) orelse

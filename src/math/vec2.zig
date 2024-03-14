@@ -35,13 +35,13 @@ pub const Vec2 = extern struct {
     /// Converts the Vector into a @Vector object of type `T`, doing
     /// the necessary conversions.
     pub inline fn intoVectorOf(self: Vec2, comptime T: type) @Vector(2, T) {
-        if (comptime std.meta.trait.isFloat(T)) {
+        if (@typeInfo(T) == .Float or @typeInfo(T) == .ComptimeFloat) {
             if (comptime T == f32) {
                 return self.intoSimd();
             } else {
                 return .{ @as(T, @floatCast(self.x)), @as(T, @floatCast(self.y)) };
             }
-        } else if (comptime std.meta.trait.isIntegral(T)) {
+        } else if (@typeInfo(T) == .Int or @typeInfo(T) == .ComptimeInt) {
             return .{ @as(T, @intFromFloat(self.x)), @as(T, @intFromFloat(self.y)) };
         } else {
             util.compileError("Cannot turn self into a vector of `{s}`", .{@typeName(T)});
@@ -56,7 +56,7 @@ pub const Vec2 = extern struct {
     /// Converts vector to an angle in radians
     /// starting at .{ 1, 0 } and going ccw towards .{ 0, 1 }
     pub inline fn intoDirAngle(self: Vec2) ztg.math.Radians {
-        return math.atan2(f32, self.y, self.x);
+        return math.atan2(self.y, self.x);
     }
 
     test intoDirAngle {

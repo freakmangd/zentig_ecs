@@ -96,7 +96,7 @@ pub fn swapRemove(self: *Self, index: usize) void {
         return;
     }
 
-    var bytes = self.pop();
+    const bytes = self.pop();
     self.set(index, bytes.ptr);
 }
 
@@ -117,7 +117,7 @@ pub const ByteIterator = struct {
     }
 
     pub fn nextAs(self: *ByteIterator, comptime T: type) ?*T {
-        var n = self.next() orelse return null;
+        const n = self.next() orelse return null;
         return cast(T, n);
     }
 };

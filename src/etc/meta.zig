@@ -27,12 +27,15 @@ pub fn memberFnType(comptime Container: type, comptime fn_name: []const u8) Memb
     if (comptime params.len == 0) return .non_member;
 
     const Param0 = params[0].type orelse return .non_member;
+    const ti = @typeInfo(Param0);
 
     if (DerefType(Param0) == Container) {
-        if (std.meta.trait.isConstPtr(Param0)) {
-            return .by_const_ptr;
-        } else if (std.meta.trait.isSingleItemPtr(Param0)) {
-            return .by_ptr;
+        if (ti == .Pointer) {
+            if (ti.Pointer.is_const) {
+                return .by_const_ptr;
+            } else {
+                return .by_ptr;
+            }
         } else {
             return .by_value;
         }
@@ -42,7 +45,8 @@ pub fn memberFnType(comptime Container: type, comptime fn_name: []const u8) Memb
 
 /// If `T` is a Pointer type this function returns the child, otherwise returns `T`
 pub fn DerefType(comptime T: type) type {
-    if (comptime std.meta.trait.isSingleItemPtr(T)) return std.meta.Child(T);
+    const ti = @typeInfo(T);
+    if (ti == .Pointer) return ti.Pointer.child;
     return T;
 }
 
@@ -93,7 +97,7 @@ test CombineStructTypes {
     const B = struct { c: f32, d: f16 };
     const C = CombineStructTypes(&.{ A, B });
 
-    try std.testing.expectEqualDeep(std.meta.fieldNames(C), &.{ "a", "b", "c", "d" });
+    try std.testing.expectEqualDeep(std.meta.fieldNames(C), &[_][]const u8{ "a", "b", "c", "d" });
     try std.testing.expectEqual(i32, std.meta.FieldType(C, .a));
     try std.testing.expectEqual(i16, std.meta.FieldType(C, .b));
     try std.testing.expectEqual(f32, std.meta.FieldType(C, .c));

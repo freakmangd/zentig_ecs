@@ -3,8 +3,18 @@ const util = @import("../util.zig");
 
 const expectEqual = std.testing.expectEqual;
 
-const isFloat = std.meta.trait.isFloat;
-const isIntegral = std.meta.trait.isIntegral;
+fn isFloat(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Float, .ComptimeFloat => true,
+        else => false,
+    };
+}
+fn isIntegral(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Int, .ComptimeInt => true,
+        else => false,
+    };
+}
 
 /// Alias for `f32`, used to clarify input parameters for
 /// functions that take angles in radians
