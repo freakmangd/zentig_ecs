@@ -1,7 +1,19 @@
 const std = @import("std");
 const util = @import("../util.zig");
-
 const expectEqual = std.testing.expectEqual;
+
+pub const Vec2 = @import("vec2.zig").Vec2;
+pub const Vec3 = @import("vec3.zig").Vec3;
+pub const Vec4 = @import("vec4.zig").Vec4;
+
+pub fn VectorOfLen(comptime len: usize) ?type {
+    return switch (len) {
+        2 => Vec2,
+        3 => Vec3,
+        4 => Vec4,
+        else => null,
+    };
+}
 
 fn isFloat(comptime T: type) bool {
     return switch (@typeInfo(T)) {
@@ -26,7 +38,7 @@ pub const Degrees = f32;
 
 pub inline fn toFloat(comptime T: type, x: anytype) T {
     if (T == @TypeOf(x)) return x;
-    if (comptime !isFloat(T)) @compileError("toInt requires it's first argument `T` to be an Integral type to convert `x` to.");
+    if (comptime !isFloat(T)) @compileError("toFloat requires it's first argument `T` to be a Float type to convert `x` to.");
 
     return switch (@typeInfo(@TypeOf(x))) {
         .Int => @floatFromInt(x),

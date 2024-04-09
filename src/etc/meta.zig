@@ -87,7 +87,7 @@ pub fn CombineStructTypes(comptime types: []const type) type {
     return @Type(.{ .Struct = std.builtin.Type.Struct{
         .fields = &field_types,
         .decls = &.{},
-        .layout = .Auto,
+        .layout = .auto,
         .is_tuple = false,
     } });
 }
@@ -171,9 +171,12 @@ pub const utpOf = struct {
         comptime return utpOfImpl(T);
     }
     inline fn utpOfImpl(comptime T: type) Utp {
-        _ = T;
         const gen = struct {
             var id: u1 = undefined;
+
+            comptime {
+                _ = T;
+            }
         };
         return @ptrCast(&gen.id);
     }

@@ -124,12 +124,12 @@ inline fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void
         if (comptime member_type == .non_member) {
             if (comptime can_err) try Component.onAdded(ent, self) else Component.onAdded(ent, self);
         } else {
-            var c = if (comptime needs_mut) mutable_comp else component;
+            var c = if (comptime needs_mut) &mutable_comp else component;
             if (comptime can_err) try c.onAdded(ent, self) else c.onAdded(ent, self);
         }
     }
 
-    if (comptime builtin.mode == .Debug) {
+    if (comptime builtin.mode == .Debug and !builtin.is_test) {
         if (self.checkEntHas(ent, Component)) ztg.log.warn("Entity {} already has a component of type `{}` but you are adding it again, the data will be overwritten with this new instance.", .{ ent, Component });
     }
 
@@ -247,10 +247,24 @@ const test_mod = struct {
         }
     }
 
+    pub fn test_time(com: ztg.Commands, time: *ztg.base.Time) !void {
+        try std.testing.expectEqual(@as(usize, 0), time.frame_count);
+        try com.runStage(.update);
+        try std.testing.expectEqual(@as(usize, 1), time.frame_count);
+        try com.runStageByName("update");
+        try std.testing.expectEqual(@as(usize, 2), time.frame_count);
+        try com.runStageList(&.{.update});
+        try std.testing.expectEqual(@as(usize, 3), time.frame_count);
+        try com.runStageNameList(&.{"update"});
+        try std.testing.expectEqual(@as(usize, 4), time.frame_count);
+    }
+
     pub fn include(comptime wb: *ztg.WorldBuilder) void {
         wb.include(&.{ztg.base}); // ensure we included ztg.base for the Transform component
         wb.addComponents(&.{MyComponent});
         wb.addSystemsToStage(.update, .{update_MyComponent});
+        wb.addStage(.do_test);
+        wb.addSystemsToStage(.do_test, test_time);
     }
 };
 
@@ -262,7 +276,7 @@ test "basic usage" {
     const com = w.commands();
 
     _ = try com.newEntWith(.{
-        ztg.base.Transform.identity(),
+        ztg.base.Transform{},
         test_mod.MyComponent{
             .speed = 1_000,
             .dir = ztg.vec2(0.7, 2),
@@ -273,17 +287,10 @@ test "basic usage" {
 test "running stages" {
     var w = try MyWorld.init(std.testing.allocator);
     defer w.deinit();
-    const com = w.commands();
 
-    try std.testing.expectEqual(@as(usize, 0), com.getResPtr(ztg.base.Time).frame_count);
-    try com.runStage(.update);
-    try std.testing.expectEqual(@as(usize, 1), com.getResPtr(ztg.base.Time).frame_count);
-    try com.runStageByName("update");
-    try std.testing.expectEqual(@as(usize, 2), com.getResPtr(ztg.base.Time).frame_count);
-    try com.runStageList(&.{.update});
-    try std.testing.expectEqual(@as(usize, 3), com.getResPtr(ztg.base.Time).frame_count);
-    try com.runStageNameList(&.{"update"});
-    try std.testing.expectEqual(@as(usize, 4), com.getResPtr(ztg.base.Time).frame_count);
+    // any errors that occur during the stage are propogated
+    // up to this call
+    try w.runStage(.do_test);
 }
 
 test "adding/removing entities" {
@@ -295,7 +302,7 @@ test "adding/removing entities" {
 
     if (!my_ent.checkHas(test_mod.MyComponent)) try my_ent.giveComponents(.{test_mod.MyComponent{
         .speed = 50,
-        .dir = ztg.Vec2.right(),
+        .dir = ztg.Vec2.right,
     }});
 
     try w.postSystemUpdate();

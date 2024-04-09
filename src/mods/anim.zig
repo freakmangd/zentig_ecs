@@ -124,16 +124,22 @@ fn Builder(
             self.from_any_transitions = std.EnumSet(AnimationTag).initFull();
         }
 
-        fn isValidTransition(comptime self: Self, from: AnimationTag, to: AnimationTag) bool {
-            return self.from_any_transitions.contains(to) or
-                (self.valid_transitions.get(from) orelse return false).contains(to);
-        }
-
         pub fn Build(comptime self: Self, comptime default_anim: AnimationTag) type {
             //for (std.meta.fields(AnimationTag)) |field| {
             //    if (!self.animations.contains(@field(AnimationTag, field.name))) util.compileError("Animation data for animation {s} was never initialized", .{field.name});
             //}
-            return Animator(Wrapper, Self, self, default_anim);
+            return Animator(
+                Wrapper,
+                Self,
+                AnimationTag,
+                ImageTag,
+                Animation,
+                self.image_defaults,
+                self.animations,
+                default_anim,
+                self.from_any_transitions,
+                self.valid_transitions,
+            );
         }
 
         const Animation = struct {
@@ -152,8 +158,10 @@ fn Builder(
                     current_frame += o.slice_indexes.len;
                 }
 
+                const frame_groups_final = frame_groups[0..].*;
+
                 return .{
-                    .frame_groups = &frame_groups,
+                    .frame_groups = &frame_groups_final,
                     .durations = blk: {
                         const ti = @typeInfo(@TypeOf(durations_info));
                         switch (ti) {
@@ -248,17 +256,20 @@ fn Builder(
 fn Animator(
     comptime Wrapper: type,
     comptime BuilderType: type,
-    comptime builder_info: anytype,
+    comptime _AnimationTag: type,
+    comptime ImageTag: type,
+    comptime Animation: type,
+    comptime image_defaults: std.EnumMap(ImageTag, ImageDefault),
+    comptime animations: std.EnumMap(_AnimationTag, Animation),
     comptime default_anim: BuilderType.AnimationTag,
+    comptime from_any_transitions: anytype,
+    comptime valid_transitions: anytype,
 ) type {
-    const Animation = BuilderType.Animation;
-
     return struct {
         const Self = @This();
         pub const mixin = if (@hasDecl(Wrapper, "mixin")) Wrapper.mixin else @compileError("Wrapper has no mixin, but you are trying to access it");
 
-        pub const AnimationTag = BuilderType.AnimationTag;
-        pub const ImageTag = BuilderType.ImageTag;
+        pub const AnimationTag = _AnimationTag;
         const Images = std.EnumMap(ImageTag, SlicedImage);
 
         const SlicedImage = struct {
@@ -279,7 +290,7 @@ fn Animator(
             var images: Images = .{};
 
             for (std.enums.values(ImageTag)) |tag| {
-                if (builder_info.image_defaults.get(tag)) |img| {
+                if (image_defaults.get(tag)) |img| {
                     images.put(tag, .{
                         .img = try Wrapper.loadImage(load_image_ctx, img.path),
                         .slice_method = img.slice_method,
@@ -296,7 +307,7 @@ fn Animator(
         pub fn transitionTo(self: *Self, anim: AnimationTag) error{ NullAnimationData, InvalidTransition }!void {
             if (self.current_anim == anim) return;
 
-            if (!builder_info.isValidTransition(self.current_anim, anim)) return error.InvalidTransition;
+            if (!isValidTransition(self.current_anim, anim)) return error.InvalidTransition;
 
             self.current_anim = anim;
             self.frame_group = 0;
@@ -311,7 +322,7 @@ fn Animator(
 
         fn update(q: ztg.Query(.{ Self, Wrapper.QueryType }), time: ztg.base.Time) void {
             for (q.items(0), q.items(1)) |self, qt| {
-                const anim: Animation = builder_info.animations.get(self.current_anim).?;
+                const anim: Animation = animations.get(self.current_anim).?;
                 const frame_group = anim.frame_groups[self.frame_group];
 
                 self.time += if (self.use_real_time) time.real_dt else time.dt;
@@ -340,6 +351,11 @@ fn Animator(
                     );
                 }
             }
+        }
+
+        fn isValidTransition(from: AnimationTag, to: AnimationTag) bool {
+            return from_any_transitions.contains(to) or
+                (valid_transitions.get(from) orelse return false).contains(to);
         }
     };
 }

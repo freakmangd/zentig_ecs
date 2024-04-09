@@ -38,16 +38,37 @@ pub fn ComptimeList(comptime T: type) type {
 
             self.items = &items;
         }
+
+        pub fn dereference(comptime self: Self, comptime len: usize) [len]T {
+            return self.items[0..].*;
+        }
     };
 }
 
 test ComptimeList {
-    const list = comptime blk: {
-        var list = ComptimeList(usize).fromSlice(&.{ 1, 2, 3 });
-        list.append(4);
-        list.set(0, 5);
-        list.insert(1, 6);
-        break :blk list;
-    };
-    try std.testing.expectEqualSlices(usize, &.{ 5, 6, 2, 3, 4 }, list.items);
+    {
+        const list = comptime blk: {
+            var list = ComptimeList(usize).fromSlice(&.{ 1, 2, 3 });
+            list.append(4);
+            list.appendSlice(&.{ 5, 6, 7 });
+            list.set(0, 8);
+            list.insert(1, 9);
+            break :blk list.dereference(list.items.len);
+        };
+        try std.testing.expectEqualSlices(usize, &.{ 8, 9, 2, 3, 4, 5, 6, 7 }, &list);
+    }
+
+    {
+        const list = comptime blk: {
+            var list = ComptimeList(type).fromSlice(&.{ u1, u2, u3 });
+            list.append(u4);
+            list.appendSlice(&.{ u5, u6, u7 });
+            list.set(0, u8);
+            list.insert(1, u9);
+            break :blk list;
+        };
+        inline for (list.items, &[_]type{ u8, u9, u2, u3, u4, u5, u6, u7 }) |Actual, Expected| {
+            if (Actual != Expected) return error.TestExpectedEqual;
+        }
+    }
 }

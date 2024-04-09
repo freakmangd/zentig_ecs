@@ -4,7 +4,6 @@ const util = @import("util.zig");
 const ztg = @import("init.zig");
 const ea = @import("entity_array.zig");
 const ca = @import("component_array.zig");
-const EventPools = @import("event_pools.zig").EventPools;
 const WorldBuilder = @import("worldbuilder.zig");
 
 const Allocator = std.mem.Allocator;
@@ -31,21 +30,29 @@ const WorldInfo = struct {
     }
 };
 
-pub fn World(comptime wb: WorldBuilder) type {
-    if (wb.max_entities == 0) @compileError("Cannot have max_ents == 0.");
+pub fn World(
+    comptime max_entities: usize,
+    comptime Resources: type,
+    comptime comp_types: anytype,
+    comptime StagesList: type,
+    comptime EventPool: type,
+    comptime added_resources: anytype,
+    comptime included: anytype,
+    comptime on_ent_overflow: WorldBuilder.OnEntOverflow,
+    comptime on_crash_fn: WorldBuilder.OnCrashFn,
+    comptime warnings: anytype,
+) type {
+    if (max_entities == 0) @compileError("Cannot have max_ents == 0.");
 
-    const Resources = wb.resources.Build();
-    const MinEntityIndex = std.math.IntFittingRange(0, wb.max_entities);
-    const comp_types_len = wb.comp_types.types.len;
+    const comp_types_len = comp_types.len;
+
+    const MinEntityIndex = std.math.IntFittingRange(0, max_entities);
+    const ComponentArray = ca.ComponentArray(MinEntityIndex);
+    const ComponentMask = std.bit_set.StaticBitSet(comp_types_len);
+    const EntityArray = ea.EntityArray(ComponentMask, max_entities);
 
     return struct {
         const Self = @This();
-
-        const StagesList = @import("stages.zig").Init(wb.stage_defs.items, Self);
-
-        const ComponentArray = ca.ComponentArray(MinEntityIndex);
-        const ComponentMask = std.bit_set.StaticBitSet(wb.comp_types.types.len);
-        const EntityArray = ea.EntityArray(ComponentMask, wb.max_entities);
 
         info: *WorldInfo,
 
@@ -60,32 +67,34 @@ pub fn World(comptime wb: WorldBuilder) type {
         comp_arrays: [comp_types_len]ComponentArray = undefined,
         resources: Resources = .{},
 
-        event_pools: EventPools(wb.event_types),
+        event_pools: EventPool,
         changes_queue: ChangeQueue,
 
         /// User must call `.deinit()` once the world is to be descoped. (in a defer block preferrably)
         /// All systems that request an `Allocator` will get the one passed here.
         ///
         /// Also runs the `.init` stage, useful for things that will only run once and need to be done before
-        /// anything else, without relying on most anything else (Allocator and Random are available).
+        /// anything else, without relying on most anything else. Requesting a pointer to a resource
+        /// returns an **UNSTABLE** pointer and it will be pointing to garbage after the `.init` stage ends.
+        /// The `Allocator` and `Random` resources point to stable objects, but aren't stable themselves.
         ///
         /// Example:
         /// ```zig
-        /// var world = MyWorld.init(alloc);
+        /// var world = try MyWorld.init(alloc);
         /// defer world.deinit();
         /// ```
         pub fn init(user_allocator: std.mem.Allocator) !Self {
             if (comptime builtin.mode == .Debug) {
                 //std.debug.print("Entity has utp {}\n", .{util.compId(ztg.Entity)});
-                //inline for (wb.comp_types.types) |T| {
+                //inline for (comp_types.types) |T| {
                 //    @setEvalBranchQuota(20_000);
                 //    std.debug.print("{s} has utp {}\n", .{ @typeName(T), util.compId(T) });
                 //}
 
-                if (wb.warnings.len > 0)
-                    ztg.log.warn("\n====== World was constructed with warnings: ======\n{s}", .{wb.warnings});
+                if (warnings.len > 0)
+                    ztg.log.warn("\n====== World was constructed with warnings: ======\n{s}", .{warnings});
 
-                if (wb.max_entities > 500_000) ztg.log.warn("It isn't recommended to have a max_entities count over 500,000 as it could cause unstable performance.");
+                if (max_entities > 500_000) ztg.log.warn("It isn't recommended to have a max_entities count over 500,000 as it could cause unstable performance.");
             }
 
             var info = try WorldInfo.init(user_allocator);
@@ -103,22 +112,22 @@ pub fn World(comptime wb: WorldBuilder) type {
                 .frame_alloc = frame_alloc,
                 .rand = info.rng.random(),
 
-                .event_pools = EventPools(wb.event_types).init(),
+                .event_pools = .{},
                 .changes_queue = ChangeQueue.init(frame_alloc),
             };
 
             self.entities = try user_allocator.create(EntityArray);
-            self.entities.* = EntityArray.init();
+            self.entities.* = .{};
             errdefer user_allocator.destroy(self.entities);
 
-            if (comptime wb.comp_types.types.len > 0) {
+            if (comptime comp_types_len > 0) {
                 var last_successful_init_loop: usize = 0;
                 errdefer for (self.comp_arrays[0..last_successful_init_loop]) |*arr| {
                     arr.deinit(user_allocator);
                 };
 
                 util.resetCompIds();
-                inline for (wb.comp_types.types, 0..) |CT, i| {
+                inline for (comp_types, 0..) |CT, i| {
                     @setEvalBranchQuota(20_000);
                     self.comp_arrays[util.compId(CT)] = ComponentArray.init(CT);
                     last_successful_init_loop = i;
@@ -148,7 +157,7 @@ pub fn World(comptime wb: WorldBuilder) type {
                 ztg.log.err("Found error {} while trying to clean up world for deinit.", .{err});
             };
 
-            inline for (wb.comp_types.types, &self.comp_arrays) |CT, *comp_arr| {
+            inline for (comp_types, &self.comp_arrays) |CT, *comp_arr| {
                 if (comptime @sizeOf(CT) > 0) {
                     var comp_iter = comp_arr.iterator();
                     while (comp_iter.nextAs(CT)) |comp| self.invokeOnRemoveForComponent(CT, comp) catch |err| {
@@ -266,12 +275,16 @@ pub fn World(comptime wb: WorldBuilder) type {
                     },
                     .removed_ent => |ent| try self.removeEntAndAssociatedComponents(ent),
                     .removed_component => |rem_comp| {
-                        const id = self.comp_arrays[rem_comp.component_id].component_id;
                         const comp = self.comp_arrays[rem_comp.component_id].get(rem_comp.ent) orelse {
-                            ztg.log.err("Trying to remove a component of type {s} from ent {} when ent does not have that component", .{ wb.comp_types.nameFromIndex(id), rem_comp.ent });
+                            if (builtin.mode == .Debug) {
+                                ztg.log.err("Trying to remove a component of type {s} from ent {} when ent does not have that component", .{
+                                    util.nameFromTypeArrayIndex(comp_types, rem_comp.component_id),
+                                    rem_comp.ent,
+                                });
+                            }
                             continue;
                         };
-                        try self.invokeOnRemoveForComponentById(comp, id);
+                        try self.invokeOnRemoveForComponentById(comp, rem_comp.component_id);
                         self.comp_arrays[rem_comp.component_id].swapRemove(rem_comp.ent);
                     },
                 }
@@ -288,7 +301,7 @@ pub fn World(comptime wb: WorldBuilder) type {
 
             for (children) |c| try self.removeEntAndAssociatedComponents(c);
 
-            inline for (wb.comp_types.types, &self.comp_arrays) |CT, *list| {
+            inline for (comp_types, &self.comp_arrays) |CT, *list| {
                 if (list.getAs(CT, ent)) |comp| {
                     try self.invokeOnRemoveForComponent(CT, comp);
                     _ = list.swapRemove(ent);
@@ -323,8 +336,8 @@ pub fn World(comptime wb: WorldBuilder) type {
 
         fn invokeOnRemoveForComponentById(self: *Self, comp: *anyopaque, comp_id: util.CompId) anyerror!void {
             switch (comp_id) {
-                inline 0...wb.comp_types.types.len - 1 => |id| {
-                    const T = wb.comp_types.types[id];
+                inline 0...comp_types.len - 1 => |id| {
+                    const T = comp_types[id];
                     try invokeOnRemoveForComponent(self, T, if (comptime @sizeOf(T) == 0) undefined else @as(*T, @ptrCast(@alignCast(comp))));
                 },
                 else => return error.UnregisteredComponent,
@@ -359,7 +372,7 @@ pub fn World(comptime wb: WorldBuilder) type {
         /// `.overwrite_first` => returns the first entity in the entity list, after removing all of its components
         pub fn newEnt(self: *Self) ztg.Entity {
             const ent = blk: {
-                if (self.next_ent >= wb.max_entities) {
+                if (self.next_ent >= max_entities) {
                     break :blk getOpenEntityId(self.entities, 0) orelse self.handleEntOverflow();
                 } else if (!self.entities.hasEntity(self.next_ent)) {
                     break :blk self.next_ent;
@@ -383,14 +396,14 @@ pub fn World(comptime wb: WorldBuilder) type {
         }
 
         fn getOpenEntityId(entities: *const EntityArray, from: ztg.Entity) ?ztg.Entity {
-            for (from..wb.max_entities) |e| if (!entities.hasEntity(e)) return @intCast(e);
+            for (from..max_entities) |e| if (!entities.hasEntity(e)) return @intCast(e);
             for (0..from) |e| if (!entities.hasEntity(e)) return @intCast(e);
             return null;
         }
 
         fn handleEntOverflow(self: *Self) ztg.Entity {
-            return switch (wb.on_ent_overflow) {
-                .crash => self.crash(std.fmt.comptimePrint("Exceeded entity limit of {}.", .{wb.max_entities}), .hit_ent_limit),
+            return switch (on_ent_overflow) {
+                .crash => self.crash(std.fmt.comptimePrint("Exceeded entity limit of {}.", .{max_entities}), .hit_ent_limit),
                 .overwrite_last => blk: {
                     const ent = self.entities.getEntityAt(self.entities.len - 1);
                     try self.reuseEntity(ent);
@@ -458,12 +471,12 @@ pub fn World(comptime wb: WorldBuilder) type {
         }
 
         fn giveComponentSingle(self: *Self, ent: ztg.Entity, comp: anytype) !void {
-            if (comptime wb.comp_types.types.len == 0) @compileError("World has no registered components and cannot add components");
+            if (comptime comp_types.len == 0) @compileError("World has no registered components and cannot add components");
 
             if (!self.entities.hasEntity(ent)) return error.EntityDoesntExist;
 
             const Component = @TypeOf(comp);
-            const idx = comptime wb.comp_types.indexOf(Component) orelse util.compileError("Tried to give entity Component of type `{s}`, which was not registred.", .{@typeName(Component)});
+            const idx = comptime util.indexOfType(comp_types, Component) orelse util.compileError("Tried to give entity Component of type `{s}`, which was not registred.", .{@typeName(Component)});
 
             const has_onAdded = comptime @hasDecl(Component, "onAdded");
 
@@ -478,7 +491,7 @@ pub fn World(comptime wb: WorldBuilder) type {
                 if (comptime member_type == .non_member) {
                     if (comptime can_err) try Component.onAdded(ent, self.commands()) else Component.onAdded(ent, self.commands());
                 } else {
-                    var c = if (comptime needs_mut) mutable_comp else comp;
+                    var c = if (comptime needs_mut) &mutable_comp else comp;
                     if (comptime can_err) try c.onAdded(ent, self.commands()) else c.onAdded(ent, self.commands());
                 }
             }
@@ -510,7 +523,7 @@ pub fn World(comptime wb: WorldBuilder) type {
         pub fn giveComponents(self: *Self, ent: ztg.Entity, components: anytype) !void {
             const Components = @TypeOf(components);
 
-            if (comptime wb.comp_types.types.len == 0) @compileError("World has no registered components and cannot add components");
+            if (comptime comp_types.len == 0) @compileError("World has no registered components and cannot add components");
 
             if (@typeInfo(Components) != .Struct) {
                 if (comptime !@typeInfo(Components).Struct.is_tuple) {
@@ -530,10 +543,10 @@ pub fn World(comptime wb: WorldBuilder) type {
         }
 
         fn commands_giveComponent(ptr: *anyopaque, ent: ztg.Entity, component_id: util.CompId, alignment: u29, data: *const anyopaque) ztg.Commands.GiveRemoveComponentError!void {
-            if (comptime wb.comp_types.types.len == 0) @compileError("World has no registered components and cannot add components");
+            if (comptime comp_types.len == 0) @compileError("World has no registered components and cannot add components");
             var self = commandsCast(ptr);
 
-            if (component_id >= wb.comp_types.types.len) return error.UnregisteredComponent;
+            if (component_id >= comp_types.len) return error.UnregisteredComponent;
             if (!self.entities.hasEntity(ent)) return error.EntityDoesntExist;
 
             self.entities.comp_masks[ent].set(component_id);
@@ -566,17 +579,17 @@ pub fn World(comptime wb: WorldBuilder) type {
         pub fn removeComponent(self: *Self, ent: ztg.Entity, comptime Component: type) (error{EntityDoesntExist} || Allocator.Error)!void {
             try self.removeComponent_fromCompId(
                 ent,
-                comptime wb.comp_types.indexOf(Component) orelse util.compileError("Component of type `{s}` was not registered and cannot be removed", .{@typeName(Component)}),
+                comptime util.indexOfType(comp_types, Component) orelse util.compileError("Component of type `{s}` was not registered and cannot be removed", .{@typeName(Component)}),
             );
         }
 
         fn commands_removeComponent(ptr: *anyopaque, ent: ztg.Entity, comp_id: util.CompId) ztg.Commands.GiveRemoveComponentError!void {
-            if (comp_id >= wb.comp_types.types.len) return error.UnregisteredComponent;
+            if (comp_id >= comp_types.len) return error.UnregisteredComponent;
             try commandsCast(ptr).removeComponent_fromCompId(ent, comp_id);
         }
 
         inline fn removeComponent_fromCompId(self: *Self, ent: ztg.Entity, comp_id: util.CompId) ztg.Commands.GiveRemoveComponentError!void {
-            if (comptime wb.comp_types.types.len == 0) @compileError("World has no registered components to remove.");
+            if (comptime comp_types.len == 0) @compileError("World has no registered components to remove.");
             if (!self.entities.hasEntity(ent)) return error.EntityDoesntExist;
 
             try self.changes_queue.append(.{ .removed_component = .{
@@ -587,11 +600,11 @@ pub fn World(comptime wb: WorldBuilder) type {
 
         /// Returns true or false depending on whether `ent` has been assigned a component of type `Component`
         pub fn checkEntHas(self: *Self, ent: ztg.Entity, comptime Component: type) bool {
-            return self.comp_arrays[comptime wb.comp_types.indexOf(Component) orelse util.compileError("Component of type `{s}` was not registered", .{@typeName(Component)})].contains(ent);
+            return self.comp_arrays[comptime util.indexOfType(comp_types, Component) orelse util.compileError("Component of type `{s}` was not registered", .{@typeName(Component)})].contains(ent);
         }
 
         fn commands_checkEntHas(ptr: *anyopaque, ent: ztg.Entity, component_id: util.CompId) ztg.Commands.ComponentError!bool {
-            if (comptime wb.comp_types.types.len == 0) @compileError("World has no registered components to check for.");
+            if (comptime comp_types.len == 0) @compileError("World has no registered components to check for.");
             const self = commandsCast(ptr);
             for (self.changes_queue.items) |ch| switch (ch) {
                 .added_component => |added| if (added.ent == ent and added.component_id == component_id) return true,
@@ -604,7 +617,7 @@ pub fn World(comptime wb: WorldBuilder) type {
         pub fn getComponentPtr(self: *Self, ent: ztg.Entity, comptime Component: type) ?*anyopaque {
             return self.getComponentPtr_fromCompId(
                 ent,
-                comptime wb.comp_types.indexOf(Component) orelse util.compileError("Component of type `{s}` was not registered and no pointer can be obtained.", .{@typeName(Component)}),
+                comptime util.indexOfType(comp_types, Component) orelse util.compileError("Component of type `{s}` was not registered and no pointer can be obtained.", .{@typeName(Component)}),
             );
         }
 
@@ -613,7 +626,7 @@ pub fn World(comptime wb: WorldBuilder) type {
         }
 
         fn getComponentPtr_fromCompId(self: *Self, ent: ztg.Entity, comp_id: util.CompId) ?*anyopaque {
-            if (comptime wb.comp_types.types.len == 0) @compileError("World has no registered components to get the pointer of.");
+            if (comptime comp_types.len == 0) @compileError("World has no registered components to get the pointer of.");
             for (self.changes_queue.items) |ch| switch (ch) {
                 .added_component => |added| if (added.ent == ent and added.component_id == comp_id) return added.data,
                 else => {},
@@ -623,18 +636,18 @@ pub fn World(comptime wb: WorldBuilder) type {
 
         /// Returns a copy of the resource T in this world
         pub fn getRes(self: Self, comptime T: type) T {
-            if (comptime !wb.added_resources.has(T)) util.compileError("World does not have resource of type `{s}`", .{@typeName(T)});
-            return @field(self.resources, std.fmt.comptimePrint("{}", .{wb.added_resources.indexOf(T).?}));
+            if (comptime !util.typeArrayHas(added_resources, T)) util.compileError("World does not have resource of type `{s}`", .{@typeName(T)});
+            return @field(self.resources, std.fmt.comptimePrint("{}", .{util.indexOfType(added_resources, T).?}));
         }
 
         /// Returns a pointer to the resource T in this world
         pub fn getResPtr(self: *Self, comptime T: type) *T {
-            if (comptime !wb.added_resources.has(T)) util.compileError("World does not have resource of type `{s}`", .{@typeName(T)});
-            return &@field(self.resources, std.fmt.comptimePrint("{}", .{wb.added_resources.indexOf(T).?}));
+            if (comptime !util.typeArrayHas(added_resources, T)) util.compileError("World does not have resource of type `{s}`", .{@typeName(T)});
+            return &@field(self.resources, std.fmt.comptimePrint("{}", .{util.indexOfType(added_resources, T).?}));
         }
 
         fn commands_getResPtr(ptr: *anyopaque, utp: ztg.meta.Utp) error{UnregisteredResource}!*anyopaque {
-            inline for (wb.added_resources.types, 0..) |T, i| {
+            inline for (added_resources, 0..) |T, i| {
                 if (ztg.meta.utpOf(T) == utp) return @ptrCast(&@field(commandsCast(ptr).resources, std.fmt.comptimePrint("{}", .{i})));
             }
             return error.UnregisteredResource;
@@ -675,7 +688,14 @@ pub fn World(comptime wb: WorldBuilder) type {
             const with_ids = util.idsFromTypes(QT.with_types.types);
             const without_ids = util.idsFromTypes(QT.without_types.types);
 
-            const checked_entities, const qlists = try self.initQueryLists(alloc, &req_ids, &opt_ids, &with_ids);
+            var error_missing_id: UnregisteredTypeErrorInfo = undefined;
+            const checked_entities, const qlists = switch (builtin.mode) {
+                .Debug => self.initQueryLists(alloc, &req_ids, &opt_ids, &with_ids, &error_missing_id) catch |err| switch (err) {
+                    error.UnregisteredComponent => error_missing_id.panic(QT),
+                    else => return err,
+                },
+                else => try self.initQueryLists(alloc, &req_ids, &opt_ids, &with_ids, &error_missing_id),
+            };
             defer alloc.free(qlists);
 
             const comp_mask, const negative_mask = getCompMasks(&.{ &req_ids, &with_ids }, &.{&without_ids});
@@ -744,22 +764,51 @@ pub fn World(comptime wb: WorldBuilder) type {
             }
         };
 
+        const UnregisteredTypeErrorInfo = struct {
+            index: usize,
+            query_type: enum { required, optional, with },
+
+            pub fn panic(self: UnregisteredTypeErrorInfo, comptime QT: type) noreturn {
+                std.debug.panic("Tried to query for type {s}, which was not registered", .{switch (self.query_type) {
+                    .required => getQueryTypeName(QT.req_types, self.index),
+                    .optional => getQueryTypeName(QT.opt_types, self.index),
+                    .with => getQueryTypeName(QT.with_types, self.index),
+                }});
+            }
+
+            fn getQueryTypeName(comptime QT_type_list: ztg.meta.TypeMap, index: usize) []const u8 {
+                if (comptime QT_type_list.types.len == 0) return "???";
+
+                switch (index) {
+                    inline 0...QT_type_list.types.len - 1 => |i| return @typeName(QT_type_list.types[i]),
+                    else => unreachable,
+                }
+            }
+        };
+
         fn initQueryLists(
             self: *Self,
             alloc: std.mem.Allocator,
             req_ids: []const util.CompId,
             opt_ids: []const util.CompId,
             with_ids: []const util.CompId,
+            error_missing_id: *UnregisteredTypeErrorInfo,
         ) !struct { []const ztg.Entity, []QueryList } {
             var lists = try alloc.alloc(QueryList, req_ids.len + opt_ids.len);
             var idx: usize = 0;
 
-            const first_arr = self.assertListById(req_ids[0]);
+            const first_arr = self.getListById(req_ids[0]) catch |err| {
+                error_missing_id.* = .{ .query_type = .required, .index = 0 };
+                return err;
+            };
             var smallest: []const ztg.Entity = first_arr.entities.items;
             lists[0] = QueryList.init(first_arr, 0, .required);
 
             for (req_ids[1..], 1..) |id, i| {
-                const check = self.assertListById(id);
+                const check = self.getListById(id) catch |err| {
+                    error_missing_id.* = .{ .query_type = .required, .index = i };
+                    return err;
+                };
                 idx += 1;
                 lists[idx] = QueryList.init(check, i, .required);
 
@@ -767,12 +816,19 @@ pub fn World(comptime wb: WorldBuilder) type {
             }
 
             for (opt_ids, 0..) |id, i| {
+                const check = self.getListById(id) catch |err| {
+                    error_missing_id.* = .{ .query_type = .optional, .index = i };
+                    return err;
+                };
                 idx += 1;
-                lists[idx] = QueryList.init(self.assertListById(id), i, .optional);
+                lists[idx] = QueryList.init(check, i, .optional);
             }
 
-            for (with_ids) |id| {
-                const check = self.assertListById(id);
+            for (with_ids, 0..) |id, i| {
+                const check = self.getListById(id) catch |err| {
+                    error_missing_id.* = .{ .query_type = .with, .index = i };
+                    return err;
+                };
                 if (check.len() < smallest.len) smallest = check.entities.items;
             }
 
@@ -787,7 +843,11 @@ pub fn World(comptime wb: WorldBuilder) type {
             var negative_mask = ComponentMask.initEmpty();
 
             for (comp_ids_list) |ids| for (ids) |id| comp_mask.set(id);
-            for (negative_ids_list) |ids| for (ids) |id| negative_mask.set(id);
+            for (negative_ids_list) |ids| for (ids) |id| {
+                if (builtin.mode == .Debug and id >= comp_types.len)
+                    std.debug.panic("Trying to query without ID {}, which isn't registered", .{id});
+                negative_mask.set(id);
+            };
 
             return .{ comp_mask, negative_mask };
         }
@@ -865,8 +925,8 @@ pub fn World(comptime wb: WorldBuilder) type {
                 return .{
                     .items = self.event_pools.getPtr(T.EventRecvType).items,
                 };
-            } else if (comptime wb.added_resources.has(ztg.meta.DerefType(T)) or wb.added_resources.has(T)) {
-                if (comptime wb.added_resources.has(T)) {
+            } else if (comptime util.typeArrayHas(added_resources, ztg.meta.DerefType(T)) or util.typeArrayHas(added_resources, T)) {
+                if (comptime util.typeArrayHas(added_resources, T)) {
                     return self.getRes(T);
                 } else if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) {
                     return self.getResPtr(@typeInfo(T).Pointer.child);
@@ -888,25 +948,21 @@ pub fn World(comptime wb: WorldBuilder) type {
         /// Returns whether the underlying WorldBuilder included a namespace
         /// while it was being built.
         pub fn hasIncluded(comptime Namespace: type) bool {
-            comptime return wb.included.has(Namespace);
+            comptime return included.has(Namespace);
         }
 
         fn commands_hasIncluded(type_utp: ztg.meta.Utp) bool {
-            return wb.included.hasUtp(type_utp);
+            return util.typeArrayHasUtp(included, type_utp);
         }
 
         inline fn getListOf(self: *Self, comptime T: type) *ComponentArray {
-            const idx = comptime wb.comp_types.indexOf(T) orelse util.compileError("Tried to get list of Component `{s}`, which was not registred.", .{@typeName(T)});
+            const idx = comptime util.indexOfType(comp_types, T) orelse util.compileError("Tried to get list of Component `{s}`, which was not registred.", .{@typeName(T)});
             return &self.comp_arrays[idx];
         }
 
         inline fn getListById(self: *Self, id: util.CompId) !*ComponentArray {
             if (comptime builtin.mode == .Debug) if (id >= self.comp_arrays.len) return error.UnregisteredComponent;
             return &self.comp_arrays[id];
-        }
-
-        inline fn assertListById(self: *Self, id: util.CompId) *ComponentArray {
-            return self.getListById(id) catch std.debug.panic("Tried to get list of Component with ID {}, which was not registered.", .{id});
         }
 
         inline fn commandsCast(ptr: *anyopaque) *Self {
@@ -918,7 +974,7 @@ pub fn World(comptime wb: WorldBuilder) type {
         }
 
         fn crash(self: *Self, comptime crash_msg: []const u8, r: ztg.CrashReason) noreturn {
-            wb.on_crash_fn(self.commands(), r) catch |err| ztg.log.err("onCrashFn errored due to {}", .{err});
+            on_crash_fn(self.commands(), r) catch |err| ztg.log.err("onCrashFn errored due to {}", .{err});
             @panic(crash_msg);
         }
     };
@@ -1122,7 +1178,7 @@ test "querying" {
 
     _ = try world.newEntWith(.{
         ztg.base.Name{"bad"},
-        ztg.base.Transform.identity(),
+        ztg.base.Transform{},
         my_file.MyComponent{
             .position = 30,
             .speed = 1,
@@ -1149,6 +1205,8 @@ test "callbacks" {
         }
 
         fn addAndRemove(com: ztg.Commands) !void {
+            try std.testing.expect(run);
+
             const ent = try com.newEntWith(.{Thing{}});
             try com.removeEnt(ent.ent);
         }
@@ -1169,7 +1227,7 @@ test "callbacks" {
     const EmptyCbWorld = comptime blk: {
         var wb = WorldBuilder.init(&.{});
         wb.addComponents(&.{systems.Thing});
-        wb.addSystemsToStage(.load, .{ systems.load, systems.addAndRemove });
+        wb.addSystemsToStage(.load, .{ systems.load, ztg.after(.body, systems.addAndRemove) });
         break :blk wb.Build();
     };
 

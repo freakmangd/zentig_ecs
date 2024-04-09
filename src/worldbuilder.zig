@@ -65,7 +65,7 @@ const OptimizeMode = enum {
     low_mem,
 };
 
-const OnEntOverflow = enum {
+pub const OnEntOverflow = enum {
     /// Invokes OnCrashFn with the CrashReason of .hit_ent_limit
     crash,
     /// Takes the last entity spawned, strips it of its components, and returns it
@@ -361,7 +361,7 @@ pub fn addResource(comptime self: *Self, comptime T: type, comptime default_valu
     }
 
     self.added_resources.append(T);
-    const idx = self.added_resources.indexOf(T).?;
+    const idx = self.added_resources.types.len - 1;
     self.resources.addField(std.fmt.comptimePrint("{}", .{idx}), T, @ptrCast(&default_value));
 }
 
@@ -575,7 +575,30 @@ fn defaultCrash(com: ztg.Commands, r: ztg.CrashReason) anyerror!void {
 
 /// Returns the final World type
 pub fn Build(comptime self: Self) type {
-    return World(self);
+    const comp_types = self.comp_types.dereference(self.comp_types.types.len);
+    const event_types = self.event_types.dereference(self.event_types.types.len);
+    const added_resources = self.added_resources.dereference(self.added_resources.types.len);
+    const included = self.included.dereference(self.included.types.len);
+    const on_ent_overflow = self.on_ent_overflow;
+    const on_crash_fn = self.on_crash_fn;
+    const warnings = self.warnings[0..].*;
+
+    const Resources = self.resources.Build();
+    const EventPool = @import("event_pools.zig").EventPools(event_types);
+    const StagesList = @import("stages.zig").Init(self.stage_defs.items);
+
+    return World(
+        self.max_entities,
+        Resources,
+        comp_types,
+        StagesList,
+        EventPool,
+        added_resources,
+        included,
+        on_ent_overflow,
+        on_crash_fn,
+        warnings,
+    );
 }
 
 fn warn(comptime self: *Self, comptime message: []const u8) void {

@@ -11,20 +11,12 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
             _,
         };
 
-        ents: [size]Index = undefined,
-        idx_lookup: [size]Index = undefined,
-        parent_lookup: [size]Index = undefined,
+        ents: [size]Index = .{Index.NULL} ** size,
+        idx_lookup: [size]Index = .{Index.NULL} ** size,
+        parent_lookup: [size]Index = .{Index.NULL} ** size,
         comp_masks: [size]ComponentMask = undefined,
 
         len: usize = 0,
-
-        pub fn init() Self {
-            var self = Self{};
-            @memset(&self.ents, Index.NULL);
-            @memset(&self.idx_lookup, Index.NULL);
-            @memset(&self.parent_lookup, Index.NULL);
-            return self;
-        }
 
         pub fn getIndexOf(self: *const Self, ent: ztg.Entity) ?usize {
             if (self.idx_lookup[ent] == Index.NULL) return null;
@@ -119,7 +111,7 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
 
 test EntityArray {
     const CompMask = std.bit_set.StaticBitSet(0);
-    var arr = EntityArray(CompMask, 10).init();
+    var arr = EntityArray(CompMask, 10){};
 
     arr.append(0);
     arr.append(1);

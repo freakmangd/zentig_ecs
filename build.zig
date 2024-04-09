@@ -44,6 +44,7 @@ pub fn build(b: *std.Build) void {
     });
     all_tests.root_module.addImport("zentig", zentig_mod);
     all_tests.root_module.addImport("zmath", zmath_pkg.zmath);
+    all_tests.root_module.single_threaded = true;
 
     const run_all_tests = b.addRunArtifact(all_tests);
 
@@ -182,9 +183,3 @@ pub fn addAsLocalModule(settings: struct {
 //        .exe = exe,
 //    };
 //}
-
-const srcdir = struct {
-    fn getSrcDir() []const u8 {
-        return std.fs.path.dirname(@src().file).?;
-    }
-}.getSrcDir();

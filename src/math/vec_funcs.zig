@@ -7,8 +7,8 @@ const ztg = @import("../init.zig");
 const util = @import("../util.zig");
 const math = std.math;
 
-pub fn init(comptime Self: type) type {
-    if (@typeInfo(Self).Struct.layout != .Extern) @compileError("To implement vec_funcs into a struct it must be marked extern.");
+pub fn GenerateFunctions(comptime Self: type) type {
+    if (@typeInfo(Self).Struct.layout != .@"extern") @compileError("To implement vec_funcs into a struct it must be marked extern.");
 
     const vec_len = std.meta.fields(Self).len;
 
@@ -71,55 +71,40 @@ pub fn init(comptime Self: type) type {
             }
         }
 
-        /// Returns a vector with every element set to 1
-        pub inline fn one() Self {
-            return fromSimd(@splat(1));
-        }
-
         /// Returns a vector with every element set to s
         pub inline fn splat(s: f32) Self {
             return fromSimd(@splat(s));
         }
 
+        /// Returns a vector with every element set to 1
+        pub const one = fromSimd(@splat(1));
+
         /// Shorthand for .{}
-        pub inline fn zero() Self {
-            return .{};
-        }
+        pub const zero: Self = .{};
 
         /// Shorthand for .{ .x = 1 }
-        pub inline fn right() Self {
-            return .{ .x = 1 };
-        }
+        pub const right: Self = .{ .x = 1 };
 
         /// Shorthand for .{ .x = -1 }
-        pub inline fn left() Self {
-            return .{ .x = -1 };
-        }
+        pub const left: Self = .{ .x = -1 };
 
         /// Shorthand for .{ .y = 1 }
-        pub inline fn up() Self {
-            return .{ .y = 1 };
-        }
+        pub const up: Self = .{ .y = 1 };
 
         /// Shorthand for .{ .y = -1 }
-        pub inline fn down() Self {
-            return .{ .y = -1 };
-        }
+        pub const down: Self = .{ .y = -1 };
 
-        const extra_funcs = struct {
-            /// Shorthand for .{ .z = 1 }
-            pub inline fn forward() Self {
-                return .{ .z = 1 };
-            }
+        /// Shorthand for .{ .z = 1 }
+        pub const forward = if (vec_len >= 3) Self{ .z = 1 } else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `forward` method");
 
-            /// Shorthand for .{ .z = -1 }
-            pub inline fn backward() Self {
-                return .{ .z = -1 };
-            }
-        };
+        /// Shorthand for .{ .z = -1 }
+        pub const backward = if (vec_len >= 3) Self{ .z = -1 } else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `backward` method");
 
-        pub const forward = if (vec_len > 2) forward else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `forward` method");
-        pub const backward = if (vec_len > 2) backward else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `backward` method");
+        /// Shorthand for .{ .w = 1 }
+        pub const inward = if (vec_len >= 4) Self{ .w = 1 } else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `backward` method");
+
+        /// shorthand for .{ .w = -1 }
+        pub const outward = if (vec_len >= 4) Self{ .w = -1 } else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `backward` method");
 
         pub inline fn copy(self: Self) Self {
             return self;
@@ -343,7 +328,7 @@ pub fn convertFieldToF32(obj: anytype, comptime field_name: []const u8, default:
 
 pub fn isBitcastable(comptime Self: type, comptime Other: type) bool {
     return @sizeOf(Self) == @sizeOf(Other) and
-        @typeInfo(Other).Struct.layout == .Extern and
+        @typeInfo(Other).Struct.layout == .@"extern" and
         @typeInfo(std.meta.fieldInfo(Other, .x).type) == .Float and
         @typeInfo(std.meta.fieldInfo(Other, .y).type) == .Float and
         if (@hasField(Self, "z")) @typeInfo(std.meta.fieldInfo(Other, .z).type) == .Float else true and
@@ -353,20 +338,20 @@ pub fn isBitcastable(comptime Self: type, comptime Other: type) bool {
 const Vec2 = @import("vec2.zig").Vec2;
 
 test "angle" {
-    const v = Vec2.right();
+    const v = Vec2.right;
 
-    const between_down = v.angle(Vec2.down());
-    try std.testing.expectApproxEqRel(math.degreesToRadians(f32, 90), between_down, std.math.floatEps(f32));
+    const between_down = v.angle(Vec2.down);
+    try std.testing.expectApproxEqRel(math.degreesToRadians(90), between_down, std.math.floatEps(f32));
 
-    const between_down_signed = v.angleSigned(Vec2.down());
-    try std.testing.expectApproxEqRel(math.degreesToRadians(f32, -90), between_down_signed, std.math.floatEps(f32));
+    const between_down_signed = v.angleSigned(Vec2.down);
+    try std.testing.expectApproxEqRel(math.degreesToRadians(-90), between_down_signed, std.math.floatEps(f32));
 }
 
 test "directionTo" {
-    const v0 = Vec2.zero();
-    const v1 = Vec2.right();
+    const v0 = Vec2.zero;
+    const v1 = Vec2.right;
 
-    try std.testing.expect(v0.directionTo(v1).equals(Vec2.right()));
+    try std.testing.expect(v0.directionTo(v1).equals(Vec2.right));
 }
 
 test "getNormalized" {

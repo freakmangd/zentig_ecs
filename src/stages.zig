@@ -6,7 +6,7 @@ const Commands = ztg.Commands;
 const StageDef = ztg.WorldBuilder.StageDef;
 const TypeBuilder = ztg.meta.TypeBuilder;
 
-pub fn Init(comptime stage_defs: []const StageDef, comptime World: type) type {
+pub fn Init(comptime stage_defs: []const StageDef) type {
     const Inner = CompileStagesList(stage_defs);
     const inner = Inner{};
 
@@ -46,7 +46,7 @@ pub fn Init(comptime stage_defs: []const StageDef, comptime World: type) type {
         }
 
         pub fn runStage(
-            world: *World,
+            world: anytype,
             comptime stage_field: StageField,
             comptime catch_errs: bool,
             comptime errCallback: if (catch_errs) fn (anyerror) void else void,
@@ -60,7 +60,7 @@ pub fn Init(comptime stage_defs: []const StageDef, comptime World: type) type {
             }
         }
 
-        fn runSystemTuple(systems: anytype, world: *World, comptime catch_errs: bool, comptime errCallback: if (catch_errs) fn (anyerror) void else void) !void {
+        fn runSystemTuple(systems: anytype, world: anytype, comptime catch_errs: bool, comptime errCallback: if (catch_errs) fn (anyerror) void else void) !void {
             inline for (systems) |sys| {
                 const System = @TypeOf(sys);
                 const params = @typeInfo(System).Fn.params;
@@ -79,7 +79,7 @@ pub fn Init(comptime stage_defs: []const StageDef, comptime World: type) type {
         }
 
         pub fn runStageInParallel(
-            world: *World,
+            world: anytype,
             comptime stage_field: StageField,
             comptime catch_errs: bool,
             comptime errCallback: if (catch_errs) fn (anyerror) void else void,
@@ -96,7 +96,7 @@ pub fn Init(comptime stage_defs: []const StageDef, comptime World: type) type {
         }
 
         fn runLabelSectionInParallel(
-            world: *World,
+            world: anytype,
             comptime systems_tuple: anytype,
             comptime catch_errs: bool,
             comptime errCallback: if (catch_errs) fn (anyerror) void else void,
@@ -115,7 +115,7 @@ pub fn Init(comptime stage_defs: []const StageDef, comptime World: type) type {
             }
         }
 
-        fn runSystemInParallel(world: *World, comptime f: anytype, stage_err: *?anyerror, group: *std.Thread.WaitGroup) void {
+        fn runSystemInParallel(world: anytype, comptime f: anytype, stage_err: *?anyerror, group: *std.Thread.WaitGroup) void {
             group.start();
             defer group.finish();
 
@@ -141,7 +141,7 @@ pub fn Init(comptime stage_defs: []const StageDef, comptime World: type) type {
         }
 
         pub fn runStageByName(
-            world: *World,
+            world: anytype,
             stage_name: []const u8,
             comptime catch_errs: bool,
             comptime errCallback: if (catch_errs) fn (anyerror) void else void,
@@ -166,10 +166,10 @@ fn CompileStagesList(comptime stage_defs: []const StageDef) type {
                 const during = label.during.Build(){};
                 const after = label.after.Build(){};
             };
-            stage.addField(label.name, Label, &Label{});
+            stage.addField(label.name ++ "", Label, &Label{});
         }
         const Stage = stage.Build();
-        stages_list.addField(sdef.name, Stage, &Stage{});
+        stages_list.addField(sdef.name ++ "", Stage, &Stage{});
     }
     return stages_list.Build();
 }

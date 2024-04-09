@@ -32,7 +32,7 @@ pub fn Build(
         break :blk @Type(.{ .Struct = std.builtin.Type.Struct{
             .fields = &buttons_struct_fields,
             .decls = &.{},
-            .layout = .Auto,
+            .layout = .auto,
             .is_tuple = false,
         } });
     };
@@ -51,7 +51,7 @@ pub fn Build(
         break :blk @Type(.{ .Struct = std.builtin.Type.Struct{
             .fields = &axes_struct_fields,
             .decls = &.{},
-            .layout = .Auto,
+            .layout = .auto,
             .is_tuple = false,
         } });
     };
@@ -308,7 +308,7 @@ pub fn Build(
 
         fn ini_Self(self: *Self, alloc: std.mem.Allocator) void {
             for (&self.controllers) |*c| {
-                c.* = Controller.init();
+                c.* = .{};
             }
 
             self.alloc = alloc;
@@ -370,28 +370,12 @@ fn ControllerBuilder(
 
     return struct {
         const Self = @This();
-        pub const ButtonsBitSet = std.StaticBitSet(buttons_len * 3);
+        pub const ButtonsBitSet: type = std.StaticBitSet(buttons_len * 3);
 
-        buttons: ButtonsBitSet,
-        button_bindings: std.ArrayListUnmanaged(ButtonBinding),
+        buttons: ButtonsBitSet = ButtonsBitSet.initEmpty(),
+        button_bindings: std.ArrayListUnmanaged(ButtonBinding) = .{},
 
-        axes: [axes_len]f32,
-        axis_bindings: std.ArrayListUnmanaged(AxisBinding),
-
-        pub fn init() Self {
-            var self = Self{
-                .buttons = std.StaticBitSet(buttons_len * 3).initEmpty(),
-                .axes = undefined,
-
-                .button_bindings = .{},
-                .axis_bindings = .{},
-            };
-
-            for (&self.axes) |*ax| {
-                ax.* = 0.0;
-            }
-
-            return self;
-        }
+        axes: [axes_len]f32 = .{0.0} ** axes_len,
+        axis_bindings: std.ArrayListUnmanaged(AxisBinding) = .{},
     };
 }

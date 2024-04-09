@@ -51,7 +51,7 @@ const player = struct {
 
         try plr_ent.giveComponents(.{Mover{
             .speed = 5,
-            .dir = ztg.Vec3.right(),
+            .dir = ztg.Vec3.right,
         }});
     }
 
@@ -79,7 +79,7 @@ const Mover = struct {
         // A default transform is provided in case the entity doesnt have one.
         // The defaults of a transform place it at { 0, 0, 0 } with a scale of
         // { 1, 1, 1 } and a rotation of 0.
-        if (!com.checkEntHas(ent, ztg.base.Transform)) try com.giveComponents(ent, .{ztg.base.Transform.identity()});
+        if (!com.checkEntHas(ent, ztg.base.Transform)) try com.giveComponents(ent, .{ztg.base.Transform{}});
     }
 
     pub fn include(comptime wb: *ztg.WorldBuilder) void {

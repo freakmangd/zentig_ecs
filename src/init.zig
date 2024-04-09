@@ -1,8 +1,5 @@
 const std = @import("std");
 
-// zmath doesnt have a way to use it with the package manager currently,
-// but even if it did, theres no way to fetch packages for a local
-// dependency
 /// Vendored version of https://github.com/michal-z/zig-gamedev
 pub const zmath = @import("zmath");
 
@@ -43,7 +40,9 @@ pub const Vec3 = @import("math/vec3.zig").Vec3;
 pub const Vec4 = @import("math/vec4.zig").Vec4;
 
 /// Shorthand for ztg.Vec2.init
-pub const vec2 = Vec2.init;
+pub inline fn vec2(x: anytype, y: anytype) Vec2 {
+    return Vec2.init(x, y);
+}
 /// Shorthand for ztg.Vec3.init
 pub const vec3 = Vec3.init;
 /// Shorthand for ztg.Vec4.init

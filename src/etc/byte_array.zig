@@ -111,6 +111,8 @@ pub const ByteIterator = struct {
     index: usize = 0,
 
     pub fn next(self: *ByteIterator) ?*anyopaque {
+        std.debug.assert(self.entry_size > 0);
+
         if (self.index >= self.buffer.len / self.entry_size) return null;
         self.index += 1;
         return self.buffer.ptr + (self.index - 1) * self.entry_size;

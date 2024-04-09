@@ -5,9 +5,6 @@ const util = ztg.util;
 
 /// A vector of 4 `f32`s
 pub const Vec4 = extern struct {
-    const vec_funcs = @import("vec_funcs.zig");
-    pub usingnamespace vec_funcs.init(Vec4);
-
     x: f32 = 0.0,
     y: f32 = 0.0,
     z: f32 = 0.0,
@@ -30,19 +27,7 @@ pub const Vec4 = extern struct {
     }
 
     /// Shorthand for .{ .w = 1 }
-    pub inline fn identity() Vec4 {
-        return .{ .w = 1 };
-    }
-
-    /// Shorthand for .{ .w = 1 }
-    pub inline fn inside() Vec4 {
-        return .{ .w = 1 };
-    }
-
-    /// Shorthand for .{ .w = -1 }
-    pub inline fn outside() Vec4 {
-        return .{ .w = -1 };
-    }
+    pub const identity: Vec4 = .{ .w = 1 };
 
     /// Returns T with all of it's components set to the original vector's
     /// T's only required components must be `x`, `y`, `z`, and `w`
@@ -176,4 +161,60 @@ pub const Vec4 = extern struct {
     pub fn format(value: Vec4, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
         try writer.print(std.fmt.comptimePrint("Vec4({{{s}}}, {{{s}}}, {{{s}}}, {{{s}}})", .{ fmt, fmt, fmt, fmt }), .{ value.x, value.y, value.z, value.w });
     }
+
+    const vec_funcs = @import("vec_funcs.zig");
+    const generated_funcs = vec_funcs.GenerateFunctions(Vec4);
+
+    pub const equals = generated_funcs.equals;
+    pub const approxEqRelBy = generated_funcs.approxEqRelBy;
+    pub const approxEqAbsBy = generated_funcs.approxEqAbsBy;
+    pub const approxEqRel = generated_funcs.approxEqRel;
+    pub const approxEqAbs = generated_funcs.approxEqAbs;
+    pub const expectEqual = generated_funcs.expectEqual;
+    pub const expectApproxEqAbs = generated_funcs.expectApproxEqAbs;
+    pub const expectApproxEqRel = generated_funcs.expectApproxEqRel;
+    pub const one = generated_funcs.one;
+    pub const splat = generated_funcs.splat;
+    pub const zero = generated_funcs.zero;
+    pub const right = generated_funcs.right;
+    pub const left = generated_funcs.left;
+    pub const up = generated_funcs.up;
+    pub const down = generated_funcs.down;
+    pub const copy = generated_funcs.copy;
+    pub const intoSimd = generated_funcs.intoSimd;
+    pub const fromSimd = generated_funcs.fromSimd;
+    pub const abs = generated_funcs.abs;
+    pub const angle = generated_funcs.angle;
+    pub const angleSigned = generated_funcs.angleSigned;
+    pub const directionTo = generated_funcs.directionTo;
+    pub const distance = generated_funcs.distance;
+    pub const sqrDistance = generated_funcs.sqrDistance;
+    pub const dot = generated_funcs.dot;
+    pub const getNormalized = generated_funcs.getNormalized;
+    pub const setNormalized = generated_funcs.setNormalized;
+    pub const length = generated_funcs.length;
+    pub const sqrLength = generated_funcs.sqrLength;
+    pub const lerp = generated_funcs.lerp;
+    pub const lerpUnclamped = generated_funcs.lerpUnclamped;
+    pub const moveTowards = generated_funcs.moveTowards;
+    pub const max = generated_funcs.max;
+    pub const min = generated_funcs.min;
+    pub const project = generated_funcs.project;
+    pub const reflect = generated_funcs.reflect;
+    pub const random01 = generated_funcs.random01;
+    pub const swizzle = generated_funcs.swizzle;
+    pub const shuffle = generated_funcs.shuffle;
+    pub const withClampedLength = generated_funcs.withClampedLength;
+    pub const getNegated = generated_funcs.getNegated;
+    pub const setNegated = generated_funcs.setNegated;
+    pub const add = generated_funcs.add;
+    pub const sub = generated_funcs.sub;
+    pub const mul = generated_funcs.mul;
+    pub const div = generated_funcs.div;
+    pub const scale = generated_funcs.scale;
+    pub const addEql = generated_funcs.addEql;
+    pub const subEql = generated_funcs.subEql;
+    pub const mulEql = generated_funcs.mulEql;
+    pub const divEql = generated_funcs.divEql;
+    pub const scaleEql = generated_funcs.scaleEql;
 };

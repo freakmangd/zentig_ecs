@@ -6,7 +6,7 @@ const Self = @This();
 
 fields: []const Type.StructField = &.{},
 is_tuple: bool = false,
-layout: Type.ContainerLayout = .Auto,
+layout: Type.ContainerLayout = .auto,
 
 pub fn initFrom(comptime T: type) Self {
     const ti = @typeInfo(T).Struct;
@@ -19,7 +19,7 @@ pub fn initFrom(comptime T: type) Self {
 
 pub fn addFieldExtra(
     comptime self: *Self,
-    comptime name: []const u8,
+    comptime name: [:0]const u8,
     comptime T: type,
     comptime default_value: ?*const anyopaque,
     comptime is_comptime: ?bool,
@@ -27,14 +27,14 @@ pub fn addFieldExtra(
 ) void {
     self.fields = self.fields ++ &[_]Type.StructField{.{
         .type = T,
-        .name = name ++ "\x00",
+        .name = name,
         .default_value = default_value,
         .alignment = alignment orelse 0,
         .is_comptime = is_comptime orelse false,
     }};
 }
 
-pub fn addField(comptime self: *Self, comptime name: []const u8, comptime T: type, comptime default_value: ?*const anyopaque) void {
+pub fn addField(comptime self: *Self, comptime name: [:0]const u8, comptime T: type, comptime default_value: ?*const anyopaque) void {
     return addFieldExtra(self, name, T, default_value, null, null);
 }
 
