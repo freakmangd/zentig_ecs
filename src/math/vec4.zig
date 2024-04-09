@@ -5,17 +5,12 @@ const util = ztg.util;
 
 /// A vector of 4 `f32`s
 pub const Vec4 = extern struct {
-    const vec_funcs = @import("vec_funcs.zig");
-    pub usingnamespace vec_funcs.init(Vec4);
-
-    const Self = @This();
-
     x: f32 = 0.0,
     y: f32 = 0.0,
     z: f32 = 0.0,
     w: f32 = 0.0,
 
-    pub inline fn init(x: anytype, y: anytype, z: anytype, w: anytype) Self {
+    pub inline fn init(x: anytype, y: anytype, z: anytype, w: anytype) Vec4 {
         return .{
             .x = if (comptime @typeInfo(@TypeOf(x)) == .Int) @floatFromInt(x) else x,
             .y = if (comptime @typeInfo(@TypeOf(y)) == .Int) @floatFromInt(y) else y,
@@ -24,7 +19,7 @@ pub const Vec4 = extern struct {
         };
     }
 
-    pub inline fn set(self: *Self, x: anytype, y: anytype, z: anytype, w: anytype) void {
+    pub inline fn set(self: *Vec4, x: anytype, y: anytype, z: anytype, w: anytype) void {
         self.x = if (comptime @typeInfo(@TypeOf(x)) == .Int) @floatFromInt(x) else x;
         self.y = if (comptime @typeInfo(@TypeOf(y)) == .Int) @floatFromInt(y) else y;
         self.z = if (comptime @typeInfo(@TypeOf(z)) == .Int) @floatFromInt(z) else z;
@@ -32,49 +27,37 @@ pub const Vec4 = extern struct {
     }
 
     /// Shorthand for .{ .w = 1 }
-    pub inline fn identity() Self {
-        return .{ .w = 1 };
-    }
-
-    /// Shorthand for .{ .w = 1 }
-    pub inline fn inside() Self {
-        return .{ .w = 1 };
-    }
-
-    /// Shorthand for .{ .w = -1 }
-    pub inline fn outside() Self {
-        return .{ .w = -1 };
-    }
+    pub const identity: Vec4 = .{ .w = 1 };
 
     /// Returns T with all of it's components set to the original vector's
     /// T's only required components must be `x`, `y`, `z`, and `w`
-    pub inline fn into(self: Self, comptime T: type) T {
-        if (@typeInfo(T).Struct.layout == .Extern) return @bitCast(self);
+    pub inline fn into(self: Vec4, comptime T: type) T {
+        if (comptime vec_funcs.isBitcastable(Vec4, T)) return @bitCast(self);
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z), .w = @floatCast(self.w) };
     }
 
     /// Returns T with it's x and y components set to the original vector's x and y
     /// T's only required components must be `x` and `y`
-    pub inline fn intoVec2(self: Self, comptime T: type) T {
+    pub inline fn intoVec2(self: Vec4, comptime T: type) T {
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y) };
     }
 
     /// Returns T with it's x and y components set to the original vector's x, y and z
     /// T's only required components must be `x`, `y`, and `z`
-    pub inline fn intoVec3(self: Self, comptime T: type) T {
+    pub inline fn intoVec3(self: Vec4, comptime T: type) T {
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z) };
     }
 
     /// Converts the Vector into a @Vector object of type `T`, doing
     /// the necessary conversions.
-    pub inline fn intoVectorOf(self: Self, comptime T: type) @Vector(4, T) {
-        if (comptime std.meta.trait.isFloat(T)) {
+    pub inline fn intoVectorOf(self: Vec4, comptime T: type) @Vector(4, T) {
+        if (@typeInfo(T) == .Float or @typeInfo(T) == .ComptimeFloat) {
             if (comptime T == f32) {
                 return self.intoSimd();
             } else {
                 return .{ @floatCast(self.x), @floatCast(self.y), @floatCast(self.z), @floatCast(self.w) };
             }
-        } else if (comptime std.meta.trait.isIntegral(T)) {
+        } else if (@typeInfo(T) == .Int or @typeInfo(T) == .ComptimeInt) {
             return .{ @intFromFloat(self.x), @intFromFloat(self.y), @intFromFloat(self.z), @intFromFloat(self.w) };
         } else {
             util.compileError("Cannot turn self into a vector of `{s}`", .{@typeName(T)});
@@ -82,31 +65,31 @@ pub const Vec4 = extern struct {
     }
 
     /// For use when integrating with the zmath library
-    pub const intoZMath = Self.intoSimd;
+    pub const intoZMath = Vec4.intoSimd;
 
     /// For use when integrating with the zmath library
-    pub const fromZMath = Self.fromSimd;
+    pub const fromZMath = Vec4.fromSimd;
 
     /// Creates a Vec4 from other, other must have `x`, `y`, `z`, and `w` components
-    pub inline fn from(other: anytype) Self {
-        if (@typeInfo(@TypeOf(other)).Struct.layout == .Extern) return @bitCast(other);
+    pub inline fn from(other: anytype) Vec4 {
+        if (comptime vec_funcs.isBitcastable(Vec4, @TypeOf(other))) return @bitCast(other);
         return .{ .x = @floatCast(other.x), .y = @floatCast(other.y), .z = @floatCast(other.z), .w = @floatCast(other.w) };
     }
 
     /// Creates a Vec4 from other, other must have `x`, and `y` components
-    pub inline fn fromVec2(vec2: anytype, z: f32, w: f32) Self {
+    pub inline fn fromVec2(vec2: anytype, z: f32, w: f32) Vec4 {
         return .{ .x = @floatCast(vec2.x), .y = @floatCast(vec2.y), .z = z, .w = w };
     }
 
     /// Creates a Vec4 from other, other must have `x`, `y`, and `z` components
-    pub inline fn fromVec3(vec3: anytype, w: f32) Self {
+    pub inline fn fromVec3(vec3: anytype, w: f32) Vec4 {
         return .{ .x = @floatCast(vec3.x), .y = @floatCast(vec3.y), .z = @floatCast(vec3.z), .w = w };
     }
 
     /// Will try to convert vec to a Vec4
     /// e.g. if vec has an x field, it will use it,
     /// same goes for the y, z, and w fields.
-    pub inline fn fromAny(vec: anytype) Self {
+    pub inline fn fromAny(vec: anytype) Vec4 {
         return .{
             .x = vec_funcs.convertFieldToF32(vec, "x", 0),
             .y = vec_funcs.convertFieldToF32(vec, "y", 0),
@@ -116,32 +99,32 @@ pub const Vec4 = extern struct {
     }
 
     /// Returns a `Vec3` from self, discarding the `w` component
-    pub inline fn flatten(self: Self) ztg.Vec3 {
+    pub inline fn flatten(self: Vec4) ztg.Vec3 {
         return self.flattenInto(ztg.Vec3);
     }
 
     /// Creates a `T`, which must have `x`, `y`, and `z` components, from self and discards the `w` component
-    pub inline fn flattenInto(self: Self, comptime T: type) T {
+    pub inline fn flattenInto(self: Vec4, comptime T: type) T {
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z) };
     }
 
-    pub inline fn quatMultiply(v0: Self, v1: Self) Self {
-        return Self.fromZMath(ztg.zmath.qmul(v0.intoZMath(), v1.intoZMath()));
+    pub inline fn quatMultiply(v0: Vec4, v1: Vec4) Vec4 {
+        return Vec4.fromZMath(ztg.zmath.qmul(v0.intoZMath(), v1.intoZMath()));
     }
 
-    pub inline fn quatRotatePoint(q: Self, p: ztg.Vec3) ztg.Vec3 {
+    pub inline fn quatRotatePoint(q: Vec4, p: ztg.Vec3) ztg.Vec3 {
         return ztg.Vec3.fromZMath(ztg.zmath.rotate(q.intoZMath(), p.intoZMath()));
     }
 
     // Thank you unity: https://github.com/Unity-Technologies/UnityCsReference/blob/e7d9de5f09767c3320b6dab51bc2c2dc90447786/Runtime/Export/Math/Quaternion.cs#L169
-    pub fn quatAngle(a: Self, b: Self) f32 {
-        const ab_dot = @min(@fabs(Self.dot(a, b)), 1.0);
+    pub fn quatAngle(a: Vec4, b: Vec4) f32 {
+        const ab_dot = @min(@abs(Vec4.dot(a, b)), 1.0);
         if (ab_dot > 1.0 - std.math.floatEps(f32)) return 0.0;
         return math.acos(ab_dot) * 2.0;
     }
 
     // Thank you wikipedia: https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Quaternion_to_Euler_angles_(in_3-2-1_sequence)_conversion
-    pub fn toEulerAngles(q: Self) ztg.Vec3 {
+    pub fn toEulerAngles(q: Vec4) ztg.Vec3 {
         const sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
         const cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
 
@@ -159,7 +142,7 @@ pub const Vec4 = extern struct {
     }
 
     // Thank you wikipedia: https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Euler_angles_(in_3-2-1_sequence)_to_quaternion_conversion
-    pub fn fromEulerAngles(vec: ztg.Vec3) Self {
+    pub fn fromEulerAngles(vec: ztg.Vec3) Vec4 {
         const cr = math.cos(vec.x * 0.5);
         const sr = math.sin(vec.x * 0.5);
         const cp = math.cos(vec.y * 0.5);
@@ -178,4 +161,60 @@ pub const Vec4 = extern struct {
     pub fn format(value: Vec4, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
         try writer.print(std.fmt.comptimePrint("Vec4({{{s}}}, {{{s}}}, {{{s}}}, {{{s}}})", .{ fmt, fmt, fmt, fmt }), .{ value.x, value.y, value.z, value.w });
     }
+
+    const vec_funcs = @import("vec_funcs.zig");
+    const generated_funcs = vec_funcs.GenerateFunctions(Vec4);
+
+    pub const equals = generated_funcs.equals;
+    pub const approxEqRelBy = generated_funcs.approxEqRelBy;
+    pub const approxEqAbsBy = generated_funcs.approxEqAbsBy;
+    pub const approxEqRel = generated_funcs.approxEqRel;
+    pub const approxEqAbs = generated_funcs.approxEqAbs;
+    pub const expectEqual = generated_funcs.expectEqual;
+    pub const expectApproxEqAbs = generated_funcs.expectApproxEqAbs;
+    pub const expectApproxEqRel = generated_funcs.expectApproxEqRel;
+    pub const one = generated_funcs.one;
+    pub const splat = generated_funcs.splat;
+    pub const zero = generated_funcs.zero;
+    pub const right = generated_funcs.right;
+    pub const left = generated_funcs.left;
+    pub const up = generated_funcs.up;
+    pub const down = generated_funcs.down;
+    pub const copy = generated_funcs.copy;
+    pub const intoSimd = generated_funcs.intoSimd;
+    pub const fromSimd = generated_funcs.fromSimd;
+    pub const abs = generated_funcs.abs;
+    pub const angle = generated_funcs.angle;
+    pub const angleSigned = generated_funcs.angleSigned;
+    pub const directionTo = generated_funcs.directionTo;
+    pub const distance = generated_funcs.distance;
+    pub const sqrDistance = generated_funcs.sqrDistance;
+    pub const dot = generated_funcs.dot;
+    pub const getNormalized = generated_funcs.getNormalized;
+    pub const setNormalized = generated_funcs.setNormalized;
+    pub const length = generated_funcs.length;
+    pub const sqrLength = generated_funcs.sqrLength;
+    pub const lerp = generated_funcs.lerp;
+    pub const lerpUnclamped = generated_funcs.lerpUnclamped;
+    pub const moveTowards = generated_funcs.moveTowards;
+    pub const max = generated_funcs.max;
+    pub const min = generated_funcs.min;
+    pub const project = generated_funcs.project;
+    pub const reflect = generated_funcs.reflect;
+    pub const random01 = generated_funcs.random01;
+    pub const swizzle = generated_funcs.swizzle;
+    pub const shuffle = generated_funcs.shuffle;
+    pub const withClampedLength = generated_funcs.withClampedLength;
+    pub const getNegated = generated_funcs.getNegated;
+    pub const setNegated = generated_funcs.setNegated;
+    pub const add = generated_funcs.add;
+    pub const sub = generated_funcs.sub;
+    pub const mul = generated_funcs.mul;
+    pub const div = generated_funcs.div;
+    pub const scale = generated_funcs.scale;
+    pub const addEql = generated_funcs.addEql;
+    pub const subEql = generated_funcs.subEql;
+    pub const mulEql = generated_funcs.mulEql;
+    pub const divEql = generated_funcs.divEql;
+    pub const scaleEql = generated_funcs.scaleEql;
 };

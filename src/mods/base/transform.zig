@@ -4,17 +4,17 @@ const zmath = @import("zmath");
 
 const Self = @This();
 
-basis: zmath.Mat,
+basis: zmath.Mat = zmath.translationV(ztg.Vec3.zero.intoZMath()),
 __data: struct {
-    rot: ztg.Vec4,
-    scale: ztg.Vec3,
-    basis_isdirty: bool = true,
-},
+    rot: ztg.Vec4 = ztg.Vec4.identity,
+    scale: ztg.Vec3 = ztg.Vec3.one,
+    basis_is_dirty: bool = true,
+} = .{},
 
 pub const InitOptions = struct {
-    pos: ztg.Vec3 = ztg.Vec3.zero(),
-    rot: ztg.Vec4 = ztg.Vec4.identity(),
-    scale: ztg.Vec3 = ztg.Vec3.one(),
+    pos: ztg.Vec3 = ztg.Vec3.zero,
+    rot: ztg.Vec4 = ztg.Vec4.identity,
+    scale: ztg.Vec3 = ztg.Vec3.one,
 };
 
 pub fn init(_pos: ztg.Vec3, _rot: ztg.Vec4, _scale: ztg.Vec3) Self {
@@ -32,20 +32,15 @@ pub fn initWith(with: InitOptions) Self {
 }
 
 pub fn fromPos(pos: ztg.Vec3) Self {
-    return init(pos, ztg.Vec4.identity(), ztg.Vec3.one());
+    return init(pos, ztg.Vec4.identity, ztg.Vec3.one);
 }
 
 pub fn fromRot(rot: ztg.Vec4) Self {
-    return init(ztg.Vec3.zero(), rot, ztg.Vec3.one());
+    return init(ztg.Vec3.zero, rot, ztg.Vec3.one);
 }
 
 pub fn fromScale(_scale: ztg.Vec3) Self {
-    return init(ztg.Vec3.zero(), ztg.Vec4.identity(), _scale);
-}
-
-pub const default = identity;
-pub fn identity() Self {
-    return init(ztg.Vec3.zero(), ztg.Vec4.identity(), ztg.Vec3.one());
+    return init(ztg.Vec3.zero, ztg.Vec4.identity, _scale);
 }
 
 pub fn getPos(self: Self) ztg.Vec3 {
@@ -66,17 +61,17 @@ pub inline fn getRot(self: Self) ztg.Vec4 {
 
 pub inline fn setRot(self: *Self, new_rot: ztg.Vec4) void {
     self.__data.rot = new_rot;
-    self.__data.basis_isdirty = true;
+    self.__data.basis_is_dirty = true;
 }
 
 pub inline fn setRotEuler(self: *Self, x: f32, y: f32, z: f32) void {
     self.__data.rot = ztg.Vec4.fromEulerAngles(.{ .x = x, .y = y, .z = z });
-    self.__data.basis_isdirty = true;
+    self.__data.basis_is_dirty = true;
 }
 
 pub inline fn rotate(self: *Self, by: ztg.Vec4) void {
     self.__data.rot = self.__data.rot.quatMultiply(by);
-    self.__data.basis_isdirty = true;
+    self.__data.basis_is_dirty = true;
 }
 
 pub inline fn rotateEuler(self: *Self, x: f32, y: f32, z: f32) void {
@@ -89,16 +84,16 @@ pub inline fn getScale(self: Self) ztg.Vec3 {
 
 pub inline fn setScale(self: *Self, new_scale: ztg.Vec3) void {
     self.__data.scale = new_scale;
-    self.__data.basis_isdirty = true;
+    self.__data.basis_is_dirty = true;
 }
 
 pub inline fn scale(self: *Self, scalar: ztg.Vec3) void {
     self.__data.scale.scaleEql(scalar);
-    self.__data.basis_isdirty = true;
+    self.__data.basis_is_dirty = true;
 }
 
 pub fn updateBasis(self: *Self) void {
-    self.__data.basis_isdirty = false;
+    self.__data.basis_is_dirty = false;
     self.basis = self.calculateLatestMatrix();
 }
 
@@ -109,12 +104,12 @@ pub fn calculateLatestMatrix(self: Self) zmath.Mat {
 }
 
 pub fn getUpdatedBasis(self: *Self) zmath.Mat {
-    if (self.__data.basis_isdirty) self.updateBasis();
+    if (self.__data.basis_is_dirty) self.updateBasis();
     return self.basis;
 }
 
 pub fn onAdded(ent: ztg.Entity, com: ztg.Commands) !void {
-    if (!com.checkEntHas(ent, ztg.base.GlobalTransform)) try com.giveComponents(ent, .{ztg.base.GlobalTransform.identity()});
+    if (!com.checkEntHas(ent, ztg.base.GlobalTransform)) try com.giveComponents(ent, .{ztg.base.GlobalTransform.identity});
 }
 
 test {

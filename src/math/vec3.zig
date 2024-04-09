@@ -5,9 +5,6 @@ const util = ztg.util;
 
 /// A vector of 3 `f32`s
 pub const Vec3 = extern struct {
-    const vec_funcs = @import("vec_funcs.zig");
-    pub usingnamespace vec_funcs.init(Vec3);
-
     x: f32 = 0.0,
     y: f32 = 0.0,
     z: f32 = 0.0,
@@ -29,7 +26,7 @@ pub const Vec3 = extern struct {
     /// Returns T with all of it's components set to the original vector's
     /// T's only required components must be `x`, `y`, and `z`
     pub inline fn into(self: Vec3, comptime T: type) T {
-        if (@typeInfo(T).Struct.layout == .Extern) return @bitCast(self);
+        if (comptime vec_funcs.isBitcastable(Vec3, T)) return @bitCast(self);
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z) };
     }
 
@@ -42,13 +39,13 @@ pub const Vec3 = extern struct {
     /// Converts the Vector into a @Vector object of type `T`, doing
     /// the necessary conversions.
     pub inline fn intoVectorOf(self: Vec3, comptime T: type) @Vector(3, T) {
-        if (comptime std.meta.trait.isFloat(T)) {
+        if (@typeInfo(T) == .Float or @typeInfo(T) == .ComptimeFloat) {
             if (comptime T == f32) {
                 return self.intoSimd();
             } else {
                 return .{ @floatCast(self.x), @floatCast(self.y), @floatCast(self.z) };
             }
-        } else if (comptime std.meta.trait.isIntegral(T)) {
+        } else if (@typeInfo(T) == .Int) {
             return .{ @intFromFloat(self.x), @intFromFloat(self.y), @intFromFloat(self.z) };
         } else {
             util.compileError("Cannot turn self into a vector of `{s}`", .{@typeName(T)});
@@ -72,7 +69,7 @@ pub const Vec3 = extern struct {
 
     /// Creates a Vec3 from other, other must have `x`, `y`, and `z` components
     pub inline fn from(other: anytype) Vec3 {
-        if (@typeInfo(@TypeOf(other)).Struct.layout == .Extern) return @bitCast(other);
+        if (comptime vec_funcs.isBitcastable(Vec3, @TypeOf(other))) return @bitCast(other);
         return .{ .x = @floatCast(other.x), .y = @floatCast(other.y), .z = @floatCast(other.z) };
     }
 
@@ -138,6 +135,66 @@ pub const Vec3 = extern struct {
     }
 
     pub fn format(value: Vec3, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-        try writer.print(std.fmt.comptimePrint("Vec3({{{s}}}, {{{s}}}, {{{s}}})", .{ fmt, fmt, fmt }), .{ value.x, value.y, value.z });
+        try writer.print(std.fmt.comptimePrint("Vec3({{{s}:.{}}}, {{{s}:.{}}}, {{{s}:.{}}})", .{
+            fmt, 2,
+            fmt, 2,
+            fmt, 2,
+        }), .{ value.x, value.y, value.z });
     }
+
+    const vec_funcs = @import("vec_funcs.zig");
+    const generated_funcs = vec_funcs.GenerateFunctions(Vec3);
+
+    pub const equals = generated_funcs.equals;
+    pub const approxEqRelBy = generated_funcs.approxEqRelBy;
+    pub const approxEqAbsBy = generated_funcs.approxEqAbsBy;
+    pub const approxEqRel = generated_funcs.approxEqRel;
+    pub const approxEqAbs = generated_funcs.approxEqAbs;
+    pub const expectEqual = generated_funcs.expectEqual;
+    pub const expectApproxEqAbs = generated_funcs.expectApproxEqAbs;
+    pub const expectApproxEqRel = generated_funcs.expectApproxEqRel;
+    pub const one = generated_funcs.one;
+    pub const splat = generated_funcs.splat;
+    pub const zero = generated_funcs.zero;
+    pub const right = generated_funcs.right;
+    pub const left = generated_funcs.left;
+    pub const up = generated_funcs.up;
+    pub const down = generated_funcs.down;
+    pub const copy = generated_funcs.copy;
+    pub const intoSimd = generated_funcs.intoSimd;
+    pub const fromSimd = generated_funcs.fromSimd;
+    pub const abs = generated_funcs.abs;
+    pub const angle = generated_funcs.angle;
+    pub const angleSigned = generated_funcs.angleSigned;
+    pub const directionTo = generated_funcs.directionTo;
+    pub const distance = generated_funcs.distance;
+    pub const sqrDistance = generated_funcs.sqrDistance;
+    pub const dot = generated_funcs.dot;
+    pub const getNormalized = generated_funcs.getNormalized;
+    pub const setNormalized = generated_funcs.setNormalized;
+    pub const length = generated_funcs.length;
+    pub const sqrLength = generated_funcs.sqrLength;
+    pub const lerp = generated_funcs.lerp;
+    pub const lerpUnclamped = generated_funcs.lerpUnclamped;
+    pub const moveTowards = generated_funcs.moveTowards;
+    pub const max = generated_funcs.max;
+    pub const min = generated_funcs.min;
+    pub const project = generated_funcs.project;
+    pub const reflect = generated_funcs.reflect;
+    pub const random01 = generated_funcs.random01;
+    pub const swizzle = generated_funcs.swizzle;
+    pub const shuffle = generated_funcs.shuffle;
+    pub const withClampedLength = generated_funcs.withClampedLength;
+    pub const getNegated = generated_funcs.getNegated;
+    pub const setNegated = generated_funcs.setNegated;
+    pub const add = generated_funcs.add;
+    pub const sub = generated_funcs.sub;
+    pub const mul = generated_funcs.mul;
+    pub const div = generated_funcs.div;
+    pub const scale = generated_funcs.scale;
+    pub const addEql = generated_funcs.addEql;
+    pub const subEql = generated_funcs.subEql;
+    pub const mulEql = generated_funcs.mulEql;
+    pub const divEql = generated_funcs.divEql;
+    pub const scaleEql = generated_funcs.scaleEql;
 };

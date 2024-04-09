@@ -10,7 +10,7 @@ pub fn ComponentArray(comptime Index: type) type {
     return struct {
         const Self = @This();
 
-        component_id: util.CompId,
+        component_id: if (builtin.mode == .Debug) util.CompId else void,
         component_name: if (builtin.mode == .Debug) []const u8 else void,
 
         components_data: ByteArray,
@@ -24,17 +24,16 @@ pub fn ComponentArray(comptime Index: type) type {
             //};
             //_ = max_cap;
 
-            var self = Self{
-                .component_id = util.compId(T),
-                .component_name = if (builtin.mode == .Debug) @typeName(T) else void{},
+            return .{
+                .component_id = if (builtin.mode == .Debug) util.compId(T) else {},
+                .component_name = if (builtin.mode == .Debug) @typeName(T) else {},
                 .components_data = ByteArray.init(T),
             };
-
-            return self;
         }
 
         pub fn deinit(self: *Self, alloc: std.mem.Allocator) void {
             self.components_data.deinit(alloc);
+
             self.entities.deinit(alloc);
             self.ent_to_comp_idx.deinit(alloc);
         }
@@ -51,19 +50,12 @@ pub fn ComponentArray(comptime Index: type) type {
         fn appendBytes(self: *Self, alloc: std.mem.Allocator, ent: ztg.Entity, bytes_start: *const anyopaque) !void {
             try self.entities.append(alloc, ent);
             try self.ent_to_comp_idx.put(alloc, ent, @intCast(self.components_data.len));
+
             try self.components_data.appendPtr(alloc, bytes_start);
         }
 
         pub fn willResize(self: *const Self) bool {
             return self.entities.items.len >= self.components_data.getCapacity();
-        }
-
-        pub fn reassign(self: *Self, old: ztg.Entity, new: ztg.Entity) void {
-            const old_ent_idx = self.indexOfEntityInEnts(old);
-            self.entities.items[old_ent_idx] = new;
-            const comp_idx = self.ent_to_comp_idx.get(old).?;
-            _ = self.ent_to_comp_idx.remove(old);
-            self.ent_to_comp_idx.putAssumeCapacity(new, comp_idx);
         }
 
         pub fn swapRemove(self: *Self, ent: ztg.Entity) void {
@@ -75,7 +67,7 @@ pub fn ComponentArray(comptime Index: type) type {
             const index_of_rem = self.indexOfEntityInEnts(ent);
             _ = self.entities.swapRemove(index_of_rem);
 
-            self.components_data.swapRemove(self.ent_to_comp_idx.get(ent).?);
+            self.components_data.swapRemove(index_of_rem);
             _ = self.ent_to_comp_idx.remove(ent);
 
             // were removing the end of the array, so no need to reassign the last_ent's value
@@ -99,7 +91,7 @@ pub fn ComponentArray(comptime Index: type) type {
         pub fn getAs(self: *const Self, comptime T: type, ent: ztg.Entity) ?*T {
             self.assertType(T);
 
-            var g = self.get(ent) orelse return null;
+            const g = self.get(ent) orelse return null;
             return cast(T, g);
         }
 
@@ -112,7 +104,7 @@ pub fn ComponentArray(comptime Index: type) type {
         }
 
         inline fn cast(comptime T: type, data: *anyopaque) *T {
-            if (@alignOf(T) == 0) return @ptrCast(data);
+            if (comptime @alignOf(T) == 0) return @ptrCast(data);
             return @ptrCast(@alignCast(data));
         }
 
@@ -121,15 +113,15 @@ pub fn ComponentArray(comptime Index: type) type {
         }
 
         fn assertType(self: Self, comptime T: type) void {
-            if (util.compId(T) != self.component_id) switch (builtin.mode) {
-                .Debug => std.debug.panic("Incorrect type. Expected Type: {s} (ID {}), found Type {s} (ID: {}).", .{
+            if (comptime builtin.mode != .Debug) return;
+
+            if (util.compId(T) != self.component_id)
+                std.debug.panic("Incorrect type. Expected Type: {s} (ID {}), found Type {s} (ID: {}).", .{
                     self.component_name,
                     self.component_id,
                     @typeName(T),
                     util.compId(T),
-                }),
-                else => std.debug.panic("Type {s} is not correct for component array.", .{@typeName(T)}),
-            };
+                });
         }
     };
 }
@@ -192,23 +184,6 @@ test "remove" {
 
     try std.testing.expectEqual(@as(usize, 100), arr.getAs(usize, 1).?.*);
     try std.testing.expectEqual(@as(usize, 1), arr.len());
-}
-
-test "reassign" {
-    var arr = initForTests(usize, usize);
-    defer arr.deinit(std.testing.allocator);
-
-    try arr.assign(std.testing.allocator, 0, @as(usize, 10));
-    try arr.assign(std.testing.allocator, 1, @as(usize, 20));
-
-    try std.testing.expectEqual(@as(usize, 10), arr.getAs(usize, 0).?.*);
-    try std.testing.expectEqual(@as(usize, 20), arr.getAs(usize, 1).?.*);
-
-    arr.reassign(0, 2);
-
-    try std.testing.expect(!arr.contains(0));
-    try std.testing.expectEqual(@as(usize, 10), arr.getAs(usize, 2).?.*);
-    try std.testing.expectEqual(@as(usize, 20), arr.getAs(usize, 1).?.*);
 }
 
 test "capacity" {

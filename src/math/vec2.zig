@@ -7,9 +7,6 @@ const math = std.math;
 
 /// A vector of 2 `f32`s
 pub const Vec2 = extern struct {
-    const vec_funcs = @import("vec_funcs.zig");
-    pub usingnamespace vec_funcs.init(Vec2);
-
     x: f32 = 0.0,
     y: f32 = 0.0,
 
@@ -28,20 +25,20 @@ pub const Vec2 = extern struct {
     /// Returns T with all of it's components set to the original vector's
     /// T's only required components must be `x`, and `y`
     pub inline fn into(self: Vec2, comptime T: type) T {
-        if (@typeInfo(T).Struct.layout == .Extern) return @bitCast(self);
+        if (comptime vec_funcs.isBitcastable(Vec2, T)) return @bitCast(self);
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y) };
     }
 
     /// Converts the Vector into a @Vector object of type `T`, doing
     /// the necessary conversions.
     pub inline fn intoVectorOf(self: Vec2, comptime T: type) @Vector(2, T) {
-        if (comptime std.meta.trait.isFloat(T)) {
+        if (@typeInfo(T) == .Float or @typeInfo(T) == .ComptimeFloat) {
             if (comptime T == f32) {
                 return self.intoSimd();
             } else {
                 return .{ @as(T, @floatCast(self.x)), @as(T, @floatCast(self.y)) };
             }
-        } else if (comptime std.meta.trait.isIntegral(T)) {
+        } else if (@typeInfo(T) == .Int or @typeInfo(T) == .ComptimeInt) {
             return .{ @as(T, @intFromFloat(self.x)), @as(T, @intFromFloat(self.y)) };
         } else {
             util.compileError("Cannot turn self into a vector of `{s}`", .{@typeName(T)});
@@ -56,13 +53,13 @@ pub const Vec2 = extern struct {
     /// Converts vector to an angle in radians
     /// starting at .{ 1, 0 } and going ccw towards .{ 0, 1 }
     pub inline fn intoDirAngle(self: Vec2) ztg.math.Radians {
-        return math.atan2(f32, self.y, self.x);
+        return math.atan2(self.y, self.x);
     }
 
     test intoDirAngle {
         try testing.expectEqual(@as(ztg.math.Radians, 0), init(1, 0).intoDirAngle());
-        try testing.expectEqual(std.math.degreesToRadians(ztg.math.Radians, 90), init(0, 1).intoDirAngle());
-        try testing.expectEqual(std.math.degreesToRadians(ztg.math.Radians, 180), init(-1, 0).intoDirAngle());
+        try testing.expectEqual(std.math.degreesToRadians(90), init(0, 1).intoDirAngle());
+        try testing.expectEqual(std.math.degreesToRadians(180), init(-1, 0).intoDirAngle());
     }
 
     /// Converts angle theta to a unit vector representation
@@ -91,7 +88,7 @@ pub const Vec2 = extern struct {
 
     /// Creates a new Vec2 from the components of other
     pub inline fn from(other: anytype) Vec2 {
-        if (@typeInfo(@TypeOf(other)).Struct.layout == .Extern) return @bitCast(other);
+        if (comptime vec_funcs.isBitcastable(Vec2, @TypeOf(other))) return @bitCast(other);
         return .{ .x = @floatCast(other.x), .y = @floatCast(other.y) };
     }
 
@@ -160,11 +157,11 @@ pub const Vec2 = extern struct {
         try init(-1, 0).expectApproxEqAbs(init(0, 1).perpendicular());
     }
 
-    /// Returns a new copy of the vector rotated ccw by `angle` radians
-    pub inline fn getRotated(self: Vec2, angle: ztg.math.Radians) Vec2 {
+    /// Returns a new copy of the vector rotated ccw by `theta` radians
+    pub inline fn getRotated(self: Vec2, theta: ztg.math.Radians) Vec2 {
         return Vec2{
-            .x = @mulAdd(f32, std.math.cos(angle), self.x, -std.math.sin(angle) * self.y),
-            .y = @mulAdd(f32, std.math.sin(angle), self.x, std.math.cos(angle) * self.y),
+            .x = @mulAdd(f32, std.math.cos(theta), self.x, -std.math.sin(theta) * self.y),
+            .y = @mulAdd(f32, std.math.sin(theta), self.x, std.math.cos(theta) * self.y),
         };
     }
 
@@ -172,12 +169,77 @@ pub const Vec2 = extern struct {
         try init(0, 1).expectApproxEqAbs(init(1, 0).getRotated(std.math.pi / 2.0));
     }
 
-    /// Rotates the vector ccw in place by `angle` radians
-    pub inline fn setRotated(self: *Vec2, angle: ztg.math.Radians) void {
-        self.* = self.getRotated(angle);
+    /// Rotates the vector ccw in place by `theta` radians
+    pub inline fn setRotated(self: *Vec2, theta: ztg.math.Radians) void {
+        self.* = self.getRotated(theta);
     }
 
     pub fn format(value: Vec2, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-        try writer.print(std.fmt.comptimePrint("Vec2({{{s}}}, {{{s}}})", .{ fmt, fmt }), .{ value.x, value.y });
+        try writer.print(std.fmt.comptimePrint("Vec2({{{s}:.{}}}, {{{s}:.{}}})", .{
+            fmt, 2,
+            fmt, 2,
+        }), .{ value.x, value.y });
     }
+
+    test format {
+        const v = init(0, 1);
+        try std.testing.expectFmt("Vec2(0.00e0, 1.00e0)", "{}", .{v});
+        try std.testing.expectFmt("Vec2(0.00, 1.00)", "{d}", .{v});
+    }
+
+    const vec_funcs = @import("vec_funcs.zig");
+    const generated_funcs = vec_funcs.GenerateFunctions(Vec2);
+
+    pub const equals = generated_funcs.equals;
+    pub const approxEqRelBy = generated_funcs.approxEqRelBy;
+    pub const approxEqAbsBy = generated_funcs.approxEqAbsBy;
+    pub const approxEqRel = generated_funcs.approxEqRel;
+    pub const approxEqAbs = generated_funcs.approxEqAbs;
+    pub const expectEqual = generated_funcs.expectEqual;
+    pub const expectApproxEqAbs = generated_funcs.expectApproxEqAbs;
+    pub const expectApproxEqRel = generated_funcs.expectApproxEqRel;
+    pub const one = generated_funcs.one;
+    pub const splat = generated_funcs.splat;
+    pub const zero = generated_funcs.zero;
+    pub const right = generated_funcs.right;
+    pub const left = generated_funcs.left;
+    pub const up = generated_funcs.up;
+    pub const down = generated_funcs.down;
+    pub const copy = generated_funcs.copy;
+    pub const intoSimd = generated_funcs.intoSimd;
+    pub const fromSimd = generated_funcs.fromSimd;
+    pub const abs = generated_funcs.abs;
+    pub const angle = generated_funcs.angle;
+    pub const angleSigned = generated_funcs.angleSigned;
+    pub const directionTo = generated_funcs.directionTo;
+    pub const distance = generated_funcs.distance;
+    pub const sqrDistance = generated_funcs.sqrDistance;
+    pub const dot = generated_funcs.dot;
+    pub const getNormalized = generated_funcs.getNormalized;
+    pub const setNormalized = generated_funcs.setNormalized;
+    pub const length = generated_funcs.length;
+    pub const sqrLength = generated_funcs.sqrLength;
+    pub const lerp = generated_funcs.lerp;
+    pub const lerpUnclamped = generated_funcs.lerpUnclamped;
+    pub const moveTowards = generated_funcs.moveTowards;
+    pub const max = generated_funcs.max;
+    pub const min = generated_funcs.min;
+    pub const project = generated_funcs.project;
+    pub const reflect = generated_funcs.reflect;
+    pub const random01 = generated_funcs.random01;
+    pub const swizzle = generated_funcs.swizzle;
+    pub const shuffle = generated_funcs.shuffle;
+    pub const withClampedLength = generated_funcs.withClampedLength;
+    pub const getNegated = generated_funcs.getNegated;
+    pub const setNegated = generated_funcs.setNegated;
+    pub const add = generated_funcs.add;
+    pub const sub = generated_funcs.sub;
+    pub const mul = generated_funcs.mul;
+    pub const div = generated_funcs.div;
+    pub const scale = generated_funcs.scale;
+    pub const addEql = generated_funcs.addEql;
+    pub const subEql = generated_funcs.subEql;
+    pub const mulEql = generated_funcs.mulEql;
+    pub const divEql = generated_funcs.divEql;
+    pub const scaleEql = generated_funcs.scaleEql;
 };

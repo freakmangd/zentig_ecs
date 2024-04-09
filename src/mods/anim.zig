@@ -1,13 +1,14 @@
 const std = @import("std");
-const ztg = @import("../../init.zig");
-const util = @import("../../util.zig");
+const ztg = @import("../init.zig");
+const util = @import("../util.zig");
 
 pub fn builder(
     comptime Wrapper: type,
+    comptime serialize_as: []const u8,
     comptime ImageTag: type,
     comptime AnimationTag: type,
     comptime transitions: anytype,
-) Builder(Wrapper, ImageTag, AnimationTag, transitions) {
+) Builder(Wrapper, serialize_as, ImageTag, AnimationTag, transitions) {
     return .{};
 }
 
@@ -38,6 +39,7 @@ const Durations = union(enum) {
 
 fn Builder(
     comptime Wrapper: type,
+    comptime _serialize_as: []const u8,
     comptime _ImageTag: type,
     comptime _AnimationTag: type,
     comptime transitions: anytype,
@@ -46,6 +48,7 @@ fn Builder(
         const Self = @This();
         const AnimationTag = _AnimationTag;
         const ImageTag = _ImageTag;
+        pub const zentig_serialize = _serialize_as;
 
         image_defaults: std.EnumMap(ImageTag, ImageDefault) = .{},
         animations: std.EnumMap(AnimationTag, Animation) = .{},
@@ -121,13 +124,22 @@ fn Builder(
             self.from_any_transitions = std.EnumSet(AnimationTag).initFull();
         }
 
-        fn isValidTransition(comptime self: Self, from: AnimationTag, to: AnimationTag) bool {
-            return self.from_any_transitions.contains(to) or
-                (self.valid_transitions.get(from) orelse return false).contains(to);
-        }
-
         pub fn Build(comptime self: Self, comptime default_anim: AnimationTag) type {
-            return Animator(Wrapper, Self, self, default_anim);
+            //for (std.meta.fields(AnimationTag)) |field| {
+            //    if (!self.animations.contains(@field(AnimationTag, field.name))) util.compileError("Animation data for animation {s} was never initialized", .{field.name});
+            //}
+            return Animator(
+                Wrapper,
+                Self,
+                AnimationTag,
+                ImageTag,
+                Animation,
+                self.image_defaults,
+                self.animations,
+                default_anim,
+                self.from_any_transitions,
+                self.valid_transitions,
+            );
         }
 
         const Animation = struct {
@@ -146,21 +158,21 @@ fn Builder(
                     current_frame += o.slice_indexes.len;
                 }
 
+                const frame_groups_final = frame_groups[0..].*;
+
                 return .{
-                    .frame_groups = &frame_groups,
+                    .frame_groups = &frame_groups_final,
                     .durations = blk: {
-                        if (comptime std.meta.trait.isFloat(@TypeOf(durations_info)) or std.meta.trait.isIntegral(@TypeOf(durations_info))) {
-                            break :blk .{ .single = durations_info };
-                        } else if (comptime std.meta.trait.isTuple(@TypeOf(durations_info))) {
-                            var frames_count: usize = 0;
-                            for (frame_groups) |frame_group| frames_count += frame_group.slice_indexes.len;
-
-                            if (durations_info.len != frames_count)
-                                util.compileError("The amount of durations must match the amount of frames for an animation. Frames len: {}, durations len: {}", .{ frames_count, durations_info.len });
-
-                            break :blk .{ .per_frame = &durations_info };
-                        } else {
-                            util.compileError("Animation expected either a number (0.4) or tuple of numbers (.{{ 0.1, 0.2, 0.6 }}) for durations, found {s}", .{@typeName(@TypeOf(durations_info))});
+                        const ti = @typeInfo(@TypeOf(durations_info));
+                        switch (ti) {
+                            .Float, .ComptimeFloat, .Int, .ComptimeInt => break :blk .{ .single = durations_info },
+                            else => {
+                                if (ti == .Struct and ti.Struct.is_tuple) {
+                                    break :blk .{ .per_frame = &durations_info };
+                                } else {
+                                    util.compileError("Animation expected either a number (0.4) or tuple of numbers (.{{ 0.1, 0.2, 0.6 }}) for durations, found {s}", .{@typeName(@TypeOf(durations_info))});
+                                }
+                            },
                         }
                     },
                 };
@@ -225,7 +237,7 @@ fn Builder(
                 };
 
                 // use inclusive range
-                const len = std.math.absCast(@as(i32, @intCast(range[1])) - @as(i32, @intCast(range[0]))) + 1;
+                const len = @abs(@as(i32, @intCast(range[1])) - @as(i32, @intCast(range[0]))) + 1;
                 const dir = if (range[0] <= range[1]) 1 else -1;
 
                 var i: i32 = 0;
@@ -244,17 +256,20 @@ fn Builder(
 fn Animator(
     comptime Wrapper: type,
     comptime BuilderType: type,
-    comptime builder_info: anytype,
+    comptime _AnimationTag: type,
+    comptime ImageTag: type,
+    comptime Animation: type,
+    comptime image_defaults: std.EnumMap(ImageTag, ImageDefault),
+    comptime animations: std.EnumMap(_AnimationTag, Animation),
     comptime default_anim: BuilderType.AnimationTag,
+    comptime from_any_transitions: anytype,
+    comptime valid_transitions: anytype,
 ) type {
-    const Animation = BuilderType.Animation;
-    const FrameGroup = BuilderType.FrameGroup;
-
     return struct {
         const Self = @This();
+        pub const mixin = if (@hasDecl(Wrapper, "mixin")) Wrapper.mixin else @compileError("Wrapper has no mixin, but you are trying to access it");
 
-        pub const AnimationTag = BuilderType.AnimationTag;
-        pub const ImageTag = BuilderType.ImageTag;
+        pub const AnimationTag = _AnimationTag;
         const Images = std.EnumMap(ImageTag, SlicedImage);
 
         const SlicedImage = struct {
@@ -263,7 +278,6 @@ fn Animator(
         };
 
         current_anim: AnimationTag = default_anim,
-        color: Wrapper.Color = Wrapper.default_color,
         images: Images,
 
         current_frame: usize = 0,
@@ -276,7 +290,7 @@ fn Animator(
             var images: Images = .{};
 
             for (std.enums.values(ImageTag)) |tag| {
-                if (builder_info.image_defaults.get(tag)) |img| {
+                if (image_defaults.get(tag)) |img| {
                     images.put(tag, .{
                         .img = try Wrapper.loadImage(load_image_ctx, img.path),
                         .slice_method = img.slice_method,
@@ -293,11 +307,7 @@ fn Animator(
         pub fn transitionTo(self: *Self, anim: AnimationTag) error{ NullAnimationData, InvalidTransition }!void {
             if (self.current_anim == anim) return;
 
-            if (!builder_info.isValidTransition(self.current_anim, anim)) return error.InvalidTransition;
-            if (!builder_info.animations.contains(anim)) {
-                ztg.log.err("Animation data for animation {} was never initialized", .{anim});
-                return error.NullAnimationData;
-            }
+            if (!isValidTransition(self.current_anim, anim)) return error.InvalidTransition;
 
             self.current_anim = anim;
             self.frame_group = 0;
@@ -307,22 +317,21 @@ fn Animator(
 
         pub fn include(comptime wb: *ztg.WorldBuilder) void {
             wb.addComponents(&.{Self});
-            wb.addSystems(.{
-                .update = update,
-                .draw = draw,
-            });
+            wb.addSystemsToStage(.update, update);
         }
 
-        fn update(q: ztg.Query(.{Self}), time: ztg.base.Time) void {
-            for (q.items(0)) |self| {
-                const anim: Animation = builder_info.animations.get(self.current_anim).?;
+        fn update(q: ztg.Query(.{ Self, Wrapper.QueryType }), time: ztg.base.Time) void {
+            for (q.items(0), q.items(1)) |self, qt| {
+                const anim: Animation = animations.get(self.current_anim).?;
+                const frame_group = anim.frame_groups[self.frame_group];
+
                 self.time += if (self.use_real_time) time.real_dt else time.dt;
 
-                if (self.time > anim.durations.get(anim.frame_groups[self.frame_group].start_frame + self.current_frame)) {
+                if (self.time > anim.durations.get(frame_group.start_frame + self.current_frame)) {
                     self.time = 0;
                     self.current_frame += 1;
 
-                    if (self.current_frame >= anim.frame_groups[self.frame_group].slice_indexes.len) {
+                    if (self.current_frame >= frame_group.slice_indexes.len) {
                         self.current_frame = 0;
                         self.frame_group += 1;
 
@@ -331,69 +340,26 @@ fn Animator(
                         }
                     }
                 }
+
+                if (comptime @hasDecl(Wrapper, "onFrame")) {
+                    const sliced_img: SlicedImage = self.images.get(frame_group.image_tag).?;
+                    Wrapper.onFrame(
+                        sliced_img.img,
+                        sliced_img.slice_method,
+                        frame_group.slice_indexes[self.current_frame],
+                        qt,
+                    );
+                }
             }
         }
 
-        fn draw(q: ztg.Query(.{ Self, ztg.base.Transform, Wrapper.QueryType })) void {
-            for (q.items(0), q.items(1), q.items(2)) |self, tr, qt| {
-                const anim: Animation = builder_info.animations.get(self.current_anim).?;
-                const frame_group: FrameGroup = anim.frame_groups[self.frame_group];
-                const sliced_img: SlicedImage = self.images.get(frame_group.image_tag).?;
-
-                // fn frame(Wrapper.Image, ztg.base.Transform, ImageSliceMethod, @Vector(2, usize))
-                Wrapper.frame(
-                    sliced_img.img,
-                    tr,
-                    sliced_img.slice_method,
-                    frame_group.slice_indexes[self.current_frame],
-                    qt,
-                );
-            }
+        fn isValidTransition(from: AnimationTag, to: AnimationTag) bool {
+            return from_any_transitions.contains(to) or
+                (valid_transitions.get(from) orelse return false).contains(to);
         }
     };
 }
 
-pub fn TransitionSpace(comptime Anim: type, comptime dimensions: usize, comptime defs: anytype) type {
-    return struct {
-        var points = blk: {
-            var map = std.EnumMap(Anim.AnimationTag, ztg.ComptimeList(@Vector(dimensions, f32))){};
-
-            for (std.meta.fields(@TypeOf(defs))) |field| {
-                const tag = std.meta.stringToEnum(Anim.AnimationTag, field.name) orelse util.compileError("Field {s} of TransitionSpace is not a registered animation of {s}", .{});
-
-                var ptr = map.getPtr(tag) orelse getPtr_blk: {
-                    map.put(tag, .{});
-                    break :getPtr_blk map.getPtr(tag).?;
-                };
-
-                if (std.meta.trait.isTuple(@TypeOf(@field(defs, field.name)[0]))) {
-                    for (@field(defs, field.name)) |vec| {
-                        ptr.append(vec);
-                    }
-                } else {
-                    ptr.append(@field(defs, field.name));
-                }
-            }
-
-            break :blk map;
-        };
-
-        pub fn eval(at: @Vector(dimensions, f32)) Anim.AnimationTag {
-            var shortest_sqr_dist: f32 = std.math.floatMax(f32);
-            var shortest_tag: Anim.AnimationTag = undefined;
-
-            var iter = points.iterator();
-            while (iter.next()) |entry| {
-                for (entry.value.items) |pos| {
-                    const sqr_dist = ztg.math.sqrDistanceVec(pos, at);
-                    if (sqr_dist < shortest_sqr_dist) {
-                        shortest_sqr_dist = sqr_dist;
-                        shortest_tag = entry.key;
-                    }
-                }
-            }
-
-            return shortest_tag;
-        }
-    };
+pub fn AnimTagSpace(comptime Anim: type, comptime dimensions: usize, comptime defs: anytype) type {
+    return ztg.EnumValueSpace(Anim.AnimationTag, dimensions, defs);
 }

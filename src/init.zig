@@ -1,8 +1,5 @@
 const std = @import("std");
 
-// zmath doesnt have a way to use it with the package manager currently,
-// but even if it did, theres no way to fetch packages for a local
-// dependency
 /// Vendored version of https://github.com/michal-z/zig-gamedev
 pub const zmath = @import("zmath");
 
@@ -12,22 +9,40 @@ pub const Entity = usize;
 /// An Entity and a Commands grouped together for acting on a specific entity
 pub const EntityHandle = @import("entity_handle.zig");
 
-pub usingnamespace @import("events.zig");
-pub usingnamespace @import("query_modifiers.zig");
-pub usingnamespace @import("query.zig");
-pub usingnamespace @import("system_order.zig");
+pub const events = @import("events.zig");
+pub const EventSender = events.EventSender;
+pub const EventReceiver = events.EventReceiver;
+
+pub const query_modifiers = @import("query_modifiers.zig");
+pub const With = query_modifiers.With;
+pub const Without = query_modifiers.Without;
+
+pub const query = @import("query.zig");
+pub const Query = query.Query;
+pub const QueryOpts = query.QueryOpts;
+
+pub const system_order = @import("system_order.zig");
+pub const after = system_order.after;
+pub const before = system_order.before;
+pub const during = system_order.during;
+pub const ordered = system_order.ordered;
+pub const orderGroup = system_order.orderGroup;
+pub const SystemOrder = system_order.SystemOrder;
 
 pub const math = @import("math/init.zig");
 
-pub const ComptimeList = @import("etc/comptime_list.zig").ComptimeList;
 pub const Timer = @import("etc/timer.zig");
+pub const ComptimeList = @import("etc/comptime_list.zig").ComptimeList;
+pub const EnumValueSpace = @import("etc/enum_value_space.zig").EnumValueSpace;
 
 pub const Vec2 = @import("math/vec2.zig").Vec2;
 pub const Vec3 = @import("math/vec3.zig").Vec3;
 pub const Vec4 = @import("math/vec4.zig").Vec4;
 
 /// Shorthand for ztg.Vec2.init
-pub const vec2 = Vec2.init;
+pub inline fn vec2(x: anytype, y: anytype) Vec2 {
+    return Vec2.init(x, y);
+}
 /// Shorthand for ztg.Vec3.init
 pub const vec3 = Vec3.init;
 /// Shorthand for ztg.Vec4.init
@@ -39,6 +54,7 @@ pub const WorldBuilder = @import("worldbuilder.zig");
 pub const Commands = @import("commands.zig");
 
 pub const base = @import("mods/base/init.zig");
+pub const anim = @import("mods/anim.zig");
 pub const input = @import("mods/input.zig");
 //pub const physics = @import("mods/physics.zig");
 

@@ -5,6 +5,10 @@ const Self = @This();
 
 types: []const type = &.{},
 
+pub fn dereference(comptime self: Self, comptime len: usize) [len]type {
+    return self.types[0..].*;
+}
+
 pub fn append(comptime self: *Self, comptime T: type) void {
     self.types = self.types ++ &[_]type{T};
 }

@@ -59,7 +59,7 @@ pub fn set(self: *Self, index: usize, bytes_start: *const anyopaque) void {
 }
 
 pub fn get(self: Self, index: usize) *anyopaque {
-    if (self.entry_size == 0) return &.{};
+    if (self.entry_size == 0) return @ptrFromInt(std.math.maxInt(usize));
     return &self.bytes.items[index * self.entry_size];
 }
 
@@ -96,7 +96,7 @@ pub fn swapRemove(self: *Self, index: usize) void {
         return;
     }
 
-    var bytes = self.pop();
+    const bytes = self.pop();
     self.set(index, bytes.ptr);
 }
 
@@ -111,13 +111,15 @@ pub const ByteIterator = struct {
     index: usize = 0,
 
     pub fn next(self: *ByteIterator) ?*anyopaque {
+        std.debug.assert(self.entry_size > 0);
+
         if (self.index >= self.buffer.len / self.entry_size) return null;
         self.index += 1;
         return self.buffer.ptr + (self.index - 1) * self.entry_size;
     }
 
     pub fn nextAs(self: *ByteIterator, comptime T: type) ?*T {
-        var n = self.next() orelse return null;
+        const n = self.next() orelse return null;
         return cast(T, n);
     }
 };

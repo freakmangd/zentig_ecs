@@ -69,8 +69,8 @@ As well as integrate third party libraries with only one extra line!
 // but the signature can return either `!void` or `void`
 wb.include(&.{
   ztg.base,
-  @include("player.zig"),
-  @include("my_library"),
+  @import("player.zig"),
+  @import("my_library"),
 });
 ```
 

@@ -8,15 +8,8 @@ pub fn PackedSparse(comptime Sparse: type, comptime len: usize) type {
     return struct {
         const Self = @This();
 
-        written_indexes: std.BoundedArray(usize, len),
-        sparse_list: [len]Sparse,
-
-        pub fn init() Self {
-            return .{
-                .written_indexes = std.BoundedArray(usize, len).init(0) catch unreachable,
-                .sparse_list = undefined,
-            };
-        }
+        written_indexes: std.BoundedArray(usize, len) = .{},
+        sparse_list: [len]Sparse = undefined,
 
         pub fn set(self: *Self, index: usize, value: Sparse) Error!void {
             try self.written_indexes.append(index);

@@ -11,26 +11,49 @@ const Options = struct {
     } = .{},
 };
 
+/// NOTE: Input Build now takes an enum type for button_literals and axis_literals instead of a tuple of enum literals
 pub fn Build(
     comptime Wrapper: type,
-    comptime button_literals: anytype,
-    comptime axis_literals: anytype,
+    comptime Button: type,
+    comptime Axis: type,
     comptime options: Options,
 ) type {
     const ButtonBindings = blk: {
-        var buttons_tb = ztg.meta.TypeBuilder{};
-        inline for (button_literals) |b| {
-            buttons_tb.addField(@tagName(b), []const Wrapper.ButtonType, @ptrCast(&@as([]const Wrapper.ButtonType, &.{})));
+        var buttons_struct_fields: [std.meta.fields(Button).len]std.builtin.Type.StructField = undefined;
+        for (&buttons_struct_fields, std.enums.values(Button)) |*field, a| {
+            field.* = std.builtin.Type.StructField{
+                .name = @tagName(a),
+                .type = []const Wrapper.ButtonType,
+                .alignment = 0,
+                .is_comptime = false,
+                .default_value = @ptrCast(&@as([]const Wrapper.ButtonType, &.{})),
+            };
         }
-        break :blk buttons_tb.Build();
+        break :blk @Type(.{ .Struct = std.builtin.Type.Struct{
+            .fields = &buttons_struct_fields,
+            .decls = &.{},
+            .layout = .auto,
+            .is_tuple = false,
+        } });
     };
 
     const AxesBindings = blk: {
-        var axes_tb = ztg.meta.TypeBuilder{};
-        inline for (axis_literals) |a| {
-            axes_tb.addField(@tagName(a), []const Wrapper.AxisType, @ptrCast(&@as([]const Wrapper.AxisType, &.{})));
+        var axes_struct_fields: [std.meta.fields(Axis).len]std.builtin.Type.StructField = undefined;
+        for (&axes_struct_fields, std.enums.values(Axis)) |*field, a| {
+            field.* = std.builtin.Type.StructField{
+                .name = @tagName(a),
+                .type = []const Wrapper.AxisType,
+                .alignment = 0,
+                .is_comptime = false,
+                .default_value = @ptrCast(&@as([]const Wrapper.AxisType, &.{})),
+            };
         }
-        break :blk axes_tb.Build();
+        break :blk @Type(.{ .Struct = std.builtin.Type.Struct{
+            .fields = &axes_struct_fields,
+            .decls = &.{},
+            .layout = .auto,
+            .is_tuple = false,
+        } });
     };
 
     const AddBindings = struct {
@@ -39,10 +62,7 @@ pub fn Build(
     };
 
     return struct {
-        pub const Buttons = EnumFromLiterals(button_literals);
-        pub const Axes = EnumFromLiterals(axis_literals);
-        const Controller = ControllerBuilder(Buttons, Axes, Wrapper.ButtonType, Wrapper.AxisType);
-
+        const Controller = ControllerBuilder(Button, Axis, Wrapper.ButtonType, Wrapper.AxisType);
         const Self = @This();
 
         alloc: std.mem.Allocator = undefined,
@@ -53,7 +73,7 @@ pub fn Build(
             try self.addAxisBindings(controller, bindings.axes);
         }
 
-        pub fn addButtonBinding(self: *Self, controller: usize, button: Buttons, binding: Wrapper.ButtonType) !void {
+        pub fn addButtonBinding(self: *Self, controller: usize, button: Button, binding: Wrapper.ButtonType) !void {
             try self.controllers[controller].button_bindings.append(self.alloc, .{
                 .index = @intFromEnum(button),
                 .binding = binding,
@@ -63,12 +83,12 @@ pub fn Build(
         pub fn addButtonBindings(self: *Self, controller: usize, bindings: ButtonBindings) !void {
             inline for (@typeInfo(ButtonBindings).Struct.fields) |field| {
                 for (@field(bindings, field.name)) |b| {
-                    try self.addButtonBinding(controller, @field(Buttons, field.name), b);
+                    try self.addButtonBinding(controller, @field(Button, field.name), b);
                 }
             }
         }
 
-        pub fn addAxisBinding(self: *Self, controller: usize, axis: Axes, binding: Wrapper.AxisType) !void {
+        pub fn addAxisBinding(self: *Self, controller: usize, axis: Axis, binding: Wrapper.AxisType) !void {
             try self.controllers[controller].axis_bindings.append(self.alloc, .{
                 .index = @intFromEnum(axis),
                 .binding = binding,
@@ -78,7 +98,7 @@ pub fn Build(
         pub fn addAxisBindings(self: *Self, controller: usize, bindings: AxesBindings) !void {
             inline for (@typeInfo(AxesBindings).Struct.fields) |field| {
                 for (@field(bindings, field.name)) |a| {
-                    try self.addAxisBinding(controller, @field(Axes, field.name), a);
+                    try self.addAxisBinding(controller, @field(Axis, field.name), a);
                 }
             }
         }
@@ -100,19 +120,19 @@ pub fn Build(
             self.controllers[controller].axis_bindings.clearRetainingCapacity();
         }
 
-        pub inline fn isDown(self: Self, controller: usize, button: Buttons) bool {
+        pub inline fn isDown(self: Self, controller: usize, button: Button) bool {
             return self.controllers[controller].buttons.isSet(@as(usize, @intCast(@intFromEnum(button))) * 3);
         }
 
-        pub inline fn isPressed(self: Self, controller: usize, button: Buttons) bool {
+        pub inline fn isPressed(self: Self, controller: usize, button: Button) bool {
             return self.controllers[controller].buttons.isSet((@as(usize, @intCast(@intFromEnum(button))) * 3) + 1);
         }
 
-        pub inline fn isReleased(self: Self, controller: usize, button: Buttons) bool {
+        pub inline fn isReleased(self: Self, controller: usize, button: Button) bool {
             return self.controllers[controller].buttons.isSet((@as(usize, @intCast(@intFromEnum(button))) * 3) + 2);
         }
 
-        pub inline fn getAxis(self: Self, controller: usize, axis: Axes) f32 {
+        pub inline fn getAxis(self: Self, controller: usize, axis: Axis) f32 {
             return self.controllers[controller].axes[@intFromEnum(axis)];
         }
 
@@ -128,14 +148,14 @@ pub fn Build(
             for (self.controllers, 0..) |contr, i| {
                 try writer.print("controller {}:\n", .{i});
                 for (contr.button_bindings.items) |bb| {
-                    try writer.print("{}=", .{bb.index});
+                    try writer.print("{s}=", .{@tagName(@as(Button, @enumFromInt(bb.index)))});
                     try Wrapper.exportButtonBinding(writer, bb.binding);
                     try writer.print("\n", .{});
                 }
 
                 try writer.print("axes:\n", .{});
                 for (contr.axis_bindings.items) |ab| {
-                    try writer.print("{}=", .{ab.index});
+                    try writer.print("{s}=", .{@tagName(@as(Axis, @enumFromInt(ab.index)))});
                     try Wrapper.exportAxisBinding(writer, ab.binding);
                     try writer.print("\n", .{});
                 }
@@ -195,7 +215,7 @@ pub fn Build(
 
                 if (std.mem.startsWith(u8, line, "controller")) {
                     const end_idx = std.mem.indexOf(u8, line, ":") orelse {
-                        log.err("Bad formatted bindings file, no `:` character after controller index.", .{});
+                        log.err("Malformed bindings file, no `:` character after controller index.", .{});
                         return false;
                     };
                     current_controller = std.fmt.parseInt(usize, line[11..end_idx], 10) catch |err| {
@@ -206,44 +226,51 @@ pub fn Build(
                 } else if (std.mem.startsWith(u8, line, "axes:")) {
                     read_mode = .axes;
                 } else {
-                    const bd_eql_idx = getBindingIndexAndEqlsIndex(line) catch return false;
+                    const binding_tag, const binding_text = getTagAndInfo(line) catch {
+                        log.warn("Malformed line in bindings file at line {}", .{safety});
+                        continue;
+                    };
 
-                    const binding_index = bd_eql_idx[0];
-                    const eqls_idx = bd_eql_idx[1];
-                    const binding_text = line[eqls_idx + 1 ..];
-
-                    const ButtonIndex = std.math.IntFittingRange(0, button_literals.len);
-                    const AxisIndex = std.math.IntFittingRange(0, axis_literals.len);
+                    const ButtonIndex = std.math.IntFittingRange(0, std.meta.fields(Button).len);
+                    const AxisIndex = std.math.IntFittingRange(0, std.meta.fields(Axis).len);
 
                     switch (read_mode) {
                         .buttons => {
+                            const binding_index = @intFromEnum(std.meta.stringToEnum(Button, binding_tag) orelse {
+                                log.warn("Unrecognized button binding {s} in bindings file.", .{binding_tag});
+                                continue;
+                            });
                             self.controllers[current_controller].button_bindings.append(self.alloc, .{
                                 .index = std.math.cast(ButtonIndex, binding_index) orelse {
-                                    log.err("Index of button binding exceeded max range. Max: {}, Found {}", .{ button_literals.len, binding_index });
-                                    return false;
+                                    log.err("Index of button binding exceeded max range. Max: {}, Found {}", .{ std.meta.fields(Button).len, binding_index });
+                                    continue;
                                 },
                                 .binding = Wrapper.importButtonBinding(binding_text) catch |err| {
                                     log.err("Could not import button binding due to {}", .{err});
-                                    return false;
+                                    continue;
                                 },
                             }) catch |err| {
                                 log.err("Could not append to button bindings due to {}", .{err});
-                                return false;
+                                continue;
                             };
                         },
                         .axes => {
+                            const binding_index = @intFromEnum(std.meta.stringToEnum(Axis, binding_tag) orelse {
+                                log.warn("Unrecognized axis binding {s} in bindings file.", .{binding_tag});
+                                continue;
+                            });
                             self.controllers[current_controller].axis_bindings.append(self.alloc, .{
                                 .index = std.math.cast(AxisIndex, binding_index) orelse {
-                                    log.err("Index of axis binding exceeded max range. Max: {}, Found: {}", .{ axis_literals.len, binding_index });
-                                    return false;
+                                    log.err("Index of axis binding exceeded max range. Max: {}, Found: {}", .{ std.meta.fields(Axis).len, binding_index });
+                                    continue;
                                 },
                                 .binding = Wrapper.importAxisBinding(binding_text) catch |err| {
                                     log.err("Could not import axis binding due to {}", .{err});
-                                    return false;
+                                    continue;
                                 },
                             }) catch |err| {
                                 log.err("Could not append to button bindings due to {}", .{err});
-                                return false;
+                                continue;
                             };
                         },
                     }
@@ -262,17 +289,12 @@ pub fn Build(
             return true;
         }
 
-        fn getBindingIndexAndEqlsIndex(line: []const u8) !struct { usize, usize } {
+        fn getTagAndInfo(line: []const u8) !struct { []const u8, []const u8 } {
             const eqls_idx = std.mem.indexOf(u8, line, "=") orelse {
                 log.err("Bad formatted bindings file, no `=` character on binding line.", .{});
                 return error.BadFormat;
             };
-            const binding_index = std.fmt.parseInt(usize, line[0..eqls_idx], 10) catch |err| {
-                log.err("Could not parse controller binding index due to {}", .{err});
-                return error.BadFormat;
-            };
-
-            return .{ binding_index, eqls_idx };
+            return .{ line[0..eqls_idx], line[eqls_idx + 1 ..] };
         }
 
         pub fn include(comptime wb: *ztg.WorldBuilder) void {
@@ -286,7 +308,7 @@ pub fn Build(
 
         fn ini_Self(self: *Self, alloc: std.mem.Allocator) void {
             for (&self.controllers) |*c| {
-                c.* = Controller.init();
+                c.* = .{};
             }
 
             self.alloc = alloc;
@@ -294,20 +316,25 @@ pub fn Build(
 
         fn update_Self(self: *Self) void {
             for (&self.controllers) |*ct| {
-                if (comptime button_literals.len > 0) {
+                if (comptime std.meta.fields(Button).len > 0) {
+                    ct.buttons = Controller.ButtonsBitSet.initEmpty();
+                }
+                if (comptime std.meta.fields(Axis).len > 0) {
+                    for (ct.axis_bindings.items) |ab| ct.axes[ab.index] = 0;
+                }
+            }
+            for (&self.controllers) |*ct| {
+                if (comptime std.meta.fields(Button).len > 0) {
                     for (ct.button_bindings.items) |bb| {
-                        const is_down = Wrapper.isButtonDown(bb.binding);
-                        const is_pres = Wrapper.isButtonPressed(bb.binding);
-                        const is_rel = Wrapper.isButtonReleased(bb.binding);
-                        ct.buttons.setValue(@as(usize, bb.index) * 3, is_down);
-                        ct.buttons.setValue(@as(usize, bb.index) * 3 + 1, is_pres);
-                        ct.buttons.setValue(@as(usize, bb.index) * 3 + 2, is_rel);
+                        if (Wrapper.isButtonDown(bb.binding)) ct.buttons.set(@as(usize, bb.index) * 3);
+                        if (Wrapper.isButtonPressed(bb.binding)) ct.buttons.set(@as(usize, bb.index) * 3 + 1);
+                        if (Wrapper.isButtonReleased(bb.binding)) ct.buttons.set(@as(usize, bb.index) * 3 + 2);
                     }
                 }
-                if (comptime axis_literals.len > 0) {
+                if (comptime std.meta.fields(Axis).len > 0) {
                     for (ct.axis_bindings.items) |ab| {
                         const value = Wrapper.getAxis(ab.binding);
-                        ct.axes[ab.index] = value;
+                        if (@abs(value) > @abs(ct.axes[ab.index])) ct.axes[ab.index] = value;
                     }
                 }
             }
@@ -315,8 +342,8 @@ pub fn Build(
 
         fn dei_Self(self: *Self) void {
             for (&self.controllers) |*con| {
-                if (comptime button_literals.len > 0) con.button_bindings.deinit(self.alloc);
-                if (comptime axis_literals.len > 0) con.axis_bindings.deinit(self.alloc);
+                if (comptime std.meta.fields(Button).len > 0) con.button_bindings.deinit(self.alloc);
+                if (comptime std.meta.fields(Axis).len > 0) con.axis_bindings.deinit(self.alloc);
             }
         }
     };
@@ -343,47 +370,12 @@ fn ControllerBuilder(
 
     return struct {
         const Self = @This();
+        pub const ButtonsBitSet: type = std.StaticBitSet(buttons_len * 3);
 
-        buttons: std.StaticBitSet(buttons_len * 3),
-        button_bindings: std.ArrayListUnmanaged(ButtonBinding),
+        buttons: ButtonsBitSet = ButtonsBitSet.initEmpty(),
+        button_bindings: std.ArrayListUnmanaged(ButtonBinding) = .{},
 
-        axes: [axes_len]f32,
-        axis_bindings: std.ArrayListUnmanaged(AxisBinding),
-
-        pub fn init() Self {
-            var self = Self{
-                .buttons = std.StaticBitSet(buttons_len * 3).initEmpty(),
-                .axes = undefined,
-
-                .button_bindings = .{},
-                .axis_bindings = .{},
-            };
-
-            for (&self.axes) |*ax| {
-                ax.* = 0.0;
-            }
-
-            return self;
-        }
-    };
-}
-
-fn EnumFromLiterals(comptime literals: anytype) type {
-    return comptime blk: {
-        var enum_fields: [literals.len]std.builtin.Type.EnumField = undefined;
-
-        for (literals, &enum_fields, 0..) |lit, *field, i| {
-            field.* = .{
-                .name = @tagName(lit),
-                .value = i,
-            };
-        }
-
-        break :blk @Type(std.builtin.Type{ .Enum = .{
-            .fields = &enum_fields,
-            .is_exhaustive = true,
-            .tag_type = std.math.IntFittingRange(0, literals.len),
-            .decls = &.{},
-        } });
+        axes: [axes_len]f32 = .{0.0} ** axes_len,
+        axis_bindings: std.ArrayListUnmanaged(AxisBinding) = .{},
     };
 }

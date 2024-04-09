@@ -19,6 +19,13 @@ pub fn compileError(comptime format: []const u8, comptime args: anytype) noretur
     @compileError(std.fmt.comptimePrint(format, args));
 }
 
+pub fn isContainer(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Struct, .Union, .ErrorSet, .Enum => true,
+        else => false,
+    };
+}
+
 pub fn assertOkOnAddedFunction(comptime Container: type) void {
     const member_type = comptime ztg.meta.memberFnType(Container, "onAdded");
     const fn_info = @typeInfo(@TypeOf(Container.onAdded)).Fn;
@@ -36,7 +43,7 @@ pub fn assertOkOnAddedFunction(comptime Container: type) void {
 }
 
 pub fn resetCompIds() void {
-    if (comptime builtin.mode != .Debug) return;
+    if (builtin.mode != .Debug) return;
     id_counter = 0;
     last_reset_id += 1;
 }
@@ -45,10 +52,12 @@ pub const CompId = usize;
 var last_reset_id: if (builtin.mode == .Debug) usize else void = if (builtin.mode == .Debug) 0 else void{};
 var id_counter: CompId = 0;
 pub fn compId(comptime T: type) CompId {
-    _ = T;
     const static = struct {
         var reset_id: if (builtin.mode == .Debug) usize else void = if (builtin.mode == .Debug) 0 else void{};
         var id: ?CompId = null;
+        comptime {
+            _ = T;
+        }
     };
     const result = blk: {
         if (static.id == null or if (comptime builtin.mode == .Debug) if_blk: {
@@ -75,3 +84,41 @@ pub const CompIdList = struct {
     ids: []const CompId,
     is_required: bool,
 };
+
+pub fn indexOfType(comptime type_array: anytype, comptime T: type) ?usize {
+    const result: ?usize = comptime blk: {
+        for (type_array, 0..) |t, i| {
+            @setEvalBranchQuota(20_000);
+            if (t == T) break :blk i;
+        }
+        break :blk null;
+    };
+    return result;
+}
+
+pub fn typeArrayHas(comptime type_array: anytype, comptime T: type) bool {
+    const result: bool = comptime blk: {
+        for (type_array) |t| {
+            @setEvalBranchQuota(20_000);
+            if (t == T) break :blk true;
+        }
+        break :blk false;
+    };
+    return result;
+}
+
+pub fn nameFromTypeArrayIndex(comptime type_array: anytype, index: usize) [:0]const u8 {
+    inline for (type_array, 0..) |T, i| {
+        @setEvalBranchQuota(20_000);
+        if (index == i) return @typeName(T);
+    }
+    return "ERROR";
+}
+
+pub fn typeArrayHasUtp(comptime type_array: anytype, utp: ztg.meta.Utp) bool {
+    inline for (type_array) |T| {
+        @setEvalBranchQuota(20_000);
+        if (ztg.meta.utpOf(T) == utp) return true;
+    }
+    return false;
+}

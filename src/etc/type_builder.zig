@@ -1,11 +1,12 @@
 const std = @import("std");
+const util = @import("../util.zig");
 const Type = std.builtin.Type;
 
 const Self = @This();
 
 fields: []const Type.StructField = &.{},
 is_tuple: bool = false,
-layout: Type.ContainerLayout = .Auto,
+layout: Type.ContainerLayout = .auto,
 
 pub fn initFrom(comptime T: type) Self {
     const ti = @typeInfo(T).Struct;
@@ -18,7 +19,7 @@ pub fn initFrom(comptime T: type) Self {
 
 pub fn addFieldExtra(
     comptime self: *Self,
-    comptime name: []const u8,
+    comptime name: [:0]const u8,
     comptime T: type,
     comptime default_value: ?*const anyopaque,
     comptime is_comptime: ?bool,
@@ -33,7 +34,7 @@ pub fn addFieldExtra(
     }};
 }
 
-pub fn addField(comptime self: *Self, comptime name: []const u8, comptime T: type, comptime default_value: ?*const anyopaque) void {
+pub fn addField(comptime self: *Self, comptime name: [:0]const u8, comptime T: type, comptime default_value: ?*const anyopaque) void {
     return addFieldExtra(self, name, T, default_value, null, null);
 }
 
@@ -75,11 +76,11 @@ pub fn Build(comptime self: Self) type {
     } });
 }
 
-pub fn prettyPrint(comptime T: type) *const [std.fmt.count(getFmt(T), getArgs(T)):0]u8 {
-    return std.fmt.comptimePrint(getFmt(T), getArgs(T));
+pub fn prettyPrint(comptime T: type) *const [std.fmt.count(prettyPrintFmt(T), prettyPrintArgs(T)):0]u8 {
+    return std.fmt.comptimePrint(prettyPrintFmt(T), prettyPrintArgs(T));
 }
 
-fn getFmt(comptime T: type) []const u8 {
+fn prettyPrintFmt(comptime T: type) []const u8 {
     var fmt: []const u8 = "struct {{";
     inline for (std.meta.fields(T)) |_| {
         fmt = fmt ++ "{s}: {s} ";
@@ -87,20 +88,19 @@ fn getFmt(comptime T: type) []const u8 {
     return fmt ++ "}},";
 }
 
-fn GetArgsOut(comptime T: type) type {
+fn PrettyPrintArgs(comptime T: type) type {
     return std.meta.Tuple(&[_]type{[]const u8} ** (std.meta.fields(T).len * 2));
 }
 
-fn getArgs(comptime T: type) GetArgsOut(T) {
-    var out: GetArgsOut(T) = undefined;
+fn prettyPrintArgs(comptime T: type) PrettyPrintArgs(T) {
+    var out: PrettyPrintArgs(T) = undefined;
 
     const MAX_DEPTH = 10;
-    comptime var depth: usize = 0;
     comptime var i: usize = 0;
     const out_fields = std.meta.fields(T);
     inline for (out_fields) |field| {
         out[i] = field.name;
-        out[i + 1] = if (std.meta.trait.isContainer(field.type) and depth < MAX_DEPTH) prettyPrint(field.type) else @typeName(field.type);
+        out[i + 1] = if (util.isContainer(field.type) and i / 2 < MAX_DEPTH) prettyPrint(field.type) else @typeName(field.type);
         i += 2;
     }
 

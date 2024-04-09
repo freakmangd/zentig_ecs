@@ -4,6 +4,7 @@ const std = @import("std");
 const ztg = @import("init.zig");
 const world = @import("world.zig");
 const util = @import("util.zig");
+const builtin = @import("builtin");
 
 const Allocator = std.mem.Allocator;
 const TypeMap = ztg.meta.TypeMap;
@@ -11,20 +12,23 @@ const Entity = ztg.Entity;
 
 const Self = @This();
 
+pub const ComponentError = error{UnregisteredComponent};
+pub const GiveRemoveComponentError = ComponentError || error{EntityDoesntExist} || Allocator.Error;
+
 ctx: *anyopaque,
 vtable: *const Vtable,
 
 pub const Vtable = struct {
-    new_ent: *const fn (*anyopaque) Allocator.Error!Entity,
+    new_ent: *const fn (*anyopaque) Entity,
     remove_ent: *const fn (*anyopaque, Entity) Allocator.Error!void,
 
     get_ent_parent: *const fn (*const anyopaque, ztg.Entity) error{EntityDoesntExist}!?ztg.Entity,
     set_ent_parent: *const fn (*anyopaque, ztg.Entity, ?ztg.Entity) error{ EntityDoesntExist, ParentDoesntExist }!void,
 
-    add_component: *const fn (*anyopaque, Entity, util.CompId, u29, *const anyopaque) world.CommandsGiveRemoveComponentError!void,
-    remove_component: *const fn (*anyopaque, Entity, util.CompId) world.CommandsGiveRemoveComponentError!void,
-    get_component_ptr: *const fn (*anyopaque, Entity, util.CompId) world.CommandsComponentError!?*anyopaque,
-    check_ent_has: *const fn (*anyopaque, Entity, util.CompId) world.CommandsComponentError!bool,
+    add_component: *const fn (*anyopaque, Entity, util.CompId, u29, *const anyopaque) GiveRemoveComponentError!void,
+    remove_component: *const fn (*anyopaque, Entity, util.CompId) GiveRemoveComponentError!void,
+    get_component_ptr: *const fn (*anyopaque, Entity, util.CompId) ComponentError!?*anyopaque,
+    check_ent_has: *const fn (*anyopaque, Entity, util.CompId) ComponentError!bool,
 
     run_stage: *const fn (*anyopaque, []const u8) anyerror!void,
 
@@ -73,15 +77,15 @@ pub fn runStageNameList(self: Self, stage_ids: []const []const u8) anyerror!void
 }
 
 /// Returns an EntityHandle to a new entity
-pub fn newEnt(self: Self) Allocator.Error!ztg.EntityHandle {
-    return .{ .ent = try self.vtable.new_ent(self.ctx), .com = self };
+pub fn newEnt(self: Self) ztg.EntityHandle {
+    return .{ .ent = self.vtable.new_ent(self.ctx), .com = self };
 }
 
 /// Shortcut for creating a new entity and adding components to it
 pub fn newEntWith(self: Self, components: anytype) !ztg.EntityHandle {
-    const ent = try newEnt(self);
-    try ent.giveComponents(components);
-    return ent;
+    const ent = self.vtable.new_ent(self.ctx);
+    try self.giveComponents(ent, components);
+    return .{ .ent = ent, .com = self };
 }
 
 pub const newEntWithMany = @compileError("newEntWithMany is now renamed to newEntWith");
@@ -105,10 +109,12 @@ pub fn giveEntChild(self: Self, ent: ztg.Entity, child: ztg.Entity) !void {
 
 inline fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void {
     const Component = @TypeOf(component);
+    if (Component == type) util.compileError("You have passed `{}` to giveComponents, which is of type `type`, you might have forgotten to instantiate it.", .{component});
+
     const has_onAdded = comptime @hasDecl(Component, "onAdded");
-    const member_type: ?ztg.meta.MemberFnType = comptime if (has_onAdded) ztg.meta.memberFnType(Component, "onAdded") else null;
-    const needs_mut = member_type == .by_ptr;
-    var mutable_comp: if (has_onAdded and needs_mut) Component else void = if (comptime has_onAdded and needs_mut) component else void{};
+    const member_type: if (has_onAdded) ztg.meta.MemberFnType else void = comptime if (has_onAdded) ztg.meta.memberFnType(Component, "onAdded") else {};
+    const needs_mut: if (has_onAdded) bool else void = comptime if (has_onAdded) member_type == .by_ptr else {};
+    var mutable_comp: if (has_onAdded and needs_mut) Component else void = if (comptime has_onAdded and needs_mut) component else {};
 
     if (comptime has_onAdded) {
         util.assertOkOnAddedFunction(Component);
@@ -118,9 +124,13 @@ inline fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void
         if (comptime member_type == .non_member) {
             if (comptime can_err) try Component.onAdded(ent, self) else Component.onAdded(ent, self);
         } else {
-            var c = if (comptime needs_mut) mutable_comp else component;
+            var c = if (comptime needs_mut) &mutable_comp else component;
             if (comptime can_err) try c.onAdded(ent, self) else c.onAdded(ent, self);
         }
+    }
+
+    if (comptime builtin.mode == .Debug and !builtin.is_test) {
+        if (self.checkEntHas(ent, Component)) ztg.log.warn("Entity {} already has a component of type `{}` but you are adding it again, the data will be overwritten with this new instance.", .{ ent, Component });
     }
 
     self.vtable.add_component(self.ctx, ent, util.compId(Component), @alignOf(Component), if (comptime has_onAdded and needs_mut) &mutable_comp else &component) catch |err| switch (err) {
@@ -151,14 +161,16 @@ inline fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void
 pub fn giveComponents(self: Self, ent: Entity, components: anytype) !void {
     const Components = @TypeOf(components);
 
-    if (comptime !std.meta.trait.isContainer(Components))
-        @compileError("Non-container type passed to giveComponents, if you want to give an entity a single component wrap it in an anonymous tuple.");
-
-    if (comptime !std.meta.trait.isTuple(Components) and !@hasDecl(Components, "is_component_bundle"))
-        @compileError("Struct passed to giveComponents does not have a public is_component_bundle decl, if it is not a bundle wrap it in an anonymous tuple.");
+    if (@typeInfo(Components) != .Struct) {
+        if (!@typeInfo(Components).Struct.is_tuple) {
+            util.compileError("Non-tuple type {} passed to giveComponents", .{Components});
+        } else if (!@hasDecl(Components, "is_component_bundle")) {
+            @compileError("Struct passed to giveComponents does not have a public is_component_bundle decl, if it is not a bundle wrap it in an anonymous tuple.");
+        }
+    }
 
     inline for (std.meta.fields(Components)) |field| {
-        if (comptime std.meta.trait.isContainer(field.type) and @hasDecl(field.type, "is_component_bundle")) {
+        if (comptime util.isContainer(field.type) and @hasDecl(field.type, "is_component_bundle")) {
             try giveComponents(self, ent, @field(components, field.name));
         } else {
             try giveComponentSingle(self, ent, @field(components, field.name));
@@ -235,10 +247,24 @@ const test_mod = struct {
         }
     }
 
+    pub fn test_time(com: ztg.Commands, time: *ztg.base.Time) !void {
+        try std.testing.expectEqual(@as(usize, 0), time.frame_count);
+        try com.runStage(.update);
+        try std.testing.expectEqual(@as(usize, 1), time.frame_count);
+        try com.runStageByName("update");
+        try std.testing.expectEqual(@as(usize, 2), time.frame_count);
+        try com.runStageList(&.{.update});
+        try std.testing.expectEqual(@as(usize, 3), time.frame_count);
+        try com.runStageNameList(&.{"update"});
+        try std.testing.expectEqual(@as(usize, 4), time.frame_count);
+    }
+
     pub fn include(comptime wb: *ztg.WorldBuilder) void {
         wb.include(&.{ztg.base}); // ensure we included ztg.base for the Transform component
         wb.addComponents(&.{MyComponent});
         wb.addSystemsToStage(.update, .{update_MyComponent});
+        wb.addStage(.do_test);
+        wb.addSystemsToStage(.do_test, test_time);
     }
 };
 
@@ -250,7 +276,7 @@ test "basic usage" {
     const com = w.commands();
 
     _ = try com.newEntWith(.{
-        ztg.base.Transform.identity(),
+        ztg.base.Transform{},
         test_mod.MyComponent{
             .speed = 1_000,
             .dir = ztg.vec2(0.7, 2),
@@ -261,17 +287,10 @@ test "basic usage" {
 test "running stages" {
     var w = try MyWorld.init(std.testing.allocator);
     defer w.deinit();
-    const com = w.commands();
 
-    try std.testing.expectEqual(@as(usize, 0), com.getResPtr(ztg.base.Time).frame_count);
-    try com.runStage(.update);
-    try std.testing.expectEqual(@as(usize, 1), com.getResPtr(ztg.base.Time).frame_count);
-    try com.runStageByName("update");
-    try std.testing.expectEqual(@as(usize, 2), com.getResPtr(ztg.base.Time).frame_count);
-    try com.runStageList(&.{.update});
-    try std.testing.expectEqual(@as(usize, 3), com.getResPtr(ztg.base.Time).frame_count);
-    try com.runStageNameList(&.{"update"});
-    try std.testing.expectEqual(@as(usize, 4), com.getResPtr(ztg.base.Time).frame_count);
+    // any errors that occur during the stage are propogated
+    // up to this call
+    try w.runStage(.do_test);
 }
 
 test "adding/removing entities" {
@@ -283,7 +302,7 @@ test "adding/removing entities" {
 
     if (!my_ent.checkHas(test_mod.MyComponent)) try my_ent.giveComponents(.{test_mod.MyComponent{
         .speed = 50,
-        .dir = ztg.Vec2.right(),
+        .dir = ztg.Vec2.right,
     }});
 
     try w.postSystemUpdate();
