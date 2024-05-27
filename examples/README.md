@@ -1,5 +1,5 @@
 # Examples
-To run the examples, just run `zig build [example name]` in the root folder of `zentig_ecs`
+To run the examples, run `zig build [example name]` in the root folder of `zentig_ecs`
 
 Examples:
 Example name | Description

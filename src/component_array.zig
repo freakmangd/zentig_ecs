@@ -9,9 +9,10 @@ const Allocator = std.mem.Allocator;
 pub fn ComponentArray(comptime Index: type) type {
     return struct {
         const Self = @This();
+        const debug_info = builtin.mode == .Debug and !builtin.is_test;
 
-        component_id: if (builtin.mode == .Debug) util.CompId else void,
-        component_name: if (builtin.mode == .Debug) []const u8 else void,
+        component_id: if (debug_info) util.CompId else void,
+        component_name: if (debug_info) []const u8 else void,
 
         components_data: ByteArray,
         entities: std.ArrayListUnmanaged(ztg.Entity) = .{},
@@ -25,8 +26,8 @@ pub fn ComponentArray(comptime Index: type) type {
             //_ = max_cap;
 
             return .{
-                .component_id = if (builtin.mode == .Debug) util.compId(T) else {},
-                .component_name = if (builtin.mode == .Debug) @typeName(T) else {},
+                .component_id = if (comptime debug_info) util.compId(T) else {},
+                .component_name = if (comptime debug_info) @typeName(T) else {},
                 .components_data = ByteArray.init(T),
             };
         }
@@ -38,20 +39,19 @@ pub fn ComponentArray(comptime Index: type) type {
             self.ent_to_comp_idx.deinit(alloc);
         }
 
-        pub fn assign(self: *Self, alloc: std.mem.Allocator, ent: ztg.Entity, entry: anytype) !void {
+        pub fn assign(self: *Self, alloc: std.mem.Allocator, ent: ztg.Entity, entry: anytype) !*anyopaque {
             self.assertType(@TypeOf(entry));
-            try self.appendBytes(alloc, ent, std.mem.asBytes(&entry));
+            return self.appendBytes(alloc, ent, std.mem.asBytes(&entry));
         }
 
-        pub fn assignData(self: *Self, alloc: std.mem.Allocator, ent: ztg.Entity, data: *const anyopaque) !void {
-            try self.appendBytes(alloc, ent, data);
+        pub fn assignData(self: *Self, alloc: std.mem.Allocator, ent: ztg.Entity, data: *const anyopaque) !*anyopaque {
+            return self.appendBytes(alloc, ent, data);
         }
 
-        fn appendBytes(self: *Self, alloc: std.mem.Allocator, ent: ztg.Entity, bytes_start: *const anyopaque) !void {
+        fn appendBytes(self: *Self, alloc: std.mem.Allocator, ent: ztg.Entity, bytes_start: *const anyopaque) !*anyopaque {
             try self.entities.append(alloc, ent);
             try self.ent_to_comp_idx.put(alloc, ent, @intCast(self.components_data.len));
-
-            try self.components_data.appendPtr(alloc, bytes_start);
+            return self.components_data.appendPtr(alloc, bytes_start);
         }
 
         pub fn willResize(self: *const Self) bool {
@@ -115,13 +115,15 @@ pub fn ComponentArray(comptime Index: type) type {
         fn assertType(self: Self, comptime T: type) void {
             if (comptime builtin.mode != .Debug) return;
 
-            if (util.compId(T) != self.component_id)
-                std.debug.panic("Incorrect type. Expected Type: {s} (ID {}), found Type {s} (ID: {}).", .{
-                    self.component_name,
-                    self.component_id,
-                    @typeName(T),
-                    util.compId(T),
-                });
+            if (comptime debug_info) {
+                if (util.compId(T) != self.component_id)
+                    std.debug.panic("Incorrect type. Expected Type: {s} (ID {}), found Type {s} (ID: {}).", .{
+                        self.component_name,
+                        self.component_id,
+                        @typeName(T),
+                        util.compId(T),
+                    });
+            }
         }
     };
 }
@@ -141,9 +143,9 @@ test "simple test" {
     var arr = initForTests(usize, u32);
     defer arr.deinit(std.testing.allocator);
 
-    try arr.assign(std.testing.allocator, 0, @as(u32, 1));
-    try arr.assign(std.testing.allocator, 1, @as(u32, 1));
-    try arr.assign(std.testing.allocator, 2, @as(u32, 1));
+    _ = try arr.assign(std.testing.allocator, 0, @as(u32, 1));
+    _ = try arr.assign(std.testing.allocator, 1, @as(u32, 1));
+    _ = try arr.assign(std.testing.allocator, 2, @as(u32, 1));
 
     _ = arr.swapRemove(2);
 
@@ -156,8 +158,8 @@ test "data" {
     var arr = initForTests(usize, Data);
     defer arr.deinit(std.testing.allocator);
 
-    try arr.assign(std.testing.allocator, 2, Data{ .val = 100_000 });
-    try arr.assignData(std.testing.allocator, 5, &Data{ .val = 20_000 });
+    _ = try arr.assign(std.testing.allocator, 2, Data{ .val = 100_000 });
+    _ = try arr.assignData(std.testing.allocator, 5, &Data{ .val = 20_000 });
 
     try std.testing.expectEqual(@as(u32, 100_000), arr.getAs(Data, 2).?.val);
     try std.testing.expectEqual(@as(u32, 20_000), arr.getAs(Data, 5).?.val);
@@ -177,8 +179,8 @@ test "remove" {
     var arr = initForTests(usize, usize);
     defer arr.deinit(std.testing.allocator);
 
-    try arr.assign(std.testing.allocator, 1, @as(usize, 100));
-    try arr.assign(std.testing.allocator, 2, @as(usize, 200));
+    _ = try arr.assign(std.testing.allocator, 1, @as(usize, 100));
+    _ = try arr.assign(std.testing.allocator, 2, @as(usize, 200));
 
     arr.swapRemove(2);
 
@@ -190,6 +192,6 @@ test "capacity" {
     var arr = initForTests(usize, usize);
     defer arr.deinit(std.testing.allocator);
 
-    try arr.assign(std.testing.allocator, 0, @as(usize, 10));
-    try arr.assign(std.testing.allocator, 1, @as(usize, 20));
+    _ = try arr.assign(std.testing.allocator, 0, @as(usize, 10));
+    _ = try arr.assign(std.testing.allocator, 1, @as(usize, 20));
 }

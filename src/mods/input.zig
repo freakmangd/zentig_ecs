@@ -11,7 +11,6 @@ const Options = struct {
     } = .{},
 };
 
-/// NOTE: Input Build now takes an enum type for button_literals and axis_literals instead of a tuple of enum literals
 pub fn Build(
     comptime Wrapper: type,
     comptime Button: type,

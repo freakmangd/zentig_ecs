@@ -51,13 +51,13 @@ pub fn resetCompIds() void {
 pub const CompId = usize;
 var last_reset_id: if (builtin.mode == .Debug) usize else void = if (builtin.mode == .Debug) 0 else void{};
 var id_counter: CompId = 0;
+pub var allow_new_ids: bool = false;
 pub fn compId(comptime T: type) CompId {
     const static = struct {
         var reset_id: if (builtin.mode == .Debug) usize else void = if (builtin.mode == .Debug) 0 else void{};
         var id: ?CompId = null;
-        comptime {
-            _ = T;
-        }
+
+        const Parent = T;
     };
     const result = blk: {
         if (static.id == null or if (comptime builtin.mode == .Debug) if_blk: {
@@ -65,6 +65,8 @@ pub fn compId(comptime T: type) CompId {
         } else if_blk: {
             break :if_blk false;
         }) {
+            if (builtin.mode == .Debug and !allow_new_ids) std.debug.panic("Tried to get CompId of unregistered component type {s}", .{@typeName(T)});
+
             static.id = id_counter;
             static.reset_id = last_reset_id;
             id_counter += 1;

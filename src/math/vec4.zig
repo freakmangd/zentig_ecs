@@ -143,12 +143,12 @@ pub const Vec4 = extern struct {
 
     // Thank you wikipedia: https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Euler_angles_(in_3-2-1_sequence)_to_quaternion_conversion
     pub fn fromEulerAngles(vec: ztg.Vec3) Vec4 {
-        const cr = math.cos(vec.x * 0.5);
-        const sr = math.sin(vec.x * 0.5);
-        const cp = math.cos(vec.y * 0.5);
-        const sp = math.sin(vec.y * 0.5);
-        const cy = math.cos(vec.z * 0.5);
-        const sy = math.sin(vec.z * 0.5);
+        const cr = @cos(vec.x * 0.5);
+        const sr = @sin(vec.x * 0.5);
+        const cp = @cos(vec.y * 0.5);
+        const sp = @sin(vec.y * 0.5);
+        const cy = @cos(vec.z * 0.5);
+        const sy = @sin(vec.z * 0.5);
 
         return .{
             .x = sr * cp * cy - cr * sp * sy,

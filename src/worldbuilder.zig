@@ -575,6 +575,8 @@ fn defaultCrash(com: ztg.Commands, r: ztg.CrashReason) anyerror!void {
 
 /// Returns the final World type
 pub fn Build(comptime self: Self) type {
+    verifyQueryTypes(self.stage_defs.items, self.comp_types.types);
+
     const comp_types = self.comp_types.dereference(self.comp_types.types.len);
     const event_types = self.event_types.dereference(self.event_types.types.len);
     const added_resources = self.added_resources.dereference(self.added_resources.types.len);
@@ -599,6 +601,29 @@ pub fn Build(comptime self: Self) type {
         on_crash_fn,
         warnings,
     );
+}
+
+/// Check added systems query parameters, if one of their query types isnt in the comp_types list, compile error
+fn verifyQueryTypes(stages: []const StageDef, comp_types: []const type) void {
+    for (stages) |stage| for (stage.labels.items) |label| inline for (.{ "before", "during", "after" }) |section_name| {
+        const section: TypeBuilder = @field(label, section_name);
+        for (section.fields) |field| {
+            const system_ti = @typeInfo(field.type).Fn;
+            for (system_ti.params) |param| {
+                const Param = param.type.?;
+                if (@typeInfo(Param) != .Struct or !@hasDecl(Param, "req_types")) continue;
+
+                inline for (.{ Param.req_types, Param.opt_types }) |query_types| for (query_types.types) |T| {
+                    if (!util.typeArrayHas(comp_types, T)) {
+                        util.compileError("System `{s}` contains a query for type `{s}`, which is not a registered component type. Add it with addComponents", .{
+                            @typeName(field.type),
+                            @typeName(T),
+                        });
+                    }
+                };
+            }
+        }
+    };
 }
 
 fn warn(comptime self: *Self, comptime message: []const u8) void {

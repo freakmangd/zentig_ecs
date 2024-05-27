@@ -6,6 +6,7 @@ const std = @import("std");
 const ztg = @import("../init.zig");
 const util = @import("../util.zig");
 const math = std.math;
+const builtin = std.builtin;
 
 pub fn GenerateFunctions(comptime Self: type) type {
     if (@typeInfo(Self).Struct.layout != .@"extern") @compileError("To implement vec_funcs into a struct it must be marked extern.");
@@ -183,7 +184,7 @@ pub fn GenerateFunctions(comptime Self: type) type {
 
         /// Returns `orig` moved by an amount no greater than `max_dist` in the
         /// direction towards `to`. Will always arrive at `to` and stay without overshooting.
-        pub inline fn moveTowards(orig: Self, to: Self, max_dist: f32) Self {
+        pub fn moveTowards(orig: Self, to: Self, max_dist: f32) Self {
             var to_vec = Self.sub(to, orig);
             const sqr_dist = Self.sqrLength(to_vec);
 
@@ -327,12 +328,21 @@ pub fn convertFieldToF32(obj: anytype, comptime field_name: []const u8, default:
 }
 
 pub fn isBitcastable(comptime Self: type, comptime Other: type) bool {
-    return @sizeOf(Self) == @sizeOf(Other) and
-        @typeInfo(Other).Struct.layout == .@"extern" and
-        @typeInfo(std.meta.fieldInfo(Other, .x).type) == .Float and
-        @typeInfo(std.meta.fieldInfo(Other, .y).type) == .Float and
-        if (@hasField(Self, "z")) @typeInfo(std.meta.fieldInfo(Other, .z).type) == .Float else true and
-        if (@hasField(Self, "w")) @typeInfo(std.meta.fieldInfo(Other, .w).type) == .Float else true;
+    return comptime blk: {
+        if (@typeInfo(Other).Struct.layout != .@"extern") break :blk false;
+
+        const s_fields: []const builtin.Type.StructField = @typeInfo(Self).Struct.fields;
+        const o_fields: []const builtin.Type.StructField = @typeInfo(Other).Struct.fields;
+        if (s_fields.len != o_fields.len) break :blk false;
+
+        const OtherField = std.meta.FieldEnum(Other);
+        for (s_fields) |sf| {
+            const other_field = std.meta.stringToEnum(OtherField, sf.name) orelse break :blk false;
+            if (sf.type != std.meta.FieldType(Other, other_field)) break :blk false;
+        }
+
+        break :blk true;
+    };
 }
 
 const Vec2 = @import("vec2.zig").Vec2;
@@ -371,4 +381,22 @@ test "shuffle" {
     const b = Vec2{ .x = 20, .y = 10 };
     const c = Vec2.shuffle(a, b, .{ -1, 1 });
     try Vec2.expectEqual(.{ .x = 20, .y = 20 }, c);
+}
+
+test isBitcastable {
+    const ExternVec = extern struct {
+        x: f32 = 0xDEAD,
+        y: f32 = 0xBEEF,
+    };
+
+    try std.testing.expect(isBitcastable(Vec2, ExternVec));
+    try Vec2.expectEqual(Vec2.init(0xDEAD, 0xBEEF), Vec2.from(ExternVec{}));
+
+    const MyVec = struct {
+        x: f32 = 0xDEAD,
+        y: f32 = 0xBEEF,
+    };
+
+    try std.testing.expect(!isBitcastable(Vec2, MyVec));
+    try Vec2.expectEqual(Vec2.init(0xDEAD, 0xBEEF), Vec2.from(MyVec{}));
 }

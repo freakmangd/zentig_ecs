@@ -36,7 +36,7 @@ pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type
     return struct {
         const Self = @This();
 
-        pub const IsQueryType = true;
+        pub const IsQueryType = {};
         pub const options = _options;
 
         pub const has_entities: bool = blk: {

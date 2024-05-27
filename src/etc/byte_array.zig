@@ -36,9 +36,10 @@ pub fn appendAssumeCapacity(self: *Self, entry: anytype) void {
     self.len += 1;
 }
 
-pub fn appendPtr(self: *Self, alloc: std.mem.Allocator, bytes_start: *const anyopaque) !void {
+pub fn appendPtr(self: *Self, alloc: std.mem.Allocator, bytes_start: *const anyopaque) !*anyopaque {
     try self.bytes.appendSlice(alloc, @as([*]const u8, @ptrCast(bytes_start))[0..self.entry_size]);
     self.len += 1;
+    return if (self.entry_size == 0) undefined else &self.bytes.items[(self.len - 1) * self.entry_size];
 }
 
 pub fn appendPtrAssumeCapacity(self: *Self, bytes_start: *const anyopaque) void {
