@@ -192,7 +192,8 @@ pub fn GenerateFunctions(comptime Self: type) type {
 
             const dist = math.sqrt(sqr_dist);
 
-            to_vec.divEql(dist * max_dist);
+            to_vec.divEql(dist);
+            to_vec.mulEql(max_dist);
             return Self.add(orig, to_vec);
         }
 
