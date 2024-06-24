@@ -88,8 +88,6 @@ pub fn newEntWith(self: Self, components: anytype) !ztg.EntityHandle {
     return .{ .ent = ent, .com = self };
 }
 
-pub const newEntWithMany = @compileError("newEntWithMany is now renamed to newEntWith");
-
 /// Returns the entity's parent if it has one
 /// Can error if the entity doesn't exist
 pub fn getEntParent(self: Self, ent: ztg.Entity) !?ztg.Entity {
