@@ -13,12 +13,12 @@ const TypeBuilder = ztg.meta.TypeBuilder;
 /// Used for storing pointer-stable objects on the heap
 const WorldInfo = struct {
     frame_arena: std.heap.ArenaAllocator,
-    rng: std.rand.DefaultPrng,
+    rng: std.Random.DefaultPrng,
 
     fn init(alloc: std.mem.Allocator) !*WorldInfo {
         const self = try alloc.create(WorldInfo);
         self.* = .{
-            .rng = std.rand.DefaultPrng.init(@bitCast(std.time.milliTimestamp())),
+            .rng = std.Random.DefaultPrng.init(@bitCast(std.time.milliTimestamp())),
             .frame_arena = std.heap.ArenaAllocator.init(alloc),
         };
         return self;
@@ -59,13 +59,13 @@ pub fn World(
         alloc: Allocator,
         frame_arena: *std.heap.ArenaAllocator,
         frame_alloc: Allocator,
-        rand: std.rand.Random,
+        rand: std.Random,
 
         next_ent: ztg.Entity = 0,
         entities: *EntityArray = undefined,
 
         comp_arrays: [comp_types_len]ComponentArray = undefined,
-        resources: Resources = .{},
+        resources: *Resources = undefined,
 
         event_pools: EventPool,
         changes_queue: ChangeQueue,
@@ -119,6 +119,10 @@ pub fn World(
                 .changes_queue = ChangeQueue.init(frame_alloc),
             };
 
+            self.resources = try user_allocator.create(Resources);
+            self.resources.* = .{};
+            errdefer user_allocator.destroy(self.resources);
+
             self.entities = try user_allocator.create(EntityArray);
             self.entities.* = .{};
             errdefer user_allocator.destroy(self.entities);
@@ -144,7 +148,7 @@ pub fn World(
 
             self.getResPtr(Allocator).* = user_allocator;
             self.getResPtr(ztg.FrameAlloc).* = .{frame_alloc};
-            self.getResPtr(std.rand.Random).* = info.rng.random();
+            self.getResPtr(std.Random).* = info.rng.random();
 
             ztg.profiler.init(user_allocator);
 
@@ -186,6 +190,7 @@ pub fn World(
             self.changes_queue.deinit();
 
             self.alloc.destroy(self.entities);
+            self.alloc.destroy(self.resources);
             self.info.deinit(self.alloc);
             //self.alloc.destroy(self);
         }
@@ -313,7 +318,13 @@ pub fn World(
         pub fn postSystemUpdate(self: *Self) anyerror!void {
             if (comptime comp_types_len == 0) return;
 
-            for (self.changes_queue.items) |rem| {
+            // using a while loop since the changes_queue.items can be realloced
+            // inside the loop.
+            var i: usize = 0;
+            while (i < self.changes_queue.items.len) : (i += 1) {
+                // skip bounds check, length cant change
+                const rem = (@as([*]const ChangeQueueItem, @ptrCast(self.changes_queue.items)) + i)[0];
+
                 switch (rem) {
                     .added_component => |comp| {
                         var arr = &self.comp_arrays[comp.component_id];
@@ -906,7 +917,7 @@ pub fn World(
                 };
             } else if (comptime @typeInfo(T) == .Struct and @hasDecl(T, "EventRecvType")) {
                 return .{
-                    .items = self.event_pools.getPtr(T.EventRecvType).items,
+                    .events = self.event_pools.getPtr(T.EventRecvType),
                 };
             } else if (comptime util.typeArrayHas(added_resources, ztg.meta.DerefType(T)) or util.typeArrayHas(added_resources, T)) {
                 if (comptime util.typeArrayHas(added_resources, T)) {
@@ -969,7 +980,8 @@ const ComponentChange = struct {
 };
 
 /// For internal queueing of commands. Cleared after a stage is completed.
-const ChangeQueue = std.ArrayList(union(enum) {
+const ChangeQueue = std.ArrayList(ChangeQueueItem);
+const ChangeQueueItem = union(enum) {
     added_component: struct {
         ent: ztg.Entity,
         component_id: util.CompId,
@@ -977,7 +989,7 @@ const ChangeQueue = std.ArrayList(union(enum) {
     },
     removed_ent: ztg.Entity,
     removed_component: ComponentChange,
-});
+};
 
 const testing = std.testing;
 

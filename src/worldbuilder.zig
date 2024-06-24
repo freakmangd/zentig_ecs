@@ -88,7 +88,7 @@ pub fn init(comptime includes: []const type) Self {
 
     self.addResource(std.mem.Allocator, undefined);
     self.addResource(ztg.FrameAlloc, undefined);
-    self.addResource(std.rand.Random, undefined);
+    self.addResource(std.Random, undefined);
     self.include(includes);
 
     return self;
@@ -467,7 +467,7 @@ test addEvent {
         }
 
         fn recvEvent(recv: ztg.EventReceiver(MyEvent)) !void {
-            for (recv.items) |it| try std.testing.expectEqual(@as(i32, 20), it.data);
+            try std.testing.expectEqual(20, recv.next().?.data);
             system_was_run = true;
         }
     };
@@ -586,7 +586,7 @@ pub fn Build(comptime self: Self) type {
     const warnings = self.warnings[0..].*;
 
     const Resources = self.resources.Build();
-    const EventPool = @import("event_pools.zig").EventPools(event_types);
+    const EventPool = @import("events.zig").EventPools(event_types);
     const StagesList = @import("stages.zig").Init(self.stage_defs.items);
 
     return World(
