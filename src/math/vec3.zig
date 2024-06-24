@@ -1,7 +1,7 @@
 const std = @import("std");
 const ztg = @import("../init.zig");
 const math = std.math;
-const util = ztg.util;
+const util = @import("../util.zig");
 
 /// A vector of 3 `f32`s
 pub const Vec3 = extern struct {
@@ -119,7 +119,7 @@ pub const Vec3 = extern struct {
     }
 
     /// Returns a new Vec3 with all of it's components set to a number within [min, max)
-    pub inline fn random(rand: std.rand.Random, _min: f32, _max: f32) Vec3 {
+    pub inline fn random(rand: std.Random, _min: f32, _max: f32) Vec3 {
         return .{
             .x = std.math.lerp(_min, _max, rand.float(f32)),
             .y = std.math.lerp(_min, _max, rand.float(f32)),
@@ -134,12 +134,18 @@ pub const Vec3 = extern struct {
         return Vec3.fromSimd(rand_vec);
     }
 
-    pub fn format(value: Vec3, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-        try writer.print(std.fmt.comptimePrint("Vec3({{{s}:.{}}}, {{{s}:.{}}}, {{{s}:.{}}})", .{
-            fmt, 2,
-            fmt, 2,
-            fmt, 2,
-        }), .{ value.x, value.y, value.z });
+    pub fn format(value: Vec3, comptime _fmt: []const u8, opt: std.fmt.FormatOptions, writer: anytype) !void {
+        const start_str, const fmt = comptime blk: {
+            if (_fmt.len > 0 and _fmt[0] == 's') break :blk .{ "(", _fmt[1..] };
+            break :blk .{ "Vec3(", _fmt };
+        };
+        try writer.writeAll(start_str);
+        try util.formatFloatValue(value.x, fmt, opt, writer);
+        try writer.writeAll(", ");
+        try util.formatFloatValue(value.y, fmt, opt, writer);
+        try writer.writeAll(", ");
+        try util.formatFloatValue(value.z, fmt, opt, writer);
+        try writer.writeAll(")");
     }
 
     const vec_funcs = @import("vec_funcs.zig");

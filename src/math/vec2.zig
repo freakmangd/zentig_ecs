@@ -133,7 +133,7 @@ pub const Vec2 = extern struct {
     }
 
     /// Returns a new Vec2 with all of it's components set to a number within [min, max)
-    pub inline fn random(rand: std.rand.Random, _min: f32, _max: f32) Vec2 {
+    pub inline fn random(rand: std.Random, _min: f32, _max: f32) Vec2 {
         return .{
             .x = std.math.lerp(_min, _max, rand.float(f32)),
             .y = std.math.lerp(_min, _max, rand.float(f32)),
@@ -141,7 +141,7 @@ pub const Vec2 = extern struct {
     }
 
     /// Returns a new random Vec2 that lies on the outside of a unit circle
-    pub inline fn randomOnUnitCircle(rand: std.rand.Random) Vec2 {
+    pub inline fn randomOnUnitCircle(rand: std.Random) Vec2 {
         return fromDirAngle(rand.float(f32) * std.math.pi * 2);
     }
 
@@ -174,17 +174,23 @@ pub const Vec2 = extern struct {
         self.* = self.getRotated(theta);
     }
 
-    pub fn format(value: Vec2, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-        try writer.print(std.fmt.comptimePrint("Vec2({{{s}:.{}}}, {{{s}:.{}}})", .{
-            fmt, 2,
-            fmt, 2,
-        }), .{ value.x, value.y });
+    pub fn format(value: Vec2, comptime _fmt: []const u8, opt: std.fmt.FormatOptions, writer: anytype) !void {
+        const start_str, const fmt = comptime blk: {
+            if (_fmt.len > 0 and _fmt[0] == 's') break :blk .{ "(", _fmt[1..] };
+            break :blk .{ "Vec2(", _fmt };
+        };
+        try writer.writeAll(start_str);
+        try util.formatFloatValue(value.x, fmt, opt, writer);
+        try writer.writeAll(", ");
+        try util.formatFloatValue(value.y, fmt, opt, writer);
+        try writer.writeAll(")");
     }
 
     test format {
         const v = init(0, 1);
-        try std.testing.expectFmt("Vec2(0.00e0, 1.00e0)", "{}", .{v});
-        try std.testing.expectFmt("Vec2(0.00, 1.00)", "{d}", .{v});
+        try std.testing.expectFmt("Vec2(0e0, 1e0)", "{}", .{v});
+        try std.testing.expectFmt("Vec2(0, 1)", "{d}", .{v});
+        try std.testing.expectFmt("(0, 1)", "{sd}", .{v});
     }
 
     const vec_funcs = @import("vec_funcs.zig");

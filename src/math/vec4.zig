@@ -158,8 +158,20 @@ pub const Vec4 = extern struct {
         };
     }
 
-    pub fn format(value: Vec4, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-        try writer.print(std.fmt.comptimePrint("Vec4({{{s}}}, {{{s}}}, {{{s}}}, {{{s}}})", .{ fmt, fmt, fmt, fmt }), .{ value.x, value.y, value.z, value.w });
+    pub fn format(value: Vec4, comptime _fmt: []const u8, opt: std.fmt.FormatOptions, writer: anytype) !void {
+        const start_str, const fmt = comptime blk: {
+            if (_fmt.len > 0 and _fmt[0] == 's') break :blk .{ "(", _fmt[1..] };
+            break :blk .{ "Vec4(", _fmt };
+        };
+        try writer.writeAll(start_str);
+        try util.formatFloatValue(value.x, fmt, opt, writer);
+        try writer.writeAll(", ");
+        try util.formatFloatValue(value.y, fmt, opt, writer);
+        try writer.writeAll(", ");
+        try util.formatFloatValue(value.z, fmt, opt, writer);
+        try writer.writeAll(", ");
+        try util.formatFloatValue(value.w, fmt, opt, writer);
+        try writer.writeAll(")");
     }
 
     const vec_funcs = @import("vec_funcs.zig");
