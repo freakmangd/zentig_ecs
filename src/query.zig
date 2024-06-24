@@ -9,11 +9,6 @@ const TypeMap = ztg.meta.TypeMap;
 /// an object that can be used to iterate through entities that have
 /// all of those components. If one of the types is `Entity` (`usize`)
 /// then it will also have the entity those components are attatched to.
-///
-/// Used in systems like so:
-/// ```zig
-/// pub fn mySystem(q: Query(.{ Player, Transform, Score })) void {}
-/// ```
 pub fn Query(comptime query_types: anytype) type {
     return QueryOpts(query_types, .{});
 }
@@ -25,11 +20,6 @@ pub fn Query(comptime query_types: anytype) type {
 ///
 /// Also allows options which restrict the query without actually collecting the entities
 /// that fit the restriction, such as `.{ Transform }, .{ With(Player) }`
-///
-/// Used in systems like so:
-/// ```zig
-/// pub fn mySystem(q: QueryOpts(.{ Transform, Speed }, .{ Without(Enemy) })) void {}
-/// ```
 pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type {
     //comptime assertOkQuery(query_types_raw, _options);
 
@@ -99,15 +89,6 @@ pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type
         }
 
         /// Returns a slice of pointers to the queried components
-        ///
-        /// Example:
-        /// ```zig
-        /// const q = world.query(.{ Transform, Image });
-        ///
-        /// for (q.items(0), q.items(1)) |tr, img| {
-        ///   img.drawAt(tr.pos);
-        /// }
-        /// ```
         pub inline fn items(self: *const Self, comptime idx: usize) Items(idx) {
             const OutChildType = query_types[idx];
 
@@ -124,20 +105,24 @@ pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type
 
         /// Asserts there is only one item in the query and
         /// returns a single pointer to the type at the given index
-        ///
-        /// Example:
-        /// ```zig
-        /// const q = world.queryOpts(.{ Transform }, .{ With(Player) });
-        ///
-        /// const tr = q.single(0);
-        /// std.debug.print("Player is located at {d}, {d}.", .{ tr.pos.x, tr.pos.y });
-        /// ```
         pub inline fn single(self: *const Self, comptime idx: usize) Single(idx) {
             std.debug.assert(self.len == 1);
             return self.first(idx);
         }
 
+        /// Asserts there are zero or one items in the query,
+        /// returns null if the query collected 0 items
+        pub inline fn singleOrNull(self: *const Self, comptime idx: usize) ?Single(idx) {
+            std.debug.assert(self.len <= 1);
+            return self.firstOrNull(idx);
+        }
+
         pub inline fn first(self: *const Self, comptime idx: usize) Single(idx) {
+            return self.items(idx)[0];
+        }
+
+        pub inline fn firstOrNull(self: *const Self, comptime idx: usize) ?Single(idx) {
+            if (self.len == 0) return null;
             return self.items(idx)[0];
         }
 
