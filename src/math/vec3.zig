@@ -9,6 +9,15 @@ pub const Vec3 = extern struct {
     y: f32 = 0.0,
     z: f32 = 0.0,
 
+    pub const one = splat(1);
+    pub const zero: Vec3 = .{};
+    pub const right: Vec3 = .{ .x = 1 };
+    pub const left: Vec3 = .{ .x = -1 };
+    pub const up: Vec3 = .{ .y = 1 };
+    pub const down: Vec3 = .{ .y = -1 };
+    pub const forward: Vec3 = .{ .z = 1 };
+    pub const backward: Vec3 = .{ .z = -1 };
+
     pub inline fn init(x: anytype, y: anytype, z: anytype) Vec3 {
         return .{
             .x = if (comptime @typeInfo(@TypeOf(x)) == .Int) @floatFromInt(x) else x,
@@ -131,7 +140,7 @@ pub const Vec3 = extern struct {
     pub inline fn randomOnUnitSphere(rand: std.rand.Random) Vec3 {
         var rand_vec = @Vector(3, f32){ rand.float(f32), rand.float(f32), rand.float(f32) };
         rand_vec *= 1 / ztg.math.lengthVec(rand_vec);
-        return Vec3.fromSimd(rand_vec);
+        return from(rand_vec);
     }
 
     pub fn format(value: Vec3, comptime _fmt: []const u8, opt: std.fmt.FormatOptions, writer: anytype) !void {
@@ -159,16 +168,9 @@ pub const Vec3 = extern struct {
     pub const expectEqual = generated_funcs.expectEqual;
     pub const expectApproxEqAbs = generated_funcs.expectApproxEqAbs;
     pub const expectApproxEqRel = generated_funcs.expectApproxEqRel;
-    pub const one = generated_funcs.one;
     pub const splat = generated_funcs.splat;
-    pub const zero = generated_funcs.zero;
-    pub const right = generated_funcs.right;
-    pub const left = generated_funcs.left;
-    pub const up = generated_funcs.up;
-    pub const down = generated_funcs.down;
     pub const copy = generated_funcs.copy;
     pub const intoSimd = generated_funcs.intoSimd;
-    pub const fromSimd = generated_funcs.fromSimd;
     pub const abs = generated_funcs.abs;
     pub const angle = generated_funcs.angle;
     pub const angleSigned = generated_funcs.angleSigned;

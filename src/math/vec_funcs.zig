@@ -77,36 +77,6 @@ pub fn GenerateFunctions(comptime Self: type) type {
             return fromSimd(@splat(s));
         }
 
-        /// Returns a vector with every element set to 1
-        pub const one = fromSimd(@splat(1));
-
-        /// Shorthand for .{}
-        pub const zero: Self = .{};
-
-        /// Shorthand for .{ .x = 1 }
-        pub const right: Self = .{ .x = 1 };
-
-        /// Shorthand for .{ .x = -1 }
-        pub const left: Self = .{ .x = -1 };
-
-        /// Shorthand for .{ .y = 1 }
-        pub const up: Self = .{ .y = 1 };
-
-        /// Shorthand for .{ .y = -1 }
-        pub const down: Self = .{ .y = -1 };
-
-        /// Shorthand for .{ .z = 1 }
-        pub const forward = if (vec_len >= 3) Self{ .z = 1 } else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `forward` method");
-
-        /// Shorthand for .{ .z = -1 }
-        pub const backward = if (vec_len >= 3) Self{ .z = -1 } else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `backward` method");
-
-        /// Shorthand for .{ .w = 1 }
-        pub const inward = if (vec_len >= 4) Self{ .w = 1 } else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `backward` method");
-
-        /// shorthand for .{ .w = -1 }
-        pub const outward = if (vec_len >= 4) Self{ .w = -1 } else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `backward` method");
-
         pub inline fn copy(self: Self) Self {
             return self;
         }
@@ -115,7 +85,7 @@ pub fn GenerateFunctions(comptime Self: type) type {
             return @bitCast(self);
         }
 
-        pub inline fn fromSimd(self: @Vector(vec_len, f32)) Self {
+        inline fn fromSimd(self: @Vector(vec_len, f32)) Self {
             return @bitCast(self);
         }
 
@@ -273,11 +243,11 @@ pub fn GenerateFunctions(comptime Self: type) type {
         }
 
         pub inline fn add(v0: Self, v1: Self) Self {
-            return Self.fromSimd(v0.intoSimd() + v1.intoSimd());
+            return fromSimd(v0.intoSimd() + v1.intoSimd());
         }
 
         pub inline fn sub(v0: Self, v1: Self) Self {
-            return Self.fromSimd(v0.intoSimd() - v1.intoSimd());
+            return fromSimd(v0.intoSimd() - v1.intoSimd());
         }
 
         pub inline fn mul(v0: Self, s: f32) Self {
@@ -289,7 +259,7 @@ pub fn GenerateFunctions(comptime Self: type) type {
         }
 
         pub inline fn scale(v0: Self, v1: Self) Self {
-            return Self.fromSimd(v0.intoSimd() * v1.intoSimd());
+            return fromSimd(v0.intoSimd() * v1.intoSimd());
         }
 
         pub inline fn addEql(self: *Self, other: Self) void {
@@ -330,10 +300,16 @@ pub fn convertFieldToF32(obj: anytype, comptime field_name: []const u8, default:
 
 pub fn isBitcastable(comptime Self: type, comptime Other: type) bool {
     return comptime blk: {
-        if (@typeInfo(Other).Struct.layout != .@"extern") break :blk false;
-
+        const other_ti = @typeInfo(Other);
         const s_fields: []const builtin.Type.StructField = @typeInfo(Self).Struct.fields;
-        const o_fields: []const builtin.Type.StructField = @typeInfo(Other).Struct.fields;
+
+        if (other_ti == .Vector and
+            other_ti.Vector.len == s_fields.len and
+            other_ti.Vector.child == f32) break :blk true;
+
+        if (other_ti.Struct.layout != .@"extern") break :blk false;
+
+        const o_fields: []const builtin.Type.StructField = other_ti.Struct.fields;
         if (s_fields.len != o_fields.len) break :blk false;
 
         const OtherField = std.meta.FieldEnum(Other);

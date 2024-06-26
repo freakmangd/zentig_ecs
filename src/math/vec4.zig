@@ -10,6 +10,17 @@ pub const Vec4 = extern struct {
     z: f32 = 0.0,
     w: f32 = 0.0,
 
+    pub const one = splat(1);
+    pub const zero: Vec4 = .{};
+    pub const right: Vec4 = .{ .x = 1 };
+    pub const left: Vec4 = .{ .x = -1 };
+    pub const up: Vec4 = .{ .y = 1 };
+    pub const down: Vec4 = .{ .y = -1 };
+    pub const forward: Vec4 = .{ .z = 1 };
+    pub const backward: Vec4 = .{ .z = -1 };
+    pub const inward: Vec4 = .{ .w = 1 };
+    pub const outward: Vec4 = .{ .w = -1 };
+
     pub inline fn init(x: anytype, y: anytype, z: anytype, w: anytype) Vec4 {
         return .{
             .x = if (comptime @typeInfo(@TypeOf(x)) == .Int) @floatFromInt(x) else x,
@@ -64,11 +75,15 @@ pub const Vec4 = extern struct {
         }
     }
 
-    /// For use when integrating with the zmath library
-    pub const intoZMath = Vec4.intoSimd;
+    /// For use when integrating with the zmath library, sets z and w to 0
+    pub inline fn intoZMath(self: Vec4) @Vector(4, f32) {
+        return @bitCast(self);
+    }
 
-    /// For use when integrating with the zmath library
-    pub const fromZMath = Vec4.fromSimd;
+    /// For use when integrating with the zmath library, discards z and w components
+    pub inline fn fromZMath(vec: @Vector(4, f32)) Vec4 {
+        return @bitCast(vec);
+    }
 
     /// Creates a Vec4 from other, other must have `x`, `y`, `z`, and `w` components
     pub inline fn from(other: anytype) Vec4 {
@@ -185,16 +200,9 @@ pub const Vec4 = extern struct {
     pub const expectEqual = generated_funcs.expectEqual;
     pub const expectApproxEqAbs = generated_funcs.expectApproxEqAbs;
     pub const expectApproxEqRel = generated_funcs.expectApproxEqRel;
-    pub const one = generated_funcs.one;
     pub const splat = generated_funcs.splat;
-    pub const zero = generated_funcs.zero;
-    pub const right = generated_funcs.right;
-    pub const left = generated_funcs.left;
-    pub const up = generated_funcs.up;
-    pub const down = generated_funcs.down;
     pub const copy = generated_funcs.copy;
     pub const intoSimd = generated_funcs.intoSimd;
-    pub const fromSimd = generated_funcs.fromSimd;
     pub const abs = generated_funcs.abs;
     pub const angle = generated_funcs.angle;
     pub const angleSigned = generated_funcs.angleSigned;

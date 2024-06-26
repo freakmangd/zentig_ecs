@@ -39,14 +39,17 @@ pub const Vec2 = @import("math/vec2.zig").Vec2;
 pub const Vec3 = @import("math/vec3.zig").Vec3;
 pub const Vec4 = @import("math/vec4.zig").Vec4;
 
-/// Shorthand for ztg.Vec2.init
-pub inline fn vec2(x: anytype, y: anytype) Vec2 {
-    return Vec2.init(x, y);
-}
-/// Shorthand for ztg.Vec3.init
+pub const vec2 = Vec2.init;
+pub const splat2 = Vec2.splat;
+pub const from2 = Vec2.from;
+
 pub const vec3 = Vec3.init;
-/// Shorthand for ztg.Vec4.init
+pub const splat3 = Vec3.splat;
+pub const from3 = Vec3.from;
+
 pub const vec4 = Vec4.init;
+pub const splat4 = Vec4.splat;
+pub const from4 = Vec4.from;
 
 //pub const Mat3 = @import("math/mat3.zig");
 
