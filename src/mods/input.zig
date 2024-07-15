@@ -64,6 +64,9 @@ pub fn Build(
         const Controller = ControllerBuilder(Button, Axis, Wrapper.ButtonType, Wrapper.AxisType);
         const Self = @This();
 
+        pub const Buttons = Button;
+        pub const Axes = Axis;
+
         alloc: std.mem.Allocator = undefined,
         controllers: [options.max_controllers]Controller = undefined,
 
