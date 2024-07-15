@@ -152,22 +152,22 @@ test div {
     try std.testing.expectError(error.DivideByZero, div(f32, 1_000, 0));
 }
 
-// Converts a and b to f32 and adds them
+/// Converts a and b to f32 and adds them
 pub inline fn addf32(a: anytype, b: anytype) f32 {
     return add(f32, a, b);
 }
 
-// Converts a and b to f32 and subtracts them
+/// Converts a and b to f32 and subtracts them
 pub inline fn subf32(a: anytype, b: anytype) f32 {
     return sub(f32, a, b);
 }
 
-// Converts a and b to f32 and multiplies them
+/// Converts a and b to f32 and multiplies them
 pub inline fn mulf32(a: anytype, b: anytype) f32 {
     return mul(f32, a, b);
 }
 
-// Converts a and b to f32 and divides them
+/// Converts a and b to f32 and divides them
 pub inline fn divf32(a: anytype, b: anytype) error{DivideByZero}!f32 {
     return div(f32, a, b);
 }
@@ -277,13 +277,6 @@ test dotVec {
 }
 
 /// Swizzles a @Vector object by a comptime mask
-///
-/// Example:
-/// ```zig
-/// try expectEqual(@Vector(2, f32){ 1, 1 }, swizzleVec(@Vector(2, f32){ 1, 2 }, .{ 0, 0 }));
-/// try expectEqual(@Vector(2, f32){ 2, 2 }, swizzleVec(@Vector(2, f32){ 1, 2 }, .{ 1, 1 }));
-/// try expectEqual(@Vector(2, f32){ 2, 1 }, swizzleVec(@Vector(2, f32){ 1, 2 }, .{ 1, 0 }));
-/// ```
 pub inline fn swizzleVec(vec: anytype, comptime mask: @TypeOf(vec)) @TypeOf(vec) {
     const Vector = @typeInfo(@TypeOf(vec)).Vector;
     comptime for (@as([Vector.len]Vector.child, mask)) |m| if (m < 0) @compileError(std.fmt.comptimePrint("Swizzle mask must be all positive, found {}.", .{m}));
