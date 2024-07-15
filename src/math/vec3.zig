@@ -137,9 +137,9 @@ pub const Vec3 = extern struct {
     }
 
     /// Returns a new random Vec3 that lies on the surface of a unit sphere
-    pub inline fn randomOnUnitSphere(rand: std.rand.Random) Vec3 {
+    pub fn randomOnUnitSphere(rand: std.Random) Vec3 {
         var rand_vec = @Vector(3, f32){ rand.float(f32), rand.float(f32), rand.float(f32) };
-        rand_vec *= 1 / ztg.math.lengthVec(rand_vec);
+        rand_vec *= @as(@Vector(3, f32), @splat(1 / ztg.math.lengthVec(rand_vec)));
         return from(rand_vec);
     }
 
