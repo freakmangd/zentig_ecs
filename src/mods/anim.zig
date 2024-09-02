@@ -165,9 +165,9 @@ fn Builder(
                     .durations = blk: {
                         const ti = @typeInfo(@TypeOf(durations_info));
                         switch (ti) {
-                            .Float, .ComptimeFloat, .Int, .ComptimeInt => break :blk .{ .single = durations_info },
+                            .float, .comptime_float, .int, .comptime_int => break :blk .{ .single = durations_info },
                             else => {
-                                if (ti == .Struct and ti.Struct.is_tuple) {
+                                if (ti == .@"struct" and ti.@"struct".is_tuple) {
                                     break :blk .{ .per_frame = &durations_info };
                                 } else {
                                     util.compileError("Animation expected either a number (0.4) or tuple of numbers (.{{ 0.1, 0.2, 0.6 }}) for durations, found {s}", .{@typeName(@TypeOf(durations_info))});

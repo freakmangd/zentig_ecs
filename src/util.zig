@@ -7,12 +7,12 @@ const ztg = @import("init.zig");
 
 /// Get the element type of a MultiArrayList
 pub fn MultiArrayListElem(comptime T: type) type {
-    return @typeInfo(@TypeOf(T.pop)).Fn.return_type.?;
+    return @typeInfo(@TypeOf(T.pop)).@"fn".return_type.?;
 }
 
 /// Get the element type of an ArrayHashMap
 pub fn ArrayHashMapElem(comptime T: type) type {
-    return @typeInfo(T.KV).Struct.fields[1].type;
+    return @typeInfo(T.KV).@"struct".fields[1].type;
 }
 
 pub fn compileError(comptime format: []const u8, comptime args: anytype) noreturn {
@@ -21,17 +21,17 @@ pub fn compileError(comptime format: []const u8, comptime args: anytype) noretur
 
 pub fn isContainer(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .Struct, .Union, .ErrorSet, .Enum => true,
+        .@"struct", .@"union", .error_set, .@"enum" => true,
         else => false,
     };
 }
 
 pub fn assertOkOnAddedFunction(comptime Container: type) void {
     const member_type = comptime ztg.meta.memberFnType(Container, "onAdded");
-    const fn_info = @typeInfo(@TypeOf(Container.onAdded)).Fn;
+    const fn_info = @typeInfo(@TypeOf(Container.onAdded)).@"fn";
 
     const return_type_info = @typeInfo(fn_info.return_type.?);
-    if (!(return_type_info == .Void or (return_type_info == .ErrorUnion and return_type_info.ErrorUnion.payload == void))) {
+    if (!(return_type_info == .Void or (return_type_info == .error_union and return_type_info.error_union.payload == void))) {
         @compileError("onAdded functions must return void or !void");
     }
 

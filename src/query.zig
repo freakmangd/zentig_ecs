@@ -127,7 +127,7 @@ pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type
         }
 
         fn UnwrapOpt(comptime T: type) type {
-            if (comptime @typeInfo(T) == .Optional) return std.meta.Child(T);
+            if (comptime @typeInfo(T) == .optional) return std.meta.Child(T);
             return T;
         }
 
@@ -138,7 +138,7 @@ pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type
         fn Single(comptime idx: usize) type {
             if (comptime idx >= query_types.len) @compileError("Index for query outside of query types range.");
             if (comptime query_types[idx] == Entity) return Entity;
-            if (comptime @typeInfo(query_types[idx]) == .Optional) return ?*UnwrapOpt(query_types[idx]);
+            if (comptime @typeInfo(query_types[idx]) == .optional) return ?*UnwrapOpt(query_types[idx]);
             return *query_types[idx];
         }
     };
@@ -152,7 +152,7 @@ fn getRawTypesInfo(comptime query_types: anytype) struct { TypeMap, TypeMap } {
         // remove entites from query types
         if (QT == Entity) continue;
 
-        if (@typeInfo(QT) == .Optional) {
+        if (@typeInfo(QT) == .optional) {
             if (opt.has(std.meta.Child(QT))) @compileError("Cannot use the same type twice in a Query.");
             opt.append(std.meta.Child(QT));
         } else {

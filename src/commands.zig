@@ -137,8 +137,8 @@ inline fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void
 pub fn giveComponents(self: Self, ent: Entity, components: anytype) !void {
     const Components = @TypeOf(components);
 
-    if (@typeInfo(Components) == .Struct and
-        !@typeInfo(Components).Struct.is_tuple and
+    if (@typeInfo(Components) == .@"struct" and
+        !@typeInfo(Components).@"struct".is_tuple and
         !@hasDecl(Components, "is_component_bundle"))
     {
         @compileError(

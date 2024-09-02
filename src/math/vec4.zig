@@ -23,18 +23,18 @@ pub const Vec4 = extern struct {
 
     pub inline fn init(x: anytype, y: anytype, z: anytype, w: anytype) Vec4 {
         return .{
-            .x = if (comptime @typeInfo(@TypeOf(x)) == .Int) @floatFromInt(x) else x,
-            .y = if (comptime @typeInfo(@TypeOf(y)) == .Int) @floatFromInt(y) else y,
-            .z = if (comptime @typeInfo(@TypeOf(z)) == .Int) @floatFromInt(z) else z,
-            .w = if (comptime @typeInfo(@TypeOf(w)) == .Int) @floatFromInt(w) else w,
+            .x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x,
+            .y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y,
+            .z = if (comptime @typeInfo(@TypeOf(z)) == .int) @floatFromInt(z) else z,
+            .w = if (comptime @typeInfo(@TypeOf(w)) == .int) @floatFromInt(w) else w,
         };
     }
 
     pub inline fn set(self: *Vec4, x: anytype, y: anytype, z: anytype, w: anytype) void {
-        self.x = if (comptime @typeInfo(@TypeOf(x)) == .Int) @floatFromInt(x) else x;
-        self.y = if (comptime @typeInfo(@TypeOf(y)) == .Int) @floatFromInt(y) else y;
-        self.z = if (comptime @typeInfo(@TypeOf(z)) == .Int) @floatFromInt(z) else z;
-        self.w = if (comptime @typeInfo(@TypeOf(w)) == .Int) @floatFromInt(w) else w;
+        self.x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x;
+        self.y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y;
+        self.z = if (comptime @typeInfo(@TypeOf(z)) == .int) @floatFromInt(z) else z;
+        self.w = if (comptime @typeInfo(@TypeOf(w)) == .int) @floatFromInt(w) else w;
     }
 
     /// Shorthand for .{ .w = 1 }
@@ -62,13 +62,13 @@ pub const Vec4 = extern struct {
     /// Converts the Vector into a @Vector object of type `T`, doing
     /// the necessary conversions.
     pub inline fn intoVectorOf(self: Vec4, comptime T: type) @Vector(4, T) {
-        if (@typeInfo(T) == .Float or @typeInfo(T) == .ComptimeFloat) {
+        if (@typeInfo(T) == .float or @typeInfo(T) == .comptime_float) {
             if (comptime T == f32) {
                 return self.intoSimd();
             } else {
                 return .{ @floatCast(self.x), @floatCast(self.y), @floatCast(self.z), @floatCast(self.w) };
             }
-        } else if (@typeInfo(T) == .Int or @typeInfo(T) == .ComptimeInt) {
+        } else if (@typeInfo(T) == .int or @typeInfo(T) == .comptime_int) {
             return .{ @intFromFloat(self.x), @intFromFloat(self.y), @intFromFloat(self.z), @intFromFloat(self.w) };
         } else {
             util.compileError("Cannot turn self into a vector of `{s}`", .{@typeName(T)});

@@ -204,7 +204,7 @@ pub fn World(
                     const func = @field(CT, fn_name);
 
                     const member_fn_type = comptime ztg.meta.memberFnType(CT, fn_name);
-                    const fn_params = @typeInfo(@TypeOf(func)).Fn.params;
+                    const fn_params = @typeInfo(@TypeOf(func)).@"fn".params;
                     const maybe_ent_param_idx = if (comptime member_fn_type == .non_member) 0 else 1;
                     const has_ent_param = comptime maybe_ent_param_idx < fn_params.len and fn_params[maybe_ent_param_idx].type.? == ztg.Entity;
 
@@ -540,8 +540,8 @@ pub fn World(
             if (comptime comp_types.len == 0) @compileError("World has no registered components and cannot add components");
             const Components = @TypeOf(components);
 
-            if (@typeInfo(Components) == .Struct and
-                !@typeInfo(Components).Struct.is_tuple and
+            if (@typeInfo(Components) == .@"struct" and
+                !@typeInfo(Components).@"struct".is_tuple and
                 !@hasDecl(Components, "is_component_bundle"))
             {
                 @compileError(
@@ -890,7 +890,7 @@ pub fn World(
         ///
         /// Example:
         /// ```zig
-        /// const params = try world.initParamsForSystem(@typeInfo(@TypeOf(myFunction)).Fn.params);
+        /// const params = try world.initParamsForSystem(@typeInfo(@TypeOf(myFunction)).@"fn".params);
         /// defer world.deinitParamsForSystem(params);
         ///
         /// @call(.auto, myFunction, params);
@@ -908,22 +908,22 @@ pub fn World(
         inline fn initParam(self: *Self, alloc: std.mem.Allocator, comptime T: type) !T {
             if (comptime T == ztg.Commands) {
                 return self.commands();
-            } else if (comptime @typeInfo(T) == .Struct and @hasDecl(T, "IsQueryType")) {
+            } else if (comptime @typeInfo(T) == .@"struct" and @hasDecl(T, "IsQueryType")) {
                 return self.query(alloc, T);
-            } else if (comptime @typeInfo(T) == .Struct and @hasDecl(T, "EventSendType")) {
+            } else if (comptime @typeInfo(T) == .@"struct" and @hasDecl(T, "EventSendType")) {
                 return .{
                     .alloc = alloc,
                     .event_pool = self.event_pools.getPtr(T.EventSendType),
                 };
-            } else if (comptime @typeInfo(T) == .Struct and @hasDecl(T, "EventRecvType")) {
+            } else if (comptime @typeInfo(T) == .@"struct" and @hasDecl(T, "EventRecvType")) {
                 return .{
                     .events = self.event_pools.getPtr(T.EventRecvType),
                 };
             } else if (comptime util.typeArrayHas(added_resources, ztg.meta.DerefType(T)) or util.typeArrayHas(added_resources, T)) {
                 if (comptime util.typeArrayHas(added_resources, T)) {
                     return self.getRes(T);
-                } else if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) {
-                    return self.getResPtr(@typeInfo(T).Pointer.child);
+                } else if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .One) {
+                    return self.getResPtr(@typeInfo(T).pointer.child);
                 }
             }
 
@@ -933,7 +933,7 @@ pub fn World(
         pub fn deinitParamsForSystem(self: *Self, alloc: std.mem.Allocator, args: anytype) void {
             _ = self;
             inline for (std.meta.fields(@TypeOf(args.*))) |args_field| {
-                if (comptime @typeInfo(args_field.type) == .Struct and @hasDecl(args_field.type, "query_types")) {
+                if (comptime @typeInfo(args_field.type) == .@"struct" and @hasDecl(args_field.type, "query_types")) {
                     @field(args, args_field.name).deinit(alloc);
                 }
             }

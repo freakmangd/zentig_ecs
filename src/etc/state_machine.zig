@@ -64,10 +64,10 @@ pub fn addEventTransition(self: *Self, event: anytype, from: anytype, to: anytyp
 
 pub fn convertTo(self: Self, comptime t: enum { state, event }, value: anytype) !usize {
     const ti = @typeInfo(@TypeOf(value));
-    if (comptime !(ti == .Enum or ti == .Int))
+    if (comptime !(ti == .@"enum" or ti == .int))
         @compileError(std.fmt.comptimePrint("Expected integer or enum as argument, found {s}", .{@typeName(@TypeOf(value))}));
 
-    const converted: usize = if (comptime @typeInfo(@TypeOf(value)) == .Enum) @intFromEnum(value) else value;
+    const converted: usize = if (comptime @typeInfo(@TypeOf(value)) == .@"enum") @intFromEnum(value) else value;
     switch (t) {
         .state => if (converted > self.states_max_val) return error.IllegalState,
         .event => if (converted > self.events_max_val) return error.IllegalEvent,

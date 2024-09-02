@@ -25,13 +25,13 @@ pub fn VectorOfLen(comptime len: usize) ?type {
 
 fn isFloat(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .Float, .ComptimeFloat => true,
+        .float, .comptime_float => true,
         else => false,
     };
 }
 fn isIntegral(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .Int, .ComptimeInt => true,
+        .int, .comptime_int => true,
         else => false,
     };
 }
@@ -41,9 +41,9 @@ pub inline fn toFloat(comptime T: type, x: anytype) T {
     if (comptime !isFloat(T)) @compileError("toFloat requires it's first argument `T` to be a Float type to convert `x` to.");
 
     return switch (@typeInfo(@TypeOf(x))) {
-        .Int => @floatFromInt(x),
-        .Float => @floatCast(x),
-        .ComptimeFloat, .ComptimeInt => x,
+        .int => @floatFromInt(x),
+        .float => @floatCast(x),
+        .comptime_float, .comptime_int => x,
         else => util.compileError("Cannot convert `{s}` to a float.", .{@typeName(@TypeOf(x))}),
     };
 }
@@ -61,9 +61,9 @@ pub inline fn toInt(comptime T: type, x: anytype) T {
     if (comptime !isIntegral(T)) @compileError("toInt requires it's first argument `T` to be an Integral type to convert `x` to.");
 
     return switch (@typeInfo(@TypeOf(x))) {
-        .Int => @intCast(x),
-        .Float => @intFromFloat(x),
-        .ComptimeFloat, .ComptimeInt => x,
+        .int => @intCast(x),
+        .float => @intFromFloat(x),
+        .comptime_float, .comptime_int => x,
         else => util.compileError("Cannot convert `{s}` to an int.", .{@typeName(@TypeOf(x))}),
     };
 }
@@ -278,7 +278,7 @@ test dotVec {
 
 /// Swizzles a @Vector object by a comptime mask
 pub inline fn swizzleVec(vec: anytype, comptime mask: @TypeOf(vec)) @TypeOf(vec) {
-    const Vector = @typeInfo(@TypeOf(vec)).Vector;
+    const Vector = @typeInfo(@TypeOf(vec)).vector;
     comptime for (@as([Vector.len]Vector.child, mask)) |m| if (m < 0) @compileError(std.fmt.comptimePrint("Swizzle mask must be all positive, found {}.", .{m}));
     return @shuffle(f32, vec, undefined, mask);
 }

@@ -16,7 +16,7 @@ pub fn EnumValueSpace(comptime Enum: type, comptime dimensions: usize, comptime 
                 };
 
                 const ti = @typeInfo(@TypeOf(@field(defs, field.name)[0]));
-                if (ti == .Struct and ti.Struct.is_tuple) {
+                if (ti == .@"struct" and ti.@"struct".is_tuple) {
                     for (@field(defs, field.name)) |vec| {
                         ptr.append(vec);
                     }

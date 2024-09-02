@@ -9,7 +9,7 @@ const math = std.math;
 const builtin = std.builtin;
 
 pub fn GenerateFunctions(comptime Self: type) type {
-    if (@typeInfo(Self).Struct.layout != .@"extern") @compileError("To implement vec_funcs into a struct it must be marked extern.");
+    if (@typeInfo(Self).@"struct".layout != .@"extern") @compileError("To implement vec_funcs into a struct it must be marked extern.");
 
     const vec_len = std.meta.fields(Self).len;
 
@@ -192,9 +192,9 @@ pub fn GenerateFunctions(comptime Self: type) type {
         }
 
         const Component = blk: {
-            var info = @typeInfo(std.meta.FieldEnum(Self)).Enum;
+            var info = @typeInfo(std.meta.FieldEnum(Self)).@"enum";
             info.tag_type = i32;
-            break :blk @Type(.{ .Enum = info });
+            break :blk @Type(.{ .@"enum" = info });
         };
 
         /// Returns the vector with it's components ordered in the method defined in `comps`
@@ -290,10 +290,10 @@ pub fn convertFieldToF32(obj: anytype, comptime field_name: []const u8, default:
     const FieldType = std.meta.fields(O)[field_index].type;
 
     return switch (@typeInfo(FieldType)) {
-        .Int => @floatFromInt(@field(obj, field_name)),
-        .Float => @floatCast(@field(obj, field_name)),
-        .ComptimeFloat => @field(obj, field_name),
-        .ComptimeInt => @field(obj, field_name),
+        .int => @floatFromInt(@field(obj, field_name)),
+        .float => @floatCast(@field(obj, field_name)),
+        .comptime_float => @field(obj, field_name),
+        .comptime_int => @field(obj, field_name),
         else => util.compileError("Cannot convert type `{s}` to f32.", .{@typeName(FieldType)}),
     };
 }
@@ -301,15 +301,15 @@ pub fn convertFieldToF32(obj: anytype, comptime field_name: []const u8, default:
 pub fn isBitcastable(comptime Self: type, comptime Other: type) bool {
     return comptime blk: {
         const other_ti = @typeInfo(Other);
-        const s_fields: []const builtin.Type.StructField = @typeInfo(Self).Struct.fields;
+        const s_fields: []const builtin.Type.StructField = @typeInfo(Self).@"struct".fields;
 
-        if (other_ti == .Vector and
-            other_ti.Vector.len == s_fields.len and
-            other_ti.Vector.child == f32) break :blk true;
+        if (other_ti == .vector and
+            other_ti.vector.len == s_fields.len and
+            other_ti.vector.child == f32) break :blk true;
 
-        if (other_ti.Struct.layout != .@"extern") break :blk false;
+        if (other_ti.@"struct".layout != .@"extern") break :blk false;
 
-        const o_fields: []const builtin.Type.StructField = other_ti.Struct.fields;
+        const o_fields: []const builtin.Type.StructField = other_ti.@"struct".fields;
         if (s_fields.len != o_fields.len) break :blk false;
 
         const OtherField = std.meta.FieldEnum(Other);

@@ -20,16 +20,16 @@ pub const Vec3 = extern struct {
 
     pub inline fn init(x: anytype, y: anytype, z: anytype) Vec3 {
         return .{
-            .x = if (comptime @typeInfo(@TypeOf(x)) == .Int) @floatFromInt(x) else x,
-            .y = if (comptime @typeInfo(@TypeOf(y)) == .Int) @floatFromInt(y) else y,
-            .z = if (comptime @typeInfo(@TypeOf(z)) == .Int) @floatFromInt(z) else z,
+            .x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x,
+            .y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y,
+            .z = if (comptime @typeInfo(@TypeOf(z)) == .int) @floatFromInt(z) else z,
         };
     }
 
     pub inline fn set(self: *Vec3, x: anytype, y: anytype, z: anytype) void {
-        self.x = if (comptime @typeInfo(@TypeOf(x)) == .Int) @floatFromInt(x) else x;
-        self.y = if (comptime @typeInfo(@TypeOf(y)) == .Int) @floatFromInt(y) else y;
-        self.z = if (comptime @typeInfo(@TypeOf(z)) == .Int) @floatFromInt(z) else z;
+        self.x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x;
+        self.y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y;
+        self.z = if (comptime @typeInfo(@TypeOf(z)) == .int) @floatFromInt(z) else z;
     }
 
     /// Returns T with all of it's components set to the original vector's
@@ -48,13 +48,13 @@ pub const Vec3 = extern struct {
     /// Converts the Vector into a @Vector object of type `T`, doing
     /// the necessary conversions.
     pub inline fn intoVectorOf(self: Vec3, comptime T: type) @Vector(3, T) {
-        if (@typeInfo(T) == .Float or @typeInfo(T) == .ComptimeFloat) {
+        if (@typeInfo(T) == .float or @typeInfo(T) == .comptime_float) {
             if (comptime T == f32) {
                 return self.intoSimd();
             } else {
                 return .{ @floatCast(self.x), @floatCast(self.y), @floatCast(self.z) };
             }
-        } else if (@typeInfo(T) == .Int) {
+        } else if (@typeInfo(T) == .int) {
             return .{ @intFromFloat(self.x), @intFromFloat(self.y), @intFromFloat(self.z) };
         } else {
             util.compileError("Cannot turn self into a vector of `{s}`", .{@typeName(T)});

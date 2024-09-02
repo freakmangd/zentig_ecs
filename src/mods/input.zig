@@ -28,7 +28,7 @@ pub fn Build(
                 .default_value = @ptrCast(&@as([]const Wrapper.ButtonType, &.{})),
             };
         }
-        break :blk @Type(.{ .Struct = std.builtin.Type.Struct{
+        break :blk @Type(.{ .@"struct" = .{
             .fields = &buttons_struct_fields,
             .decls = &.{},
             .layout = .auto,
@@ -47,7 +47,7 @@ pub fn Build(
                 .default_value = @ptrCast(&@as([]const Wrapper.AxisType, &.{})),
             };
         }
-        break :blk @Type(.{ .Struct = std.builtin.Type.Struct{
+        break :blk @Type(.{ .@"struct" = .{
             .fields = &axes_struct_fields,
             .decls = &.{},
             .layout = .auto,
@@ -83,7 +83,7 @@ pub fn Build(
         }
 
         pub fn addButtonBindings(self: *Self, controller: usize, bindings: ButtonBindings) !void {
-            inline for (@typeInfo(ButtonBindings).Struct.fields) |field| {
+            inline for (@typeInfo(ButtonBindings).@"struct".fields) |field| {
                 for (@field(bindings, field.name)) |b| {
                     try self.addButtonBinding(controller, @field(Button, field.name), b);
                 }
@@ -98,7 +98,7 @@ pub fn Build(
         }
 
         pub fn addAxisBindings(self: *Self, controller: usize, bindings: AxesBindings) !void {
-            inline for (@typeInfo(AxesBindings).Struct.fields) |field| {
+            inline for (@typeInfo(AxesBindings).@"struct".fields) |field| {
                 for (@field(bindings, field.name)) |a| {
                     try self.addAxisBinding(controller, @field(Axis, field.name), a);
                 }
@@ -357,8 +357,8 @@ fn ControllerBuilder(
     comptime ButtonType: type,
     comptime AxisType: type,
 ) type {
-    const buttons_len = @typeInfo(Buttons).Enum.fields.len;
-    const axes_len = @typeInfo(Axes).Enum.fields.len;
+    const buttons_len = @typeInfo(Buttons).@"enum".fields.len;
+    const axes_len = @typeInfo(Axes).@"enum".fields.len;
 
     const ButtonBinding = struct {
         index: std.math.IntFittingRange(0, buttons_len),
