@@ -8,14 +8,14 @@ pub fn build(b: *std.Build) void {
     const zmath_pkg = zmath.package(b, target, optimize, .{});
 
     const zentig_mod = b.addModule("zentig", .{
-        .root_source_file = std.Build.LazyPath.relative("src/init.zig"),
+        .root_source_file = b.path("src/init.zig"),
         .imports = &.{
             .{ .name = "zmath", .module = zmath_pkg.zmath },
         },
     });
 
     const autodoc_test = b.addTest(.{
-        .root_source_file = std.Build.LazyPath.relative("src/init.zig"),
+        .root_source_file = b.path("src/init.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -38,7 +38,7 @@ pub fn build(b: *std.Build) void {
 
     // MAKE SURE EVERYTHING WORKS
     const all_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/init.zig" },
+        .root_source_file = b.path("src/init.zig"),
         .target = target,
         .optimize = optimize,
     });
