@@ -1,16 +1,15 @@
 const std = @import("std");
-const zmath = @import("deps/zmath/build.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const zmath_pkg = zmath.package(b, target, optimize, .{});
+    const zmath = b.dependency("zmath", .{});
 
     const zentig_mod = b.addModule("zentig", .{
         .root_source_file = b.path("src/init.zig"),
         .imports = &.{
-            .{ .name = "zmath", .module = zmath_pkg.zmath },
+            .{ .name = "zmath", .module = zmath.module("root") },
         },
     });
 
@@ -20,7 +19,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     autodoc_test.root_module.addImport("zentig", zentig_mod);
-    autodoc_test.root_module.addImport("zmath", zmath_pkg.zmath);
+    autodoc_test.root_module.addImport("zmath", zmath.module("root"));
 
     const install_docs = b.addInstallDirectory(.{
         .source_dir = autodoc_test.getEmittedDocs(),
@@ -31,8 +30,8 @@ pub fn build(b: *std.Build) void {
     const docs_step = b.step("autodocs", "Build and install documentation");
     docs_step.dependOn(&install_docs.step);
 
-    b.modules.put(b.dupe("zmath"), zmath_pkg.zmath) catch @panic("OOM");
-    b.modules.put(b.dupe("zmath_options"), zmath_pkg.zmath_options) catch @panic("OOM");
+    //b.modules.put(b.dupe("zmath"), zmath.module("root")) catch @panic("OOM");
+    // b.modules.put(b.dupe("zmath_options"), zmath_pkg.zmath_options) catch @panic("OOM");
 
     // LOCAL TESTING
 
@@ -43,7 +42,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     all_tests.root_module.addImport("zentig", zentig_mod);
-    all_tests.root_module.addImport("zmath", zmath_pkg.zmath);
+    all_tests.root_module.addImport("zmath", zmath.module("root"));
     all_tests.root_module.single_threaded = true;
 
     const run_all_tests = b.addRunArtifact(all_tests);
@@ -61,7 +60,7 @@ pub fn build(b: *std.Build) void {
     for (examples) |ex_info| {
         const example = b.addExecutable(.{
             .name = ex_info[0],
-            .root_source_file = .{ .path = ex_info[1] },
+            .root_source_file = b.path(ex_info[1]),
             .target = target,
             .optimize = optimize,
         });
@@ -82,12 +81,12 @@ pub fn build(b: *std.Build) void {
 
     for (tests) |test_info| {
         const t = b.addTest(.{
-            .root_source_file = .{ .path = test_info[1] },
+            .root_source_file = b.path(test_info[1]),
             .target = target,
             .optimize = optimize,
         });
         t.root_module.addImport("zentig", zentig_mod);
-        t.root_module.addImport("zmath", zmath_pkg.zmath);
+        t.root_module.addImport("zmath", zmath.module("root"));
 
         const run_tests = b.addRunArtifact(t);
 
@@ -108,43 +107,43 @@ const ZentigModule = struct {
     exe: *std.Build.Step.Compile,
 };
 
-pub fn addAsLocalModule(settings: struct {
-    name: []const u8,
-    path_to_root: []const u8,
-    build: *std.Build,
-    exe: *std.Build.Step.Compile,
-    target: std.zig.CrossTarget,
-    optimize: std.builtin.OptimizeMode,
-    import_zmath_as: ?[]const u8 = null,
-    import_zmath_options_as: ?[]const u8 = null,
-}) ZentigModule {
-    const zmath_pkg = zmath.package(settings.build, settings.target, settings.optimize, .{});
+// pub fn addAsLocalModule(settings: struct {
+//     name: []const u8,
+//     path_to_root: []const u8,
+//     build: *std.Build,
+//     exe: *std.Build.Step.Compile,
+//     target: std.zig.CrossTarget,
+//     optimize: std.builtin.OptimizeMode,
+//     import_zmath_as: ?[]const u8 = null,
+//     import_zmath_options_as: ?[]const u8 = null,
+// }) ZentigModule {
+//     const zmath_pkg = zmath.package(settings.build, settings.target, settings.optimize, .{});
 
-    const zentig_dep = settings.build.anonymousDependency(settings.path_to_root, @This(), .{
-        .target = settings.target,
-        .optimize = settings.optimize,
-    });
+//     const zentig_dep = settings.build.anonymousDependency(settings.path_to_root, @This(), .{
+//         .target = settings.target,
+//         .optimize = settings.optimize,
+//     });
 
-    settings.exe.addModule(settings.name, zentig_dep.module("zentig"));
+//     settings.exe.addModule(settings.name, zentig_dep.module("zentig"));
 
-    if (settings.import_zmath_as) |mn|
-        settings.exe.addModule(mn, zmath_pkg.zmath);
+//     if (settings.import_zmath_as) |mn|
+//         settings.exe.addModule(mn, zmath_pkg.zmath);
 
-    if (settings.import_zmath_options_as) |mn|
-        settings.exe.addModule(mn, zmath_pkg.zmath_options);
+//     if (settings.import_zmath_options_as) |mn|
+//         settings.exe.addModule(mn, zmath_pkg.zmath_options);
 
-    return .{
-        .zentig_mod = zentig_dep.module("zentig"),
-        .zmath_mod = zmath_pkg.zmath,
-        .zmath_options_mod = zmath_pkg.zmath_options,
+//     return .{
+//         .zentig_mod = zentig_dep.module("zentig"),
+//         .zmath_mod = zmath_pkg.zmath,
+//         .zmath_options_mod = zmath_pkg.zmath_options,
 
-        .target = settings.target,
-        .optimize = settings.optimize,
+//         .target = settings.target,
+//         .optimize = settings.optimize,
 
-        .b = settings.build,
-        .exe = settings.exe,
-    };
-}
+//         .b = settings.build,
+//         .exe = settings.exe,
+//     };
+// }
 
 //pub fn addAsLocalModule2(
 //    name: []const u8,
