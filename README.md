@@ -7,9 +7,31 @@ so great and [Unity](https://unity.com/) so approachable.
 
 ##### WARNING:
 It is not recommended to use zentig for anything major in it's current state.
-While functional, it is still very obtuse and not optimized as it lacks real testing.
+While it is functional and I use it frequently, it is far from battle tested.
 
 That being said, if you encounter any problems please feel free to open an issue!
+
+## Installation
+Fetching for zig master:
+```
+zig fetch --save git+https://github.com/freakmangd/zentig_ecs
+```
+
+Fetching for zig 0.13.0:
+```
+zig fetch --save https://github.com/freakmangd/zentig_ecs/archive/refs/tags/0.13.0.tar.gz
+```
+
+In both cases, place this in your `build.zig`:
+```zig
+const zentig = b.dependency("zentig-ecs", .{});
+exe.root_module.addImport("ztg", zentig.module("zentig"));
+```
+
+And import it in your project:
+```zig
+const ztg = @import("ztg");
+```
 
 ## Overview
 An entity is just a `usize`:
@@ -86,15 +108,13 @@ pub fn include(comptime wb: *ztg.WorldBuilder) void {
 ```zig
 pub fn include(comptime wb: *ztg.WorldBuilder) void {
   wb.include(&.{
-      // Namespaces can be included more than once to "ensure" they are included if you depend on them
+      // Namespaces can be included more than once to "ensure" 
+      // they are included if you depend on them
       ztg.base, 
       //...
   });
 }
 ```
-
-## Installation
-See the page on installing [here](https://github.com/freakmangd/zentig_ecs/tree/main/docs/installation.md)
 
 ## Getting Started
 See this short tutorial on creating systems and components [here](https://github.com/freakmangd/zentig_ecs/tree/main/docs/hello_world.md)
@@ -102,12 +122,8 @@ See this short tutorial on creating systems and components [here](https://github
 ## Full Examples
 See full examples in the [examples folder](https://github.com/freakmangd/zentig_ecs/tree/main/examples)
 
-## Raylib Support
-While it is easy to get started with a raylib with just zentig_ecs, I've created a library that
-wraps common components and provides systems that act on those components [here](https://github.com/freakmangd/zentig_raylib).
+## Framework Support
+zentig is framework agnostic, it doesn't include any drawing capabilities. For that you need something like Raylib, I've created a library that
+wraps common Raylib components and provides systems that act on those components [here](https://github.com/freakmangd/zentig_raylib).
 
 That page provides installation instructions and usage examples.
-
-## Other Frameworks
-I encourage you to make your own wrappers for your favorite framework and send it in!
-I will link any below.
