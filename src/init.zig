@@ -51,15 +51,12 @@ pub const vec4 = Vec4.init;
 pub const splat4 = Vec4.splat;
 pub const from4 = Vec4.from;
 
-//pub const Mat3 = @import("math/mat3.zig");
-
 pub const WorldBuilder = @import("worldbuilder.zig");
 pub const Commands = @import("commands.zig");
 
 pub const base = @import("mods/base/init.zig");
 pub const anim = @import("mods/anim.zig");
 pub const input = @import("mods/input.zig");
-//pub const physics = @import("mods/physics.zig");
 
 /// Zentig's scoped logging functions
 pub const log = std.log.scoped(.zentig);

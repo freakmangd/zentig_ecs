@@ -181,23 +181,3 @@ pub const utpOf = struct {
         return @ptrCast(&gen.id);
     }
 }.utpOf;
-
-//pub const UniqueTypePtr = *const anyopaque;
-//pub fn uniqueTypePtr(comptime T: type) UniqueTypePtr {
-//    return @typeName(T);
-//}
-
-//pub const TypeId = u64;
-//var id_counter: u64 = 0;
-//pub fn typeId(comptime T: type) u64 {
-//    _ = T;
-//    const static = struct {
-//        var id: ?u64 = null;
-//    };
-//    const result = static.id orelse blk: {
-//        static.id = id_counter;
-//        id_counter += 1;
-//        break :blk static.id.?;
-//    };
-//    return result;
-//}

@@ -88,12 +88,6 @@ pub fn World(
         /// ```
         pub fn init(user_allocator: std.mem.Allocator) !Self {
             if (comptime builtin.mode == .Debug) {
-                //std.debug.print("Entity has utp {}\n", .{util.compId(ztg.Entity)});
-                //inline for (comp_types.types) |T| {
-                //    @setEvalBranchQuota(20_000);
-                //    std.debug.print("{s} has utp {}\n", .{ @typeName(T), util.compId(T) });
-                //}
-
                 if (warnings.len > 0)
                     ztg.log.warn("\n====== World was constructed with warnings: ======\n{s}", .{warnings});
 

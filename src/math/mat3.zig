@@ -4,25 +4,25 @@ const math = @import("init.zig");
 const Self = @This();
 
 pub const Row = @Vector(3, f32);
-rows: [3]Row = [_]Row{
-    Row{ 1, 0, 0 },
-    Row{ 0, 1, 0 },
-    Row{ 0, 0, 1 },
+rows: [3]Row = .{
+    .{ 1, 0, 0 },
+    .{ 0, 1, 0 },
+    .{ 0, 0, 1 },
 },
 
 pub inline fn init(xx: f32, xy: f32, xz: f32, yx: f32, yy: f32, yz: f32, zx: f32, zy: f32, zz: f32) Self {
-    return .{ .rows = [_]Row{
-        Row{ xx, xy, xz },
-        Row{ yx, yy, yz },
-        Row{ zx, zy, zz },
+    return .{ .rows = .{
+        .{ xx, xy, xz },
+        .{ yx, yy, yz },
+        .{ zx, zy, zz },
     } };
 }
 
 pub inline fn identity() Self {
-    return .{ .rows = [_]Row{
-        Row{ 1, 0, 0 },
-        Row{ 0, 1, 0 },
-        Row{ 0, 0, 1 },
+    return .{ .rows = .{
+        .{ 1, 0, 0 },
+        .{ 0, 1, 0 },
+        .{ 0, 0, 1 },
     } };
 }
 
@@ -47,10 +47,10 @@ pub inline fn reduceRow(self: Self, comptime op: std.builtin.ReduceOp, row: usiz
 }
 
 pub inline fn set(self: *Self, xx: f32, xy: f32, xz: f32, yx: f32, yy: f32, yz: f32, zx: f32, zy: f32, zz: f32) void {
-    self.* = .{ .rows = [_]Row{
-        Row{ xx, xy, xz },
-        Row{ yx, yy, yz },
-        Row{ zx, zy, zz },
+    self.* = .{ .rows = .{
+        .{ xx, xy, xz },
+        .{ yx, yy, yz },
+        .{ zx, zy, zz },
     } };
 }
 
@@ -150,14 +150,14 @@ pub inline fn scaleEql(self: *Self, value: f32) Self {
     self.rows[2] *= @as(@Vector(3, f32), @splat(value));
 }
 
-//pub fn getScale() @Vector(3, f32) {}
+pub fn getScale() @Vector(3, f32) {}
 
 pub fn determinant(self: Self) f32 {
     // zig fmt: off
-            return self.rows[0][0] * (self.rows[1][1] * self.rows[2][2] - self.rows[2][1] * self.rows[1][2]) -
-                   self.rows[1][0] * (self.rows[0][1] * self.rows[2][2] - self.rows[2][1] * self.rows[0][2]) +
-                   self.rows[2][0] * (self.rows[0][1] * self.rows[1][2] - self.rows[1][1] * self.rows[0][2]);
-            // zig fmt: on
+    return self.rows[0][0] * (self.rows[1][1] * self.rows[2][2] - self.rows[2][1] * self.rows[1][2]) -
+        self.rows[1][0] * (self.rows[0][1] * self.rows[2][2] - self.rows[2][1] * self.rows[0][2]) +
+        self.rows[2][0] * (self.rows[0][1] * self.rows[1][2] - self.rows[1][1] * self.rows[0][2]);
+    // zig fmt: on
 }
 
 inline fn cofac(self: Self, row1: usize, col1: usize, row2: usize, col2: usize) f32 {
@@ -194,13 +194,13 @@ pub fn orthonormalized(self: Self) Self {
     z = math.normalizeVec3(z);
 
     return .{
-        .rows = [_]Row{ x, y, z },
+        .rows = .{ x, y, z },
     };
 }
 
-//pub fn orthogonalized(self: Self) Self {
-//    _ = self;
-//}
+pub fn orthogonalized(self: Self) Self {
+    _ = self;
+}
 
 pub inline fn xform(self: Self, vec: @Vector(3, f32)) @Vector(3, f32) {
     return .{
@@ -219,18 +219,18 @@ pub inline fn xformInv(self: Self, vec: @Vector(3, f32)) @Vector(3, f32) {
 }
 
 pub inline fn tranXForm(self: Self, other: Self) Self {
-    return .{ .rows = [_]Row{
-        Row{
+    return .{ .rows = .{
+        .{
             @reduce(.Add, self.getColumn(0) * other.getColumn(0)),
             @reduce(.Add, self.getColumn(0) * other.getColumn(1)),
             @reduce(.Add, self.getColumn(0) * other.getColumn(2)),
         },
-        Row{
+        .{
             @reduce(.Add, self.getColumn(1) * other.getColumn(0)),
             @reduce(.Add, self.getColumn(1) * other.getColumn(1)),
             @reduce(.Add, self.getColumn(1) * other.getColumn(2)),
         },
-        Row{
+        .{
             @reduce(.Add, self.getColumn(2) * other.getColumn(0)),
             @reduce(.Add, self.getColumn(2) * other.getColumn(1)),
             @reduce(.Add, self.getColumn(2) * other.getColumn(2)),

@@ -192,20 +192,3 @@ fn assertOkQuery(comptime query_types_raw: anytype, comptime options: anytype) v
         tm_opts.append(QT);
     }
 }
-
-//fn Query(comptime q: anytype, comptime options: anytype) type {
-//    if (comptime q.len >= 158) @compileError("Query has too many items.");
-//
-//    var tm = TypeMap{};
-//    var tb = TypeBuilder.init(false, .Auto);
-//
-//    inline for (q, 0..) |Q, i| {
-//        tb.addField(std.fmt.comptimePrint("{c}", .{@intCast(u8, 97 + i)}), if (Q == Entity) Entity else *Q, null);
-//        if (tm.has(Q)) @compileError("Cannot use the same type twice in a query.");
-//        tm.append(Q);
-//    }
-//
-//    tb.addField("QueryType", @TypeOf(q), &q);
-//    tb.addField("OptionsType", @TypeOf(options), &options);
-//    return std.MultiArrayList(tb.Build());
-//}
