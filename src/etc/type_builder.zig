@@ -9,7 +9,7 @@ is_tuple: bool = false,
 layout: Type.ContainerLayout = .auto,
 
 pub fn initFrom(comptime T: type) Self {
-    const ti = @typeInfo(T).Struct;
+    const ti = @typeInfo(T).@"struct";
     return .{
         .fields = ti.fields,
         .is_tuple = ti.is_tuple,
@@ -68,7 +68,7 @@ pub fn appendTupleFieldExtra(
 }
 
 pub fn Build(comptime self: Self) type {
-    return @Type(.{ .Struct = .{
+    return @Type(.{ .@"struct" = .{
         .fields = self.fields,
         .is_tuple = self.is_tuple,
         .layout = self.layout,

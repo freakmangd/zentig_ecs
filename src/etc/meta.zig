@@ -8,7 +8,7 @@ pub const EnumLiteral = @TypeOf(.enum_literal);
 
 /// Returns whether a function type can return an error
 pub fn canReturnError(comptime Fn: type) bool {
-    comptime return @typeInfo(@typeInfo(Fn).Fn.return_type.?) == .ErrorUnion;
+    comptime return @typeInfo(@typeInfo(Fn).@"fn".return_type.?) == .error_union;
 }
 
 pub const MemberFnType = enum {
@@ -23,15 +23,15 @@ pub const MemberFnType = enum {
 pub fn memberFnType(comptime Container: type, comptime fn_name: []const u8) MemberFnType {
     if (!@hasDecl(Container, fn_name)) util.compileError("Function `{s}` is not part of the `{s}` namespace.", .{ fn_name, @typeName(Container) });
 
-    const params = @typeInfo(@TypeOf(@field(Container, fn_name))).Fn.params;
+    const params = @typeInfo(@TypeOf(@field(Container, fn_name))).@"fn".params;
     if (comptime params.len == 0) return .non_member;
 
     const Param0 = params[0].type orelse return .non_member;
     const ti = @typeInfo(Param0);
 
     if (DerefType(Param0) == Container) {
-        if (ti == .Pointer) {
-            if (ti.Pointer.is_const) {
+        if (ti == .pointer) {
+            if (ti.pointer.is_const) {
                 return .by_const_ptr;
             } else {
                 return .by_ptr;
@@ -46,13 +46,13 @@ pub fn memberFnType(comptime Container: type, comptime fn_name: []const u8) Memb
 /// If `T` is a Pointer type this function returns the child, otherwise returns `T`
 pub fn DerefType(comptime T: type) type {
     const ti = @typeInfo(T);
-    if (ti == .Pointer) return ti.Pointer.child;
+    if (ti == .pointer) return ti.pointer.child;
     return T;
 }
 
 /// Returns the return type of the function f
 pub fn ReturnType(comptime f: anytype) type {
-    return @typeInfo(@TypeOf(f)).Fn.return_type.?;
+    return @typeInfo(@TypeOf(f)).@"fn".return_type.?;
 }
 
 /// Combines two struct types by their fields,
@@ -71,7 +71,7 @@ pub fn CombineStructTypes(comptime types: []const type) type {
     var field_count: usize = 0;
 
     for (types) |T| {
-        field_count += @typeInfo(T).Struct.fields.len;
+        field_count += @typeInfo(T).@"struct".fields.len;
     }
 
     var field_types: [field_count]std.builtin.Type.StructField = undefined;
@@ -84,7 +84,7 @@ pub fn CombineStructTypes(comptime types: []const type) type {
         }
     }
 
-    return @Type(.{ .Struct = std.builtin.Type.Struct{
+    return @Type(.{ .@"struct" = .{
         .fields = &field_types,
         .decls = &.{},
         .layout = .auto,
@@ -108,8 +108,8 @@ pub fn CombineEnumTypes(comptime types: []const type) type {
     var field_count: usize = 0;
 
     for (types) |T| {
-        if (comptime !@typeInfo(T).Enum.is_exhaustive) @compileError("Cannot combine enums that are non-exhaustive");
-        field_count += @typeInfo(T).Enum.fields.len;
+        if (comptime !@typeInfo(T).@"enum".is_exhaustive) @compileError("Cannot combine enums that are non-exhaustive");
+        field_count += @typeInfo(T).@"enum".fields.len;
     }
 
     var field_types: [field_count]std.builtin.Type.EnumField = undefined;
@@ -123,7 +123,7 @@ pub fn CombineEnumTypes(comptime types: []const type) type {
         field_types_i += 1;
     };
 
-    return @Type(.{ .Enum = std.builtin.Type.Enum{
+    return @Type(.{ .@"enum" = std.builtin.Type.Enum{
         .fields = &field_types,
         .decls = &.{},
         .tag_type = std.math.IntFittingRange(0, field_count),
@@ -157,7 +157,7 @@ pub fn EnumFromLiterals(comptime literals: []const EnumLiteral) type {
         };
     }
 
-    return @Type(.{ .Enum = std.builtin.Type.Enum{
+    return @Type(.{ .@"enum" = std.builtin.Type.Enum{
         .fields = &fields,
         .decls = &.{},
         .tag_type = std.math.IntFittingRange(0, literals.len),

@@ -79,7 +79,7 @@ pub const OnEntOverflow = enum {
 pub fn init(comptime includes: []const type) Self {
     var self = Self{};
 
-    for (@typeInfo(default_stages).Struct.decls) |decl| {
+    for (@typeInfo(default_stages).@"struct".decls) |decl| {
         self.stage_defs.append(.{
             .name = decl.name,
             .labels = ztg.ComptimeList(StageLabel).fromSlice(&.{.{ .name = "body" }}),
@@ -88,7 +88,7 @@ pub fn init(comptime includes: []const type) Self {
 
     self.addResource(std.mem.Allocator, undefined);
     self.addResource(ztg.FrameAlloc, undefined);
-    self.addResource(std.rand.Random, undefined);
+    self.addResource(std.Random, undefined);
     self.include(includes);
 
     return self;
@@ -117,7 +117,7 @@ pub fn include(comptime self: *Self, comptime includes: []const type) void {
 
             const ti = @typeInfo(@TypeOf(TI.include));
 
-            if (comptime !(ti.Fn.params.len == 1 and ti.Fn.params[0].type.? == *Self))
+            if (comptime !(ti.@"fn".params.len == 1 and ti.@"fn".params[0].type.? == *Self))
                 util.compileError("{s}'s include function's signature must be fn(*WorldBuilder) (!)void", .{@typeName(TI)});
 
             if (comptime ztg.meta.canReturnError(@TypeOf(TI.include))) {
@@ -367,8 +367,8 @@ pub fn addResource(comptime self: *Self, comptime T: type, comptime default_valu
 
 fn DerefTypeUntilNonPtr(comptime T: type) type {
     var CT = T;
-    while (@typeInfo(CT) == .Pointer) {
-        CT = @typeInfo(CT).Pointer.child;
+    while (@typeInfo(CT) == .pointer) {
+        CT = @typeInfo(CT).pointer.child;
     }
     return CT;
 }
@@ -467,7 +467,7 @@ test addEvent {
         }
 
         fn recvEvent(recv: ztg.EventReceiver(MyEvent)) !void {
-            for (recv.items) |it| try std.testing.expectEqual(@as(i32, 20), it.data);
+            try std.testing.expectEqual(20, recv.next().?.data);
             system_was_run = true;
         }
     };
@@ -494,20 +494,20 @@ pub fn addSystemsToStage(comptime self: *Self, comptime stage_tag: ztg.meta.Enum
 /// Same as `addSystemsToStage` but with a string instead of an enum literal
 pub fn addSystemsToStageByName(comptime self: *Self, comptime stage_name: []const u8, _systems: anytype) void {
     const _systems_ti = @typeInfo(@TypeOf(_systems));
-    const systems = if (comptime !(_systems_ti == .Struct and _systems_ti.Struct.is_tuple)) .{_systems} else _systems;
+    const systems = if (comptime !(_systems_ti == .@"struct" and _systems_ti.@"struct".is_tuple)) .{_systems} else _systems;
     const stage_index = comptime self.stageIndexFromName(stage_name);
 
     for (systems) |sys| {
         switch (@typeInfo(@TypeOf(sys))) {
-            .Fn => self.appendToStageLabel(stage_index, "body", .during, sys),
-            .Struct => {
+            .@"fn" => self.appendToStageLabel(stage_index, "body", .during, sys),
+            .@"struct" => {
                 if (!@hasField(@TypeOf(sys), "label")) @compileError("Passed unsupported struct type to addSystems, the only supported structs come from ztg.before(), ztg.during(), ztg.after(), and ztg.orderGroup().");
 
                 if (@hasField(@TypeOf(sys), "groups")) {
                     for (std.meta.fields(@TypeOf(sys.groups))) |group_field| {
                         const group_raw = @field(sys.groups, group_field.name);
                         const group_raw_ti = @typeInfo(@TypeOf(group_raw));
-                        const group = if (comptime !(group_raw_ti == .Struct and group_raw_ti.Struct.is_tuple)) .{group_raw} else group_raw;
+                        const group = if (comptime !(group_raw_ti == .@"struct" and group_raw_ti.@"struct".is_tuple)) .{group_raw} else group_raw;
 
                         for (group) |s| {
                             const ordering = std.meta.stringToEnum(ztg.SystemOrder, group_field.name) orelse
@@ -575,6 +575,8 @@ fn defaultCrash(com: ztg.Commands, r: ztg.CrashReason) anyerror!void {
 
 /// Returns the final World type
 pub fn Build(comptime self: Self) type {
+    verifyQueryTypes(self.stage_defs.items, self.comp_types.types);
+
     const comp_types = self.comp_types.dereference(self.comp_types.types.len);
     const event_types = self.event_types.dereference(self.event_types.types.len);
     const added_resources = self.added_resources.dereference(self.added_resources.types.len);
@@ -584,7 +586,7 @@ pub fn Build(comptime self: Self) type {
     const warnings = self.warnings[0..].*;
 
     const Resources = self.resources.Build();
-    const EventPool = @import("event_pools.zig").EventPools(event_types);
+    const EventPool = @import("events.zig").EventPools(event_types);
     const StagesList = @import("stages.zig").Init(self.stage_defs.items);
 
     return World(
@@ -599,6 +601,29 @@ pub fn Build(comptime self: Self) type {
         on_crash_fn,
         warnings,
     );
+}
+
+/// Check added systems query parameters, if one of their query types isnt in the comp_types list, compile error
+fn verifyQueryTypes(stages: []const StageDef, comp_types: []const type) void {
+    for (stages) |stage| for (stage.labels.items) |label| inline for (.{ "before", "during", "after" }) |section_name| {
+        const section: TypeBuilder = @field(label, section_name);
+        for (section.fields) |field| {
+            const system_ti = @typeInfo(field.type).@"fn";
+            for (system_ti.params) |param| {
+                const Param = param.type.?;
+                if (@typeInfo(Param) != .@"struct" or !@hasDecl(Param, "req_types")) continue;
+
+                inline for (.{ Param.req_types, Param.opt_types }) |query_types| for (query_types.types) |T| {
+                    if (!util.typeArrayHas(comp_types, T)) {
+                        util.compileError("System `{s}` contains a query for type `{s}`, which is not a registered component type. Add it with addComponents", .{
+                            @typeName(field.type),
+                            @typeName(T),
+                        });
+                    }
+                };
+            }
+        }
+    };
 }
 
 fn warn(comptime self: *Self, comptime message: []const u8) void {

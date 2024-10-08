@@ -173,7 +173,7 @@ pub fn inverted(self: Self) error{DivisionByZero}!Self {
 
     const det = @reduce(.Add, self.getRow(0) * co);
     if (det == 0.0) return error.DivisionByZero;
-    const s: f32 = 1.0 / (if (comptime @typeInfo(f32) == .Int) @as(f32, @floatFromInt(det)) else det);
+    const s: f32 = 1.0 / (if (comptime @typeInfo(f32) == .int) @as(f32, @floatFromInt(det)) else det);
 
     return .{ .rows = [_]Row{
         Row{ co[0] * s, self.cofac(0, 2, 2, 1) * s, self.cofac(0, 1, 1, 2) * s },

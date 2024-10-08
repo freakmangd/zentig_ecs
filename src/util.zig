@@ -7,12 +7,12 @@ const ztg = @import("init.zig");
 
 /// Get the element type of a MultiArrayList
 pub fn MultiArrayListElem(comptime T: type) type {
-    return @typeInfo(@TypeOf(T.pop)).Fn.return_type.?;
+    return @typeInfo(@TypeOf(T.pop)).@"fn".return_type.?;
 }
 
 /// Get the element type of an ArrayHashMap
 pub fn ArrayHashMapElem(comptime T: type) type {
-    return @typeInfo(T.KV).Struct.fields[1].type;
+    return @typeInfo(T.KV).@"struct".fields[1].type;
 }
 
 pub fn compileError(comptime format: []const u8, comptime args: anytype) noreturn {
@@ -21,17 +21,17 @@ pub fn compileError(comptime format: []const u8, comptime args: anytype) noretur
 
 pub fn isContainer(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .Struct, .Union, .ErrorSet, .Enum => true,
+        .@"struct", .@"union", .error_set, .@"enum" => true,
         else => false,
     };
 }
 
 pub fn assertOkOnAddedFunction(comptime Container: type) void {
     const member_type = comptime ztg.meta.memberFnType(Container, "onAdded");
-    const fn_info = @typeInfo(@TypeOf(Container.onAdded)).Fn;
+    const fn_info = @typeInfo(@TypeOf(Container.onAdded)).@"fn";
 
     const return_type_info = @typeInfo(fn_info.return_type.?);
-    if (!(return_type_info == .Void or (return_type_info == .ErrorUnion and return_type_info.ErrorUnion.payload == void))) {
+    if (!(return_type_info == .Void or (return_type_info == .error_union and return_type_info.error_union.payload == void))) {
         @compileError("onAdded functions must return void or !void");
     }
 
@@ -51,13 +51,13 @@ pub fn resetCompIds() void {
 pub const CompId = usize;
 var last_reset_id: if (builtin.mode == .Debug) usize else void = if (builtin.mode == .Debug) 0 else void{};
 var id_counter: CompId = 0;
+pub var allow_new_ids: bool = false;
 pub fn compId(comptime T: type) CompId {
     const static = struct {
         var reset_id: if (builtin.mode == .Debug) usize else void = if (builtin.mode == .Debug) 0 else void{};
         var id: ?CompId = null;
-        comptime {
-            _ = T;
-        }
+
+        const Parent = T;
     };
     const result = blk: {
         if (static.id == null or if (comptime builtin.mode == .Debug) if_blk: {
@@ -65,6 +65,8 @@ pub fn compId(comptime T: type) CompId {
         } else if_blk: {
             break :if_blk false;
         }) {
+            if (builtin.mode == .Debug and !allow_new_ids) std.debug.panic("Tried to get CompId of unregistered component type {s}", .{@typeName(T)});
+
             static.id = id_counter;
             static.reset_id = last_reset_id;
             id_counter += 1;
@@ -121,4 +123,33 @@ pub fn typeArrayHasUtp(comptime type_array: anytype, utp: ztg.meta.Utp) bool {
         if (ztg.meta.utpOf(T) == utp) return true;
     }
     return false;
+}
+
+pub fn formatFloatValue(
+    value: anytype,
+    comptime fmt: []const u8,
+    options: std.fmt.FormatOptions,
+    writer: anytype,
+) !void {
+    var buf: [std.fmt.format_float.bufferSize(.decimal, f64)]u8 = undefined;
+
+    if (fmt.len == 0 or comptime std.mem.eql(u8, fmt, "e")) {
+        const s = std.fmt.formatFloat(&buf, value, .{ .mode = .scientific, .precision = options.precision }) catch |err| switch (err) {
+            error.BufferTooSmall => "(float)",
+        };
+        return std.fmt.formatBuf(s, options, writer);
+    } else if (comptime std.mem.eql(u8, fmt, "d")) {
+        const s = std.fmt.formatFloat(&buf, value, .{ .mode = .decimal, .precision = options.precision }) catch |err| switch (err) {
+            error.BufferTooSmall => "(float)",
+        };
+        return std.fmt.formatBuf(s, options, writer);
+    } else if (comptime std.mem.eql(u8, fmt, "x")) {
+        var buf_stream = std.io.fixedBufferStream(&buf);
+        std.fmt.formatFloatHexadecimal(value, options, buf_stream.writer()) catch |err| switch (err) {
+            error.NoSpaceLeft => unreachable,
+        };
+        return std.fmt.formatBuf(buf_stream.getWritten(), options, writer);
+    } else {
+        std.fmt.invalidFmtError(fmt, value);
+    }
 }

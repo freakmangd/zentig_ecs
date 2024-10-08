@@ -13,12 +13,12 @@ const TypeBuilder = ztg.meta.TypeBuilder;
 /// Used for storing pointer-stable objects on the heap
 const WorldInfo = struct {
     frame_arena: std.heap.ArenaAllocator,
-    rng: std.rand.DefaultPrng,
+    rng: std.Random.DefaultPrng,
 
     fn init(alloc: std.mem.Allocator) !*WorldInfo {
         const self = try alloc.create(WorldInfo);
         self.* = .{
-            .rng = std.rand.DefaultPrng.init(@bitCast(std.time.milliTimestamp())),
+            .rng = std.Random.DefaultPrng.init(@bitCast(std.time.milliTimestamp())),
             .frame_arena = std.heap.ArenaAllocator.init(alloc),
         };
         return self;
@@ -59,16 +59,19 @@ pub fn World(
         alloc: Allocator,
         frame_arena: *std.heap.ArenaAllocator,
         frame_alloc: Allocator,
-        rand: std.rand.Random,
+        rand: std.Random,
 
         next_ent: ztg.Entity = 0,
         entities: *EntityArray = undefined,
 
         comp_arrays: [comp_types_len]ComponentArray = undefined,
-        resources: Resources = .{},
+        resources: *Resources = undefined,
 
         event_pools: EventPool,
         changes_queue: ChangeQueue,
+
+        on_added_fns: [comp_types_len]*const fn (*Self, *anyopaque, ztg.Entity) anyerror!void = undefined,
+        on_removed_fns: [comp_types_len]*const fn (*Self, *anyopaque, ztg.Entity) anyerror!void = undefined,
 
         /// User must call `.deinit()` once the world is to be descoped. (in a defer block preferrably)
         /// All systems that request an `Allocator` will get the one passed here.
@@ -116,6 +119,10 @@ pub fn World(
                 .changes_queue = ChangeQueue.init(frame_alloc),
             };
 
+            self.resources = try user_allocator.create(Resources);
+            self.resources.* = .{};
+            errdefer user_allocator.destroy(self.resources);
+
             self.entities = try user_allocator.create(EntityArray);
             self.entities.* = .{};
             errdefer user_allocator.destroy(self.entities);
@@ -127,16 +134,21 @@ pub fn World(
                 };
 
                 util.resetCompIds();
+                util.allow_new_ids = true;
                 inline for (comp_types, 0..) |CT, i| {
                     @setEvalBranchQuota(20_000);
-                    self.comp_arrays[util.compId(CT)] = ComponentArray.init(CT);
+                    const comp_id = util.compId(CT);
+                    self.comp_arrays[comp_id] = ComponentArray.init(CT);
+                    self.on_added_fns[comp_id] = generateAddRemSystem(CT, "onAdded");
+                    self.on_removed_fns[comp_id] = generateAddRemSystem(CT, "onRemoved");
                     last_successful_init_loop = i;
                 }
+                util.allow_new_ids = false;
             }
 
             self.getResPtr(Allocator).* = user_allocator;
             self.getResPtr(ztg.FrameAlloc).* = .{frame_alloc};
-            self.getResPtr(std.rand.Random).* = info.rng.random();
+            self.getResPtr(std.Random).* = info.rng.random();
 
             ztg.profiler.init(user_allocator);
 
@@ -159,12 +171,11 @@ pub fn World(
 
             inline for (comp_types, &self.comp_arrays) |CT, *comp_arr| {
                 if (comptime @sizeOf(CT) > 0) {
-                    var comp_iter = comp_arr.iterator();
-                    while (comp_iter.nextAs(CT)) |comp| self.invokeOnRemoveForComponent(CT, comp) catch |err| {
+                    for (comp_arr.entities.items) |ent| self.invokeOnRemoveForComponent(CT, comp_arr.getAs(CT, ent).?, ent) catch |err| {
                         std.log.err("Caught error {} while deinit'ing component list of type {s}", .{ err, @typeName(CT) });
                     };
                 } else {
-                    for (0..comp_arr.len()) |_| self.invokeOnRemoveForComponent(CT, undefined) catch |err| {
+                    for (comp_arr.entities.items) |ent| self.invokeOnRemoveForComponent(CT, undefined, ent) catch |err| {
                         std.log.err("Caught error {} while deinit'ing component list of type {s}", .{ err, @typeName(CT) });
                     };
                 }
@@ -179,8 +190,48 @@ pub fn World(
             self.changes_queue.deinit();
 
             self.alloc.destroy(self.entities);
+            self.alloc.destroy(self.resources);
             self.info.deinit(self.alloc);
             //self.alloc.destroy(self);
+        }
+
+        fn generateAddRemSystem(comptime CT: type, comptime fn_name: []const u8) *const fn (*Self, *anyopaque, ztg.Entity) anyerror!void {
+            return struct {
+                fn f(self: *Self, comp_ptr_aop: *anyopaque, ent: ztg.Entity) anyerror!void {
+                    if (comptime !util.isContainer(CT) or !@hasDecl(CT, fn_name)) return;
+
+                    const comp: *CT = @ptrCast(@alignCast(comp_ptr_aop));
+                    const func = @field(CT, fn_name);
+
+                    const member_fn_type = comptime ztg.meta.memberFnType(CT, fn_name);
+                    const fn_params = @typeInfo(@TypeOf(func)).@"fn".params;
+                    const maybe_ent_param_idx = if (comptime member_fn_type == .non_member) 0 else 1;
+                    const has_ent_param = comptime maybe_ent_param_idx < fn_params.len and fn_params[maybe_ent_param_idx].type.? == ztg.Entity;
+
+                    const params_offset = comptime blk: {
+                        var offset = if (has_ent_param) 1 else 0;
+                        if (member_fn_type != .non_member) offset += 1;
+                        break :blk offset;
+                    };
+
+                    const params = self.initParamsForSystem(self.frame_alloc, fn_params[params_offset..]) catch |err| {
+                        std.debug.panic("Failed to get args for deinit system for type `{}`. Error: {}", .{ CT, err });
+                    };
+
+                    const member_params = switch (member_fn_type) {
+                        .non_member => .{},
+                        .by_value => .{comp.*},
+                        .by_ptr => .{comp},
+                        .by_const_ptr => .{comp},
+                    } ++ (if (has_ent_param) .{ent} else .{});
+
+                    if (comptime ztg.meta.canReturnError(@TypeOf(func))) {
+                        try @call(.auto, func, member_params ++ params);
+                    } else {
+                        @call(.auto, func, member_params ++ params);
+                    }
+                }
+            }.f;
         }
 
         /// If you are going to run multiple stages in a row, consider `.runStageList()`
@@ -267,11 +318,18 @@ pub fn World(
         pub fn postSystemUpdate(self: *Self) anyerror!void {
             if (comptime comp_types_len == 0) return;
 
-            for (self.changes_queue.items) |rem| {
+            // using a while loop since the changes_queue.items can be realloced
+            // inside the loop.
+            var i: usize = 0;
+            while (i < self.changes_queue.items.len) : (i += 1) {
+                // skip bounds check, length cant change
+                const rem = (@as([*]const ChangeQueueItem, @ptrCast(self.changes_queue.items)) + i)[0];
+
                 switch (rem) {
                     .added_component => |comp| {
                         var arr = &self.comp_arrays[comp.component_id];
-                        try arr.assignData(self.alloc, comp.ent, comp.data);
+                        const comp_ptr = try arr.assignData(self.alloc, comp.ent, comp.data);
+                        try self.on_added_fns[comp.component_id](self, comp_ptr, comp.ent);
                     },
                     .removed_ent => |ent| try self.removeEntAndAssociatedComponents(ent),
                     .removed_component => |rem_comp| {
@@ -284,7 +342,7 @@ pub fn World(
                             }
                             continue;
                         };
-                        try self.invokeOnRemoveForComponentById(comp, rem_comp.component_id);
+                        try self.invokeOnRemoveForComponentById(comp, rem_comp.component_id, rem_comp.ent);
                         self.comp_arrays[rem_comp.component_id].swapRemove(rem_comp.ent);
                     },
                 }
@@ -303,7 +361,7 @@ pub fn World(
 
             inline for (comp_types, &self.comp_arrays) |CT, *list| {
                 if (list.getAs(CT, ent)) |comp| {
-                    try self.invokeOnRemoveForComponent(CT, comp);
+                    try self.invokeOnRemoveForComponent(CT, comp, ent);
                     _ = list.swapRemove(ent);
                 }
             }
@@ -311,37 +369,12 @@ pub fn World(
             _ = self.entities.swapRemoveEnt(ent);
         }
 
-        fn invokeOnRemoveForComponent(self: *Self, comptime T: type, comp: *T) anyerror!void {
-            if (comptime !@hasDecl(T, "onRemoved")) return;
-
-            const member_fn_type = comptime ztg.meta.memberFnType(T, "onRemoved");
-            const fn_params = @typeInfo(@TypeOf(T.onRemoved)).Fn.params;
-            const params = self.initParamsForSystem(self.frame_alloc, if (comptime member_fn_type != .non_member) fn_params[1..] else fn_params) catch |err| {
-                std.debug.panic("Failed to get args for deinit system for type `{}`. Error: {}", .{ T, err });
-            };
-
-            const member_params = switch (member_fn_type) {
-                .non_member => .{},
-                .by_value => .{comp.*},
-                .by_ptr => .{comp},
-                .by_const_ptr => .{comp},
-            };
-
-            if (comptime ztg.meta.canReturnError(@TypeOf(T.onRemoved))) {
-                try @call(.auto, T.onRemoved, member_params ++ params);
-            } else {
-                @call(.auto, T.onRemoved, member_params ++ params);
-            }
+        fn invokeOnRemoveForComponent(self: *Self, comptime T: type, comp: *T, ent: ztg.Entity) anyerror!void {
+            try self.invokeOnRemoveForComponentById(comp, util.compId(T), ent);
         }
 
-        fn invokeOnRemoveForComponentById(self: *Self, comp: *anyopaque, comp_id: util.CompId) anyerror!void {
-            switch (comp_id) {
-                inline 0...comp_types.len - 1 => |id| {
-                    const T = comp_types[id];
-                    try invokeOnRemoveForComponent(self, T, if (comptime @sizeOf(T) == 0) undefined else @as(*T, @ptrCast(@alignCast(comp))));
-                },
-                else => return error.UnregisteredComponent,
-            }
+        fn invokeOnRemoveForComponentById(self: *Self, comp: *anyopaque, comp_id: util.CompId, ent: ztg.Entity) anyerror!void {
+            try self.on_removed_fns[comp_id](self, comp, ent);
         }
 
         /// Call when a "frame" of your game loop has completed, most commonly after the draw call
@@ -470,34 +503,17 @@ pub fn World(
             try commandsCast(ptr).removeEnt(ent);
         }
 
-        fn giveComponentSingle(self: *Self, ent: ztg.Entity, comp: anytype) !void {
+        fn giveComponentSingle(self: *Self, ent: ztg.Entity, comp: anytype) anyerror!void {
             if (comptime comp_types.len == 0) @compileError("World has no registered components and cannot add components");
-
             if (!self.entities.hasEntity(ent)) return error.EntityDoesntExist;
 
             const Component = @TypeOf(comp);
-            const idx = comptime util.indexOfType(comp_types, Component) orelse util.compileError("Tried to give entity Component of type `{s}`, which was not registred.", .{@typeName(Component)});
+            const comp_id = comptime util.indexOfType(comp_types, Component) orelse
+                util.compileError("Tried to give entity Component of type `{s}`, which was not registred.", .{@typeName(Component)});
 
-            const has_onAdded = comptime @hasDecl(Component, "onAdded");
-
-            if (comptime has_onAdded) util.assertOkOnAddedFunction(Component);
-
-            const member_type: if (has_onAdded) ztg.meta.MemberFnType else void = comptime if (has_onAdded) ztg.meta.memberFnType(Component, "onAdded") else void{};
-            const needs_mut: bool = comptime if (has_onAdded) member_type == .by_ptr else false;
-            const can_err = comptime has_onAdded and ztg.meta.canReturnError(@TypeOf(Component.onAdded));
-            const mutable_comp: if (has_onAdded and needs_mut) Component else void = if (comptime has_onAdded and needs_mut) comp else void{};
-
-            if (comptime has_onAdded) {
-                if (comptime member_type == .non_member) {
-                    if (comptime can_err) try Component.onAdded(ent, self.commands()) else Component.onAdded(ent, self.commands());
-                } else {
-                    var c = if (comptime needs_mut) &mutable_comp else comp;
-                    if (comptime can_err) try c.onAdded(ent, self.commands()) else c.onAdded(ent, self.commands());
-                }
-            }
-
-            self.entities.comp_masks[ent].set(idx);
-            try self.comp_arrays[idx].assign(self.alloc, ent, if (has_onAdded and needs_mut) mutable_comp else comp);
+            self.entities.comp_masks[ent].set(comp_id);
+            const comp_ptr = try self.comp_arrays[comp_id].assign(self.alloc, ent, comp);
+            try self.on_added_fns[comp_id](self, comp_ptr, ent);
         }
 
         /// Adds the components to the entity `ent`.
@@ -521,16 +537,17 @@ pub fn World(
         ///
         /// This has a chance to invalidate component pointers
         pub fn giveComponents(self: *Self, ent: ztg.Entity, components: anytype) !void {
+            if (comptime comp_types.len == 0) @compileError("World has no registered components and cannot add components");
             const Components = @TypeOf(components);
 
-            if (comptime comp_types.len == 0) @compileError("World has no registered components and cannot add components");
-
-            if (@typeInfo(Components) != .Struct) {
-                if (comptime !@typeInfo(Components).Struct.is_tuple) {
-                    util.compileError("Non-tuple type {} passed to giveComponents", .{Components});
-                } else if (!@hasDecl(Components, "is_component_bundle")) {
-                    @compileError("Struct passed to giveComponents does not have a public is_component_bundle decl, if it is not a bundle wrap it in an anonymous tuple.");
-                }
+            if (@typeInfo(Components) == .@"struct" and
+                !@typeInfo(Components).@"struct".is_tuple and
+                !@hasDecl(Components, "is_component_bundle"))
+            {
+                @compileError(
+                    \\Struct passed to giveComponents does not have a public is_component_bundle decl,
+                    \\if it is not a bundle wrap it in an anonymous tuple."
+                );
             }
 
             inline for (std.meta.fields(Components)) |field| {
@@ -542,7 +559,13 @@ pub fn World(
             }
         }
 
-        fn commands_giveComponent(ptr: *anyopaque, ent: ztg.Entity, component_id: util.CompId, alignment: u29, data: *const anyopaque) ztg.Commands.GiveRemoveComponentError!void {
+        fn commands_giveComponent(
+            ptr: *anyopaque,
+            ent: ztg.Entity,
+            component_id: util.CompId,
+            alignment: u29,
+            data: *const anyopaque,
+        ) anyerror!void {
             if (comptime comp_types.len == 0) @compileError("World has no registered components and cannot add components");
             var self = commandsCast(ptr);
 
@@ -555,6 +578,7 @@ pub fn World(
             if (self.getComponentPtr_fromCompId(ent, component_id)) |comp_ptr| {
                 // entity already has this component, so just overwrite it
                 @memcpy(@as([*]u8, @ptrCast(@alignCast(comp_ptr))), @as([*]const u8, @ptrCast(data))[0..arr.components_data.entry_size]);
+                try self.on_added_fns[component_id](self, comp_ptr, ent);
             } else if (arr.willResize()) {
                 // we cant add the component right now, because then the pointers in the calling system will become invalid,
                 // so we place the data on the heap and queue for its addition.
@@ -571,24 +595,35 @@ pub fn World(
                     .data = alloced_data,
                 } });
             } else {
-                try arr.assignData(self.alloc, ent, data);
+                const comp_ptr = try arr.assignData(self.alloc, ent, data);
+                try self.on_added_fns[component_id](self, comp_ptr, ent);
             }
         }
 
         /// Removes component of type `Component` from entity `ent`
-        pub fn removeComponent(self: *Self, ent: ztg.Entity, comptime Component: type) (error{EntityDoesntExist} || Allocator.Error)!void {
-            try self.removeComponent_fromCompId(
-                ent,
-                comptime util.indexOfType(comp_types, Component) orelse util.compileError("Component of type `{s}` was not registered and cannot be removed", .{@typeName(Component)}),
-            );
+        pub fn removeComponent(
+            self: *Self,
+            ent: ztg.Entity,
+            comptime Component: type,
+        ) (error{EntityDoesntExist} || Allocator.Error)!void {
+            try self.removeComponent_fromCompId(ent, comptime util.indexOfType(comp_types, Component) orelse
+                util.compileError("Component of type `{s}` was not registered and cannot be removed", .{@typeName(Component)}));
         }
 
-        fn commands_removeComponent(ptr: *anyopaque, ent: ztg.Entity, comp_id: util.CompId) ztg.Commands.GiveRemoveComponentError!void {
+        fn commands_removeComponent(
+            ptr: *anyopaque,
+            ent: ztg.Entity,
+            comp_id: util.CompId,
+        ) ztg.Commands.RemoveComponentError!void {
             if (comp_id >= comp_types.len) return error.UnregisteredComponent;
             try commandsCast(ptr).removeComponent_fromCompId(ent, comp_id);
         }
 
-        inline fn removeComponent_fromCompId(self: *Self, ent: ztg.Entity, comp_id: util.CompId) ztg.Commands.GiveRemoveComponentError!void {
+        inline fn removeComponent_fromCompId(
+            self: *Self,
+            ent: ztg.Entity,
+            comp_id: util.CompId,
+        ) ztg.Commands.RemoveComponentError!void {
             if (comptime comp_types.len == 0) @compileError("World has no registered components to remove.");
             if (!self.entities.hasEntity(ent)) return error.EntityDoesntExist;
 
@@ -600,7 +635,10 @@ pub fn World(
 
         /// Returns true or false depending on whether `ent` has been assigned a component of type `Component`
         pub fn checkEntHas(self: *Self, ent: ztg.Entity, comptime Component: type) bool {
-            return self.comp_arrays[comptime util.indexOfType(comp_types, Component) orelse util.compileError("Component of type `{s}` was not registered", .{@typeName(Component)})].contains(ent);
+            return self.comp_arrays[
+                comptime util.indexOfType(comp_types, Component) orelse
+                    util.compileError("Component of type `{s}` was not registered", .{@typeName(Component)})
+            ].contains(ent);
         }
 
         fn commands_checkEntHas(ptr: *anyopaque, ent: ztg.Entity, component_id: util.CompId) ztg.Commands.ComponentError!bool {
@@ -615,10 +653,8 @@ pub fn World(
 
         /// Returns an optional pointer to the component assigned to `ent`
         pub fn getComponentPtr(self: *Self, ent: ztg.Entity, comptime Component: type) ?*anyopaque {
-            return self.getComponentPtr_fromCompId(
-                ent,
-                comptime util.indexOfType(comp_types, Component) orelse util.compileError("Component of type `{s}` was not registered and no pointer can be obtained.", .{@typeName(Component)}),
-            );
+            return self.getComponentPtr_fromCompId(ent, comptime util.indexOfType(comp_types, Component) orelse
+                util.compileError("Component of type `{s}` was not registered and no pointer can be obtained.", .{@typeName(Component)}));
         }
 
         fn commands_getComponentPtr(ptr: *anyopaque, ent: ztg.Entity, comp_id: util.CompId) ztg.Commands.ComponentError!?*anyopaque {
@@ -688,14 +724,7 @@ pub fn World(
             const with_ids = util.idsFromTypes(QT.with_types.types);
             const without_ids = util.idsFromTypes(QT.without_types.types);
 
-            var error_missing_id: UnregisteredTypeErrorInfo = undefined;
-            const checked_entities, const qlists = switch (builtin.mode) {
-                .Debug => self.initQueryLists(alloc, &req_ids, &opt_ids, &with_ids, &error_missing_id) catch |err| switch (err) {
-                    error.UnregisteredComponent => error_missing_id.panic(QT),
-                    else => return err,
-                },
-                else => try self.initQueryLists(alloc, &req_ids, &opt_ids, &with_ids, &error_missing_id),
-            };
+            const checked_entities, const qlists = try self.initQueryLists(alloc, &req_ids, &opt_ids, &with_ids);
             defer alloc.free(qlists);
 
             const comp_mask, const negative_mask = getCompMasks(&.{ &req_ids, &with_ids }, &.{&without_ids});
@@ -764,51 +793,24 @@ pub fn World(
             }
         };
 
-        const UnregisteredTypeErrorInfo = struct {
-            index: usize,
-            query_type: enum { required, optional, with },
-
-            pub fn panic(self: UnregisteredTypeErrorInfo, comptime QT: type) noreturn {
-                std.debug.panic("Tried to query for type {s}, which was not registered", .{switch (self.query_type) {
-                    .required => getQueryTypeName(QT.req_types, self.index),
-                    .optional => getQueryTypeName(QT.opt_types, self.index),
-                    .with => getQueryTypeName(QT.with_types, self.index),
-                }});
-            }
-
-            fn getQueryTypeName(comptime QT_type_list: ztg.meta.TypeMap, index: usize) []const u8 {
-                if (comptime QT_type_list.types.len == 0) return "???";
-
-                switch (index) {
-                    inline 0...QT_type_list.types.len - 1 => |i| return @typeName(QT_type_list.types[i]),
-                    else => unreachable,
-                }
-            }
-        };
-
+        // TODO: Check if passing req_ids and opt_ids as anytype to avoid
+        // alloc here is worth it.
         fn initQueryLists(
             self: *Self,
             alloc: std.mem.Allocator,
             req_ids: []const util.CompId,
             opt_ids: []const util.CompId,
             with_ids: []const util.CompId,
-            error_missing_id: *UnregisteredTypeErrorInfo,
         ) !struct { []const ztg.Entity, []QueryList } {
             var lists = try alloc.alloc(QueryList, req_ids.len + opt_ids.len);
             var idx: usize = 0;
 
-            const first_arr = self.getListById(req_ids[0]) catch |err| {
-                error_missing_id.* = .{ .query_type = .required, .index = 0 };
-                return err;
-            };
+            const first_arr = self.getListById(req_ids[0]) catch unreachable;
             var smallest: []const ztg.Entity = first_arr.entities.items;
             lists[0] = QueryList.init(first_arr, 0, .required);
 
             for (req_ids[1..], 1..) |id, i| {
-                const check = self.getListById(id) catch |err| {
-                    error_missing_id.* = .{ .query_type = .required, .index = i };
-                    return err;
-                };
+                const check = self.getListById(id) catch unreachable;
                 idx += 1;
                 lists[idx] = QueryList.init(check, i, .required);
 
@@ -816,19 +818,13 @@ pub fn World(
             }
 
             for (opt_ids, 0..) |id, i| {
-                const check = self.getListById(id) catch |err| {
-                    error_missing_id.* = .{ .query_type = .optional, .index = i };
-                    return err;
-                };
+                const check = self.getListById(id) catch unreachable;
                 idx += 1;
                 lists[idx] = QueryList.init(check, i, .optional);
             }
 
-            for (with_ids, 0..) |id, i| {
-                const check = self.getListById(id) catch |err| {
-                    error_missing_id.* = .{ .query_type = .with, .index = i };
-                    return err;
-                };
+            for (with_ids) |id| {
+                const check = self.getListById(id) catch unreachable;
                 if (check.len() < smallest.len) smallest = check.entities.items;
             }
 
@@ -894,7 +890,7 @@ pub fn World(
         ///
         /// Example:
         /// ```zig
-        /// const params = try world.initParamsForSystem(@typeInfo(@TypeOf(myFunction)).Fn.params);
+        /// const params = try world.initParamsForSystem(@typeInfo(@TypeOf(myFunction)).@"fn".params);
         /// defer world.deinitParamsForSystem(params);
         ///
         /// @call(.auto, myFunction, params);
@@ -910,26 +906,24 @@ pub fn World(
         }
 
         inline fn initParam(self: *Self, alloc: std.mem.Allocator, comptime T: type) !T {
-            const is_container = comptime util.isContainer(T);
-
             if (comptime T == ztg.Commands) {
                 return self.commands();
-            } else if (comptime is_container and @hasDecl(T, "IsQueryType")) {
+            } else if (comptime @typeInfo(T) == .@"struct" and @hasDecl(T, "IsQueryType")) {
                 return self.query(alloc, T);
-            } else if (comptime is_container and @hasDecl(T, "EventSendType")) {
+            } else if (comptime @typeInfo(T) == .@"struct" and @hasDecl(T, "EventSendType")) {
                 return .{
                     .alloc = alloc,
                     .event_pool = self.event_pools.getPtr(T.EventSendType),
                 };
-            } else if (comptime is_container and @hasDecl(T, "EventRecvType")) {
+            } else if (comptime @typeInfo(T) == .@"struct" and @hasDecl(T, "EventRecvType")) {
                 return .{
-                    .items = self.event_pools.getPtr(T.EventRecvType).items,
+                    .events = self.event_pools.getPtr(T.EventRecvType),
                 };
             } else if (comptime util.typeArrayHas(added_resources, ztg.meta.DerefType(T)) or util.typeArrayHas(added_resources, T)) {
                 if (comptime util.typeArrayHas(added_resources, T)) {
                     return self.getRes(T);
-                } else if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) {
-                    return self.getResPtr(@typeInfo(T).Pointer.child);
+                } else if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .One) {
+                    return self.getResPtr(@typeInfo(T).pointer.child);
                 }
             }
 
@@ -939,7 +933,7 @@ pub fn World(
         pub fn deinitParamsForSystem(self: *Self, alloc: std.mem.Allocator, args: anytype) void {
             _ = self;
             inline for (std.meta.fields(@TypeOf(args.*))) |args_field| {
-                if (comptime @typeInfo(args_field.type) == .Struct and @hasDecl(args_field.type, "query_types")) {
+                if (comptime @typeInfo(args_field.type) == .@"struct" and @hasDecl(args_field.type, "query_types")) {
                     @field(args, args_field.name).deinit(alloc);
                 }
             }
@@ -986,7 +980,8 @@ const ComponentChange = struct {
 };
 
 /// For internal queueing of commands. Cleared after a stage is completed.
-const ChangeQueue = std.ArrayList(union(enum) {
+const ChangeQueue = std.ArrayList(ChangeQueueItem);
+const ChangeQueueItem = union(enum) {
     added_component: struct {
         ent: ztg.Entity,
         component_id: util.CompId,
@@ -994,7 +989,7 @@ const ChangeQueue = std.ArrayList(union(enum) {
     },
     removed_ent: ztg.Entity,
     removed_component: ComponentChange,
-});
+};
 
 const testing = std.testing;
 

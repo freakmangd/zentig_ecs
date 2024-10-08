@@ -63,7 +63,7 @@ pub fn Init(comptime stage_defs: []const StageDef) type {
         fn runSystemTuple(systems: anytype, world: anytype, comptime catch_errs: bool, comptime errCallback: if (catch_errs) fn (anyerror) void else void) !void {
             inline for (systems) |sys| {
                 const System = @TypeOf(sys);
-                const params = @typeInfo(System).Fn.params;
+                const params = @typeInfo(System).@"fn".params;
                 const args = try world.initParamsForSystem(world.frame_alloc, params);
 
                 if (comptime ztg.meta.canReturnError(System)) {
@@ -120,7 +120,7 @@ pub fn Init(comptime stage_defs: []const StageDef) type {
             defer group.finish();
 
             const F = @TypeOf(f);
-            const params = @typeInfo(F).Fn.params;
+            const params = @typeInfo(F).@"fn".params;
             const args = world.initParamsForSystem(thread_alloc.allocator(), params) catch |err| {
                 stage_err.* = err;
                 return;

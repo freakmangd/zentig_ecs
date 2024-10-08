@@ -1,7 +1,7 @@
 const std = @import("std");
 const ztg = @import("../init.zig");
 const math = std.math;
-const util = ztg.util;
+const util = @import("../util.zig");
 
 /// A vector of 3 `f32`s
 pub const Vec3 = extern struct {
@@ -9,18 +9,27 @@ pub const Vec3 = extern struct {
     y: f32 = 0.0,
     z: f32 = 0.0,
 
+    pub const one = splat(1);
+    pub const zero: Vec3 = .{};
+    pub const right: Vec3 = .{ .x = 1 };
+    pub const left: Vec3 = .{ .x = -1 };
+    pub const up: Vec3 = .{ .y = 1 };
+    pub const down: Vec3 = .{ .y = -1 };
+    pub const forward: Vec3 = .{ .z = 1 };
+    pub const backward: Vec3 = .{ .z = -1 };
+
     pub inline fn init(x: anytype, y: anytype, z: anytype) Vec3 {
         return .{
-            .x = if (comptime @typeInfo(@TypeOf(x)) == .Int) @floatFromInt(x) else x,
-            .y = if (comptime @typeInfo(@TypeOf(y)) == .Int) @floatFromInt(y) else y,
-            .z = if (comptime @typeInfo(@TypeOf(z)) == .Int) @floatFromInt(z) else z,
+            .x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x,
+            .y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y,
+            .z = if (comptime @typeInfo(@TypeOf(z)) == .int) @floatFromInt(z) else z,
         };
     }
 
     pub inline fn set(self: *Vec3, x: anytype, y: anytype, z: anytype) void {
-        self.x = if (comptime @typeInfo(@TypeOf(x)) == .Int) @floatFromInt(x) else x;
-        self.y = if (comptime @typeInfo(@TypeOf(y)) == .Int) @floatFromInt(y) else y;
-        self.z = if (comptime @typeInfo(@TypeOf(z)) == .Int) @floatFromInt(z) else z;
+        self.x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x;
+        self.y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y;
+        self.z = if (comptime @typeInfo(@TypeOf(z)) == .int) @floatFromInt(z) else z;
     }
 
     /// Returns T with all of it's components set to the original vector's
@@ -39,13 +48,13 @@ pub const Vec3 = extern struct {
     /// Converts the Vector into a @Vector object of type `T`, doing
     /// the necessary conversions.
     pub inline fn intoVectorOf(self: Vec3, comptime T: type) @Vector(3, T) {
-        if (@typeInfo(T) == .Float or @typeInfo(T) == .ComptimeFloat) {
+        if (@typeInfo(T) == .float or @typeInfo(T) == .comptime_float) {
             if (comptime T == f32) {
                 return self.intoSimd();
             } else {
                 return .{ @floatCast(self.x), @floatCast(self.y), @floatCast(self.z) };
             }
-        } else if (@typeInfo(T) == .Int) {
+        } else if (@typeInfo(T) == .int) {
             return .{ @intFromFloat(self.x), @intFromFloat(self.y), @intFromFloat(self.z) };
         } else {
             util.compileError("Cannot turn self into a vector of `{s}`", .{@typeName(T)});
@@ -119,7 +128,7 @@ pub const Vec3 = extern struct {
     }
 
     /// Returns a new Vec3 with all of it's components set to a number within [min, max)
-    pub inline fn random(rand: std.rand.Random, _min: f32, _max: f32) Vec3 {
+    pub inline fn random(rand: std.Random, _min: f32, _max: f32) Vec3 {
         return .{
             .x = std.math.lerp(_min, _max, rand.float(f32)),
             .y = std.math.lerp(_min, _max, rand.float(f32)),
@@ -128,18 +137,24 @@ pub const Vec3 = extern struct {
     }
 
     /// Returns a new random Vec3 that lies on the surface of a unit sphere
-    pub inline fn randomOnUnitSphere(rand: std.rand.Random) Vec3 {
+    pub fn randomOnUnitSphere(rand: std.Random) Vec3 {
         var rand_vec = @Vector(3, f32){ rand.float(f32), rand.float(f32), rand.float(f32) };
-        rand_vec *= 1 / ztg.math.lengthVec(rand_vec);
-        return Vec3.fromSimd(rand_vec);
+        rand_vec *= @as(@Vector(3, f32), @splat(1 / ztg.math.lengthVec(rand_vec)));
+        return from(rand_vec);
     }
 
-    pub fn format(value: Vec3, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-        try writer.print(std.fmt.comptimePrint("Vec3({{{s}:.{}}}, {{{s}:.{}}}, {{{s}:.{}}})", .{
-            fmt, 2,
-            fmt, 2,
-            fmt, 2,
-        }), .{ value.x, value.y, value.z });
+    pub fn format(value: Vec3, comptime _fmt: []const u8, opt: std.fmt.FormatOptions, writer: anytype) !void {
+        const start_str, const fmt = comptime blk: {
+            if (_fmt.len > 0 and _fmt[0] == 's') break :blk .{ "(", _fmt[1..] };
+            break :blk .{ "Vec3(", _fmt };
+        };
+        try writer.writeAll(start_str);
+        try util.formatFloatValue(value.x, fmt, opt, writer);
+        try writer.writeAll(", ");
+        try util.formatFloatValue(value.y, fmt, opt, writer);
+        try writer.writeAll(", ");
+        try util.formatFloatValue(value.z, fmt, opt, writer);
+        try writer.writeAll(")");
     }
 
     const vec_funcs = @import("vec_funcs.zig");
@@ -153,16 +168,9 @@ pub const Vec3 = extern struct {
     pub const expectEqual = generated_funcs.expectEqual;
     pub const expectApproxEqAbs = generated_funcs.expectApproxEqAbs;
     pub const expectApproxEqRel = generated_funcs.expectApproxEqRel;
-    pub const one = generated_funcs.one;
     pub const splat = generated_funcs.splat;
-    pub const zero = generated_funcs.zero;
-    pub const right = generated_funcs.right;
-    pub const left = generated_funcs.left;
-    pub const up = generated_funcs.up;
-    pub const down = generated_funcs.down;
     pub const copy = generated_funcs.copy;
     pub const intoSimd = generated_funcs.intoSimd;
-    pub const fromSimd = generated_funcs.fromSimd;
     pub const abs = generated_funcs.abs;
     pub const angle = generated_funcs.angle;
     pub const angleSigned = generated_funcs.angleSigned;

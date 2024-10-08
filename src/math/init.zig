@@ -2,6 +2,14 @@ const std = @import("std");
 const util = @import("../util.zig");
 const expectEqual = std.testing.expectEqual;
 
+/// Alias for `f32`, used to clarify input parameters for
+/// functions that take angles in radians
+pub const Radians = f32;
+
+/// Alias for `f32`, used to clarify input parameters for
+/// functions that take angles in degrees
+pub const Degrees = f32;
+
 pub const Vec2 = @import("vec2.zig").Vec2;
 pub const Vec3 = @import("vec3.zig").Vec3;
 pub const Vec4 = @import("vec4.zig").Vec4;
@@ -17,33 +25,25 @@ pub fn VectorOfLen(comptime len: usize) ?type {
 
 fn isFloat(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .Float, .ComptimeFloat => true,
+        .float, .comptime_float => true,
         else => false,
     };
 }
 fn isIntegral(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .Int, .ComptimeInt => true,
+        .int, .comptime_int => true,
         else => false,
     };
 }
-
-/// Alias for `f32`, used to clarify input parameters for
-/// functions that take angles in radians
-pub const Radians = f32;
-
-/// Alias for `f32`, used to clarify input parameters for
-/// functions that take angles in degrees
-pub const Degrees = f32;
 
 pub inline fn toFloat(comptime T: type, x: anytype) T {
     if (T == @TypeOf(x)) return x;
     if (comptime !isFloat(T)) @compileError("toFloat requires it's first argument `T` to be a Float type to convert `x` to.");
 
     return switch (@typeInfo(@TypeOf(x))) {
-        .Int => @floatFromInt(x),
-        .Float => @floatCast(x),
-        .ComptimeFloat, .ComptimeInt => x,
+        .int => @floatFromInt(x),
+        .float => @floatCast(x),
+        .comptime_float, .comptime_int => x,
         else => util.compileError("Cannot convert `{s}` to a float.", .{@typeName(@TypeOf(x))}),
     };
 }
@@ -61,9 +61,9 @@ pub inline fn toInt(comptime T: type, x: anytype) T {
     if (comptime !isIntegral(T)) @compileError("toInt requires it's first argument `T` to be an Integral type to convert `x` to.");
 
     return switch (@typeInfo(@TypeOf(x))) {
-        .Int => @intCast(x),
-        .Float => @intFromFloat(x),
-        .ComptimeFloat, .ComptimeInt => x,
+        .int => @intCast(x),
+        .float => @intFromFloat(x),
+        .comptime_float, .comptime_int => x,
         else => util.compileError("Cannot convert `{s}` to an int.", .{@typeName(@TypeOf(x))}),
     };
 }
@@ -152,24 +152,29 @@ test div {
     try std.testing.expectError(error.DivideByZero, div(f32, 1_000, 0));
 }
 
-// Converts a and b to f32 and adds them
+/// Converts a and b to f32 and adds them
 pub inline fn addf32(a: anytype, b: anytype) f32 {
     return add(f32, a, b);
 }
 
-// Converts a and b to f32 and subtracts them
+/// Converts a and b to f32 and subtracts them
 pub inline fn subf32(a: anytype, b: anytype) f32 {
     return sub(f32, a, b);
 }
 
-// Converts a and b to f32 and multiplies them
+/// Converts a and b to f32 and multiplies them
 pub inline fn mulf32(a: anytype, b: anytype) f32 {
     return mul(f32, a, b);
 }
 
-// Converts a and b to f32 and divides them
+/// Converts a and b to f32 and divides them
 pub inline fn divf32(a: anytype, b: anytype) error{DivideByZero}!f32 {
     return div(f32, a, b);
+}
+
+fn angleDifference(from: anytype, to: anytype) @TypeOf(from, to) {
+    const difference = (to - from) % std.math.tau;
+    return ((2.0 * difference) % std.math.tau) - difference;
 }
 
 /// Clamps v between 0 and 1
@@ -181,6 +186,33 @@ test clamp01 {
     try expectEqual(@as(f32, 0.5), clamp01(@as(f32, 0.5)));
     try expectEqual(@as(f32, 1.0), clamp01(@as(f32, 1.5)));
     try expectEqual(@as(f32, 0.0), clamp01(@as(f32, -20.0)));
+}
+
+pub fn moveTowards(from: anytype, to: anytype, delta: anytype) @TypeOf(from, to, delta) {
+    if (@abs(to - from) <= delta)
+        return to;
+
+    return from + (std.math.sign(to - from) * delta);
+}
+
+pub fn rotateToward(from: anytype, to: anytype, delta: anytype) @TypeOf(from, to, delta) {
+    const difference = angleDifference(from, to);
+    const abs_difference = @abs(difference);
+    return from + std.math.clamp(delta, abs_difference - std.math.pi, abs_difference) * if (difference >= 0.0) 1.0 else -1.0;
+}
+
+pub fn remap(
+    value: anytype,
+    in_from: anytype,
+    in_to: anytype,
+    out_from: anytype,
+    out_to: anytype,
+) @TypeOf(value, in_from, in_to, out_from, out_to) {
+    return std.math.lerp(out_from, out_to, inverseLerp(in_from, in_to, value));
+}
+
+pub fn inverseLerp(from: anytype, to: anytype, weight: anytype) @TypeOf(from, to, weight) {
+    return (weight - from) / (to - from);
 }
 
 /// Returns the length of a @Vector object
@@ -245,15 +277,8 @@ test dotVec {
 }
 
 /// Swizzles a @Vector object by a comptime mask
-///
-/// Example:
-/// ```zig
-/// try expectEqual(@Vector(2, f32){ 1, 1 }, swizzleVec(@Vector(2, f32){ 1, 2 }, .{ 0, 0 }));
-/// try expectEqual(@Vector(2, f32){ 2, 2 }, swizzleVec(@Vector(2, f32){ 1, 2 }, .{ 1, 1 }));
-/// try expectEqual(@Vector(2, f32){ 2, 1 }, swizzleVec(@Vector(2, f32){ 1, 2 }, .{ 1, 0 }));
-/// ```
 pub inline fn swizzleVec(vec: anytype, comptime mask: @TypeOf(vec)) @TypeOf(vec) {
-    const Vector = @typeInfo(@TypeOf(vec)).Vector;
+    const Vector = @typeInfo(@TypeOf(vec)).vector;
     comptime for (@as([Vector.len]Vector.child, mask)) |m| if (m < 0) @compileError(std.fmt.comptimePrint("Swizzle mask must be all positive, found {}.", .{m}));
     return @shuffle(f32, vec, undefined, mask);
 }

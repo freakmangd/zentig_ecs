@@ -13,7 +13,7 @@ const Entity = ztg.Entity;
 const Self = @This();
 
 pub const ComponentError = error{UnregisteredComponent};
-pub const GiveRemoveComponentError = ComponentError || error{EntityDoesntExist} || Allocator.Error;
+pub const RemoveComponentError = ComponentError || error{EntityDoesntExist} || Allocator.Error;
 
 ctx: *anyopaque,
 vtable: *const Vtable,
@@ -25,8 +25,8 @@ pub const Vtable = struct {
     get_ent_parent: *const fn (*const anyopaque, ztg.Entity) error{EntityDoesntExist}!?ztg.Entity,
     set_ent_parent: *const fn (*anyopaque, ztg.Entity, ?ztg.Entity) error{ EntityDoesntExist, ParentDoesntExist }!void,
 
-    add_component: *const fn (*anyopaque, Entity, util.CompId, u29, *const anyopaque) GiveRemoveComponentError!void,
-    remove_component: *const fn (*anyopaque, Entity, util.CompId) GiveRemoveComponentError!void,
+    add_component: *const fn (*anyopaque, Entity, util.CompId, u29, *const anyopaque) anyerror!void,
+    remove_component: *const fn (*anyopaque, Entity, util.CompId) RemoveComponentError!void,
     get_component_ptr: *const fn (*anyopaque, Entity, util.CompId) ComponentError!?*anyopaque,
     check_ent_has: *const fn (*anyopaque, Entity, util.CompId) ComponentError!bool,
 
@@ -88,8 +88,6 @@ pub fn newEntWith(self: Self, components: anytype) !ztg.EntityHandle {
     return .{ .ent = ent, .com = self };
 }
 
-pub const newEntWithMany = @compileError("newEntWithMany is now renamed to newEntWith");
-
 /// Returns the entity's parent if it has one
 /// Can error if the entity doesn't exist
 pub fn getEntParent(self: Self, ent: ztg.Entity) !?ztg.Entity {
@@ -111,29 +109,7 @@ inline fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void
     const Component = @TypeOf(component);
     if (Component == type) util.compileError("You have passed `{}` to giveComponents, which is of type `type`, you might have forgotten to instantiate it.", .{component});
 
-    const has_onAdded = comptime @hasDecl(Component, "onAdded");
-    const member_type: if (has_onAdded) ztg.meta.MemberFnType else void = comptime if (has_onAdded) ztg.meta.memberFnType(Component, "onAdded") else {};
-    const needs_mut: if (has_onAdded) bool else void = comptime if (has_onAdded) member_type == .by_ptr else {};
-    var mutable_comp: if (has_onAdded and needs_mut) Component else void = if (comptime has_onAdded and needs_mut) component else {};
-
-    if (comptime has_onAdded) {
-        util.assertOkOnAddedFunction(Component);
-
-        const can_err = comptime has_onAdded and ztg.meta.canReturnError(@TypeOf(Component.onAdded));
-
-        if (comptime member_type == .non_member) {
-            if (comptime can_err) try Component.onAdded(ent, self) else Component.onAdded(ent, self);
-        } else {
-            var c = if (comptime needs_mut) &mutable_comp else component;
-            if (comptime can_err) try c.onAdded(ent, self) else c.onAdded(ent, self);
-        }
-    }
-
-    if (comptime builtin.mode == .Debug and !builtin.is_test) {
-        if (self.checkEntHas(ent, Component)) ztg.log.warn("Entity {} already has a component of type `{}` but you are adding it again, the data will be overwritten with this new instance.", .{ ent, Component });
-    }
-
-    self.vtable.add_component(self.ctx, ent, util.compId(Component), @alignOf(Component), if (comptime has_onAdded and needs_mut) &mutable_comp else &component) catch |err| switch (err) {
+    self.vtable.add_component(self.ctx, ent, util.compId(Component), @alignOf(Component), @ptrCast(&component)) catch |err| switch (err) {
         error.UnregisteredComponent => panicOnUnregistered(Component, .component),
         else => return err,
     };
@@ -161,12 +137,14 @@ inline fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void
 pub fn giveComponents(self: Self, ent: Entity, components: anytype) !void {
     const Components = @TypeOf(components);
 
-    if (@typeInfo(Components) != .Struct) {
-        if (!@typeInfo(Components).Struct.is_tuple) {
-            util.compileError("Non-tuple type {} passed to giveComponents", .{Components});
-        } else if (!@hasDecl(Components, "is_component_bundle")) {
-            @compileError("Struct passed to giveComponents does not have a public is_component_bundle decl, if it is not a bundle wrap it in an anonymous tuple.");
-        }
+    if (@typeInfo(Components) == .@"struct" and
+        !@typeInfo(Components).@"struct".is_tuple and
+        !@hasDecl(Components, "is_component_bundle"))
+    {
+        @compileError(
+            \\Struct passed to giveComponents does not have a public is_component_bundle decl,
+            \\if it is not a bundle wrap it in an anonymous tuple."
+        );
     }
 
     inline for (std.meta.fields(Components)) |field| {

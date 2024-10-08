@@ -6,9 +6,10 @@ const std = @import("std");
 const ztg = @import("../init.zig");
 const util = @import("../util.zig");
 const math = std.math;
+const builtin = std.builtin;
 
 pub fn GenerateFunctions(comptime Self: type) type {
-    if (@typeInfo(Self).Struct.layout != .@"extern") @compileError("To implement vec_funcs into a struct it must be marked extern.");
+    if (@typeInfo(Self).@"struct".layout != .@"extern") @compileError("To implement vec_funcs into a struct it must be marked extern.");
 
     const vec_len = std.meta.fields(Self).len;
 
@@ -76,36 +77,6 @@ pub fn GenerateFunctions(comptime Self: type) type {
             return fromSimd(@splat(s));
         }
 
-        /// Returns a vector with every element set to 1
-        pub const one = fromSimd(@splat(1));
-
-        /// Shorthand for .{}
-        pub const zero: Self = .{};
-
-        /// Shorthand for .{ .x = 1 }
-        pub const right: Self = .{ .x = 1 };
-
-        /// Shorthand for .{ .x = -1 }
-        pub const left: Self = .{ .x = -1 };
-
-        /// Shorthand for .{ .y = 1 }
-        pub const up: Self = .{ .y = 1 };
-
-        /// Shorthand for .{ .y = -1 }
-        pub const down: Self = .{ .y = -1 };
-
-        /// Shorthand for .{ .z = 1 }
-        pub const forward = if (vec_len >= 3) Self{ .z = 1 } else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `forward` method");
-
-        /// Shorthand for .{ .z = -1 }
-        pub const backward = if (vec_len >= 3) Self{ .z = -1 } else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `backward` method");
-
-        /// Shorthand for .{ .w = 1 }
-        pub const inward = if (vec_len >= 4) Self{ .w = 1 } else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `backward` method");
-
-        /// shorthand for .{ .w = -1 }
-        pub const outward = if (vec_len >= 4) Self{ .w = -1 } else @compileError("Struct " ++ @typeName(Self) ++ " does not have a `backward` method");
-
         pub inline fn copy(self: Self) Self {
             return self;
         }
@@ -114,7 +85,7 @@ pub fn GenerateFunctions(comptime Self: type) type {
             return @bitCast(self);
         }
 
-        pub inline fn fromSimd(self: @Vector(vec_len, f32)) Self {
+        inline fn fromSimd(self: @Vector(vec_len, f32)) Self {
             return @bitCast(self);
         }
 
@@ -183,7 +154,7 @@ pub fn GenerateFunctions(comptime Self: type) type {
 
         /// Returns `orig` moved by an amount no greater than `max_dist` in the
         /// direction towards `to`. Will always arrive at `to` and stay without overshooting.
-        pub inline fn moveTowards(orig: Self, to: Self, max_dist: f32) Self {
+        pub fn moveTowards(orig: Self, to: Self, max_dist: f32) Self {
             var to_vec = Self.sub(to, orig);
             const sqr_dist = Self.sqrLength(to_vec);
 
@@ -191,7 +162,8 @@ pub fn GenerateFunctions(comptime Self: type) type {
 
             const dist = math.sqrt(sqr_dist);
 
-            to_vec.divEql(dist * max_dist);
+            to_vec.divEql(dist);
+            to_vec.mulEql(max_dist);
             return Self.add(orig, to_vec);
         }
 
@@ -220,9 +192,9 @@ pub fn GenerateFunctions(comptime Self: type) type {
         }
 
         const Component = blk: {
-            var info = @typeInfo(std.meta.FieldEnum(Self)).Enum;
+            var info = @typeInfo(std.meta.FieldEnum(Self)).@"enum";
             info.tag_type = i32;
-            break :blk @Type(.{ .Enum = info });
+            break :blk @Type(.{ .@"enum" = info });
         };
 
         /// Returns the vector with it's components ordered in the method defined in `comps`
@@ -271,11 +243,11 @@ pub fn GenerateFunctions(comptime Self: type) type {
         }
 
         pub inline fn add(v0: Self, v1: Self) Self {
-            return Self.fromSimd(v0.intoSimd() + v1.intoSimd());
+            return fromSimd(v0.intoSimd() + v1.intoSimd());
         }
 
         pub inline fn sub(v0: Self, v1: Self) Self {
-            return Self.fromSimd(v0.intoSimd() - v1.intoSimd());
+            return fromSimd(v0.intoSimd() - v1.intoSimd());
         }
 
         pub inline fn mul(v0: Self, s: f32) Self {
@@ -287,7 +259,7 @@ pub fn GenerateFunctions(comptime Self: type) type {
         }
 
         pub inline fn scale(v0: Self, v1: Self) Self {
-            return Self.fromSimd(v0.intoSimd() * v1.intoSimd());
+            return fromSimd(v0.intoSimd() * v1.intoSimd());
         }
 
         pub inline fn addEql(self: *Self, other: Self) void {
@@ -318,21 +290,36 @@ pub fn convertFieldToF32(obj: anytype, comptime field_name: []const u8, default:
     const FieldType = std.meta.fields(O)[field_index].type;
 
     return switch (@typeInfo(FieldType)) {
-        .Int => @floatFromInt(@field(obj, field_name)),
-        .Float => @floatCast(@field(obj, field_name)),
-        .ComptimeFloat => @field(obj, field_name),
-        .ComptimeInt => @field(obj, field_name),
+        .int => @floatFromInt(@field(obj, field_name)),
+        .float => @floatCast(@field(obj, field_name)),
+        .comptime_float => @field(obj, field_name),
+        .comptime_int => @field(obj, field_name),
         else => util.compileError("Cannot convert type `{s}` to f32.", .{@typeName(FieldType)}),
     };
 }
 
 pub fn isBitcastable(comptime Self: type, comptime Other: type) bool {
-    return @sizeOf(Self) == @sizeOf(Other) and
-        @typeInfo(Other).Struct.layout == .@"extern" and
-        @typeInfo(std.meta.fieldInfo(Other, .x).type) == .Float and
-        @typeInfo(std.meta.fieldInfo(Other, .y).type) == .Float and
-        if (@hasField(Self, "z")) @typeInfo(std.meta.fieldInfo(Other, .z).type) == .Float else true and
-        if (@hasField(Self, "w")) @typeInfo(std.meta.fieldInfo(Other, .w).type) == .Float else true;
+    return comptime blk: {
+        const other_ti = @typeInfo(Other);
+        const s_fields: []const builtin.Type.StructField = @typeInfo(Self).@"struct".fields;
+
+        if (other_ti == .vector and
+            other_ti.vector.len == s_fields.len and
+            other_ti.vector.child == f32) break :blk true;
+
+        if (other_ti.@"struct".layout != .@"extern") break :blk false;
+
+        const o_fields: []const builtin.Type.StructField = other_ti.@"struct".fields;
+        if (s_fields.len != o_fields.len) break :blk false;
+
+        const OtherField = std.meta.FieldEnum(Other);
+        for (s_fields) |sf| {
+            const other_field = std.meta.stringToEnum(OtherField, sf.name) orelse break :blk false;
+            if (sf.type != std.meta.FieldType(Other, other_field)) break :blk false;
+        }
+
+        break :blk true;
+    };
 }
 
 const Vec2 = @import("vec2.zig").Vec2;
@@ -371,4 +358,22 @@ test "shuffle" {
     const b = Vec2{ .x = 20, .y = 10 };
     const c = Vec2.shuffle(a, b, .{ -1, 1 });
     try Vec2.expectEqual(.{ .x = 20, .y = 20 }, c);
+}
+
+test isBitcastable {
+    const ExternVec = extern struct {
+        x: f32 = 0xDEAD,
+        y: f32 = 0xBEEF,
+    };
+
+    try std.testing.expect(isBitcastable(Vec2, ExternVec));
+    try Vec2.expectEqual(Vec2.init(0xDEAD, 0xBEEF), Vec2.from(ExternVec{}));
+
+    const MyVec = struct {
+        x: f32 = 0xDEAD,
+        y: f32 = 0xBEEF,
+    };
+
+    try std.testing.expect(!isBitcastable(Vec2, MyVec));
+    try Vec2.expectEqual(Vec2.init(0xDEAD, 0xBEEF), Vec2.from(MyVec{}));
 }
