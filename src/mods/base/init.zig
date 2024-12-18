@@ -6,7 +6,7 @@ pub const Lifetime = @import("lifetime.zig");
 pub const Transform = @import("transform.zig");
 pub const GlobalTransform = @import("global_transform.zig");
 
-pub const Active = struct { bool = true };
+pub const Active = struct { bool };
 pub const Name = struct { []const u8 };
 
 pub fn include(comptime world: *ztg.WorldBuilder) !void {

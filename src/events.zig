@@ -104,7 +104,7 @@ fn EventArray(comptime T: type) type {
 
 pub fn EventPools(comptime event_types: anytype) type {
     const Inner = blk: {
-        var tb = ztg.meta.TypeBuilder{ .is_tuple = true };
+        var tb = ztg.meta.TypeBuilder{};
         inline for (event_types) |T| {
             tb.appendTupleField(EventArray(T), &EventArray(T){});
         }
