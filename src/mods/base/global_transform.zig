@@ -69,8 +69,8 @@ pub fn include(comptime wb: *ztg.WorldBuilder) void {
 }
 
 fn pou_updateGlobals(com: ztg.Commands, q: ztg.Query(.{ ztg.Entity, Self })) void {
-    for (q.items(0), q.items(1)) |ent, gtr| {
+    for (q.items(ztg.Entity), q.items(Self)) |ent, gtr| {
         gtr.updateBasis(com, ent);
     }
-    for (q.items(1)) |gtr| gtr.__data.basis_is_dirty = true;
+    for (q.items(Self)) |gtr| gtr.__data.basis_is_dirty = true;
 }

@@ -76,14 +76,14 @@ const player_file = struct {
     }
 
     fn playerSpeach(q: ztg.Query(.{ Player, ztg.base.Transform })) !void {
-        for (q.items(0), q.items(1)) |player, trn| {
+        for (q.items(Player), q.items(ztg.base.Transform)) |player, trn| {
             try std.testing.expectEqualStrings("Player", player.name);
             try std.testing.expect(trn.getPos().equals(.{ .x = 10, .y = 10 }));
         }
     }
 
-    fn playerSpecial(q: ztg.QueryOpts(.{game_file.Sprite}, .{ztg.With(Player)})) !void {
-        for (q.items(0)) |spr| {
+    fn playerSpecial(q: ztg.Query(.{ game_file.Sprite, ztg.With(Player) })) !void {
+        for (q.items(game_file.Sprite)) |spr| {
             try std.testing.expectEqual(@as(usize, 0), spr.img);
         }
     }

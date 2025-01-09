@@ -13,13 +13,10 @@ pub const events = @import("events.zig");
 pub const EventSender = events.EventSender;
 pub const EventReceiver = events.EventReceiver;
 
-pub const query_modifiers = @import("query_modifiers.zig");
-pub const With = query_modifiers.With;
-pub const Without = query_modifiers.Without;
-
 pub const query = @import("query.zig");
 pub const Query = query.Query;
-pub const QueryOpts = query.QueryOpts;
+pub const With = query.With;
+pub const Without = query.Without;
 
 pub const system_order = @import("system_order.zig");
 pub const after = system_order.after;
@@ -72,7 +69,6 @@ pub const CrashReason = enum { hit_ent_limit };
 
 test {
     _ = @import("events.zig");
-    _ = @import("query_modifiers.zig");
     _ = @import("query.zig");
     _ = @import("system_order.zig");
     _ = math;

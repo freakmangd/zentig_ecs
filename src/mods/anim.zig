@@ -321,7 +321,7 @@ fn Animator(
         }
 
         fn update(q: ztg.Query(.{ Self, Wrapper.QueryType }), time: ztg.base.Time) void {
-            for (q.items(0), q.items(1)) |self, qt| {
+            for (q.items(Self), q.items(Wrapper.QueryType)) |self, qt| {
                 const anim: Animation = animations.get(self.current_anim).?;
                 const frame_group = anim.frame_groups[self.frame_group];
 

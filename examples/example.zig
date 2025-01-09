@@ -60,10 +60,7 @@ const player = struct {
         // Here you can query for items in the world, and running .items()
         // on a query object will return an array of pointers to all the objects
         // of that type in the world.
-        //
-        // The number in items() represents the position of the Type in the Query type.
-        // 0 for Player, 1 for Transform, etc.
-        for (q.items(0), q.items(1)) |plr, tr| {
+        for (q.items(Player), q.items(ztg.base.Transform)) |plr, tr| {
             std.debug.print("My name is {s}, and I'm located at {d} {d}.\n", .{ plr.name, tr.getPos().x, tr.getPos().y });
             std.debug.print("The current frame is {}\n", .{time.frame_count});
         }
@@ -93,7 +90,7 @@ const Mover = struct {
     }
 
     fn update(q: ztg.Query(.{ Mover, ztg.base.Transform })) void {
-        for (q.items(0), q.items(1)) |m, tr| {
+        for (q.items(Mover), q.items(ztg.base.Transform)) |m, tr| {
             tr.translate(m.dir.mul(m.speed));
         }
     }

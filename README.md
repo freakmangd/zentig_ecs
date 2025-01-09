@@ -49,7 +49,7 @@ pub const Player = struct {
 A basic system:
 ```zig
 pub fn playerSpeak(q: ztg.Query(.{Player})) !void {
-  for (q.items(0)) |plr| {
+  for (q.items(Player)) |plr| {
     std.debug.print("My name is {s}\n", .{self.name});
   }
 }

@@ -9,25 +9,14 @@ const TypeMap = ztg.meta.TypeMap;
 /// an object that can be used to iterate through entities that have
 /// all of those components. If one of the types is `Entity` (`usize`)
 /// then it will also have the entity those components are attatched to.
-pub fn Query(comptime query_types: anytype) type {
-    return QueryOpts(query_types, .{});
-}
-
-/// Takes tuple of types: `.{ Player, Position, Sprite }` and returns
-/// an object that can be used to iterate through entities that have
-/// all of those components. If one of the types is `Entity` (`usize`)
-/// then it will also have the entity those components are attatched to.
 ///
 /// Also allows options which restrict the query without actually collecting the entities
-/// that fit the restriction, such as `.{ Transform }, .{ With(Player) }`
-pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type {
-    //comptime assertOkQuery(query_types_raw, _options);
-
+/// that fit the restriction, such as `.{ Transform, With(Player) }`
+pub fn Query(comptime query_types: anytype) type {
     return struct {
         const Self = @This();
 
         pub const IsQueryType = {};
-        pub const options = _options;
 
         pub const has_entities: bool = blk: {
             for (query_types) |QT| {
@@ -36,13 +25,11 @@ pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type
             break :blk false;
         };
 
-        const raw_types_info = getRawTypesInfo(query_types);
-        pub const req_types = raw_types_info[0];
-        pub const opt_types = raw_types_info[1];
-
-        const options_info = getOptionsInfo(options);
-        pub const with_types = options_info[0];
-        pub const without_types = options_info[1];
+        const types = classifyTypes(query_types);
+        pub const req_types = types.required;
+        pub const opt_types = types.optional;
+        pub const with_types = types.with;
+        pub const without_types = types.without;
 
         comp_ptrs: [req_types.types.len][]*anyopaque = undefined,
         opt_ptrs: [opt_types.types.len][]?*anyopaque = undefined,
@@ -69,7 +56,7 @@ pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type
             }
 
             var last_inited_opt_slice: usize = 0;
-            errdefer for (self.comp_ptrs[0..last_inited_slice]) |o| {
+            errdefer for (self.opt_ptrs[0..last_inited_opt_slice]) |o| {
                 alloc.free(o);
             };
 
@@ -89,41 +76,39 @@ pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type
         }
 
         /// Returns a slice of pointers to the queried components
-        pub inline fn items(self: *const Self, comptime idx: usize) Items(idx) {
-            const OutChildType = query_types[idx];
+        pub fn items(self: *const Self, comptime T: type) []const Single(T) {
+            if (comptime T == Entity) return self.entities[0..self.len];
 
-            if (comptime OutChildType == Entity) return self.entities[0..self.len];
-
-            if (comptime req_types.indexOf(OutChildType)) |comp_idx| {
+            if (comptime req_types.indexOf(T)) |comp_idx| {
                 return @ptrCast(self.comp_ptrs[comp_idx][0..self.len]);
-            } else if (comptime opt_types.indexOf(UnwrapOpt(OutChildType))) |comp_idx| {
+            } else if (comptime opt_types.indexOf(UnwrapOpt(T))) |comp_idx| {
                 return @ptrCast(self.opt_ptrs[comp_idx][0..self.len]);
             }
 
-            @compileError(std.fmt.comptimePrint("Index {} could not be resolved", .{idx}));
+            @compileError(std.fmt.comptimePrint("There is no type {} in query", .{@typeName(T)}));
         }
 
         /// Asserts there is only one item in the query and
         /// returns a single pointer to the type at the given index
-        pub inline fn single(self: *const Self, comptime idx: usize) Single(idx) {
+        pub fn single(self: *const Self, comptime T: type) Single(T) {
             std.debug.assert(self.len == 1);
-            return self.first(idx);
+            return self.first(T);
         }
 
         /// Asserts there are zero or one items in the query,
         /// returns null if the query collected 0 items
-        pub inline fn singleOrNull(self: *const Self, comptime idx: usize) ?Single(idx) {
+        pub fn singleOrNull(self: *const Self, comptime T: type) ?Single(T) {
             std.debug.assert(self.len <= 1);
-            return self.firstOrNull(idx);
+            return self.firstOrNull(T);
         }
 
-        pub inline fn first(self: *const Self, comptime idx: usize) Single(idx) {
-            return self.items(idx)[0];
+        pub fn first(self: *const Self, comptime T: type) Single(T) {
+            return self.items(T)[0];
         }
 
-        pub inline fn firstOrNull(self: *const Self, comptime idx: usize) ?Single(idx) {
+        pub fn firstOrNull(self: *const Self, comptime T: type) ?Single(T) {
             if (self.len == 0) return null;
-            return self.items(idx)[0];
+            return self.items(T)[0];
         }
 
         fn UnwrapOpt(comptime T: type) type {
@@ -131,64 +116,64 @@ pub fn QueryOpts(comptime query_types: anytype, comptime _options: anytype) type
             return T;
         }
 
-        fn Items(comptime idx: usize) type {
-            return []Single(idx);
-        }
-
-        fn Single(comptime idx: usize) type {
-            if (comptime idx >= query_types.len) @compileError("Index for query outside of query types range.");
-            if (comptime query_types[idx] == Entity) return Entity;
-            if (comptime @typeInfo(query_types[idx]) == .optional) return ?*UnwrapOpt(query_types[idx]);
-            return *query_types[idx];
+        fn Single(comptime T: type) type {
+            if (T == Entity) return Entity;
+            if (comptime @typeInfo(T) == .optional) return ?*UnwrapOpt(T);
+            return *T;
         }
     };
 }
 
-fn getRawTypesInfo(comptime query_types: anytype) struct { TypeMap, TypeMap } {
-    var req: TypeMap = .{};
-    var opt: TypeMap = .{};
-
-    for (query_types) |QT| {
-        // remove entites from query types
-        if (QT == Entity) continue;
-
-        if (@typeInfo(QT) == .optional) {
-            if (opt.has(std.meta.Child(QT))) @compileError("Cannot use the same type twice in a Query.");
-            opt.append(std.meta.Child(QT));
-        } else {
-            if (req.has(QT)) @compileError("Cannot use the same type twice in a Query.");
-            req.append(QT);
-        }
-    }
-
-    return .{ req, opt };
-}
-
-fn getOptionsInfo(comptime options: anytype) struct { TypeMap, TypeMap } {
+fn classifyTypes(comptime query_types: anytype) struct {
+    required: TypeMap,
+    optional: TypeMap,
+    with: TypeMap,
+    without: TypeMap,
+} {
+    var required: TypeMap = .{};
+    var optional: TypeMap = .{};
     var with: TypeMap = .{};
     var without: TypeMap = .{};
 
-    for (options) |OT| {
-        if (@hasDecl(OT, "QueryWith")) {
-            with.append(OT.QueryWith);
-        } else if (@hasDecl(OT, "QueryWithout")) {
-            without.append(OT.QueryWithout);
+    for (query_types) |T| {
+        if (T == Entity) continue;
+
+        switch (@typeInfo(T)) {
+            .optional => |opt| optional.append(opt.child),
+            .@"struct" => str: {
+                if (@hasDecl(T, "QueryWith")) {
+                    with.append(T.QueryWith);
+                    break :str;
+                } else if (@hasDecl(T, "QueryWithout")) {
+                    without.append(T.QueryWithout);
+                    break :str;
+                }
+
+                required.append(T);
+            },
+            else => |t| @compileError(std.fmt.comptimePrint("Type in query cannot be of type {}", .{@tagName(t)})),
         }
     }
 
-    return .{ with, without };
+    return .{
+        .required = required,
+        .optional = optional,
+        .with = with,
+        .without = without,
+    };
 }
 
-fn assertOkQuery(comptime query_types_raw: anytype, comptime options: anytype) void {
-    var tm = TypeMap{};
-    inline for (query_types_raw) |QT| {
-        if (tm.has(QT)) @compileError("Cannot use the same type twice in a Query.");
-        tm.append(QT);
-    }
+/// A query modifier asserting the entity has a component of type `T`
+/// without actually collecting it in the query
+pub fn With(comptime T: type) type {
+    return struct {
+        pub const QueryWith = T;
+    };
+}
 
-    var tm_opts = TypeMap{};
-    inline for (options) |QT| {
-        if (tm_opts.has(QT)) @compileError("Cannot use the same type twice in a Query.");
-        tm_opts.append(QT);
-    }
+/// A query modifier asserting the entity does __not__ have a component of type `T`
+pub fn Without(comptime T: type) type {
+    return struct {
+        pub const QueryWithout = T;
+    };
 }

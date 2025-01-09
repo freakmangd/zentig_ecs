@@ -43,7 +43,6 @@ pub fn build(b: *std.Build) void {
     });
     all_tests.root_module.addImport("zentig", zentig_mod);
     all_tests.root_module.addImport("zmath", zmath);
-    all_tests.root_module.single_threaded = true;
 
     const run_all_tests = b.addRunArtifact(all_tests);
 

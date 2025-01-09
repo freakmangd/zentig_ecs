@@ -26,7 +26,7 @@ pub fn include(comptime wb: *ztg.WorldBuilder) void {
 }
 
 fn pou_lifetimes(com: ztg.Commands, q: ztg.Query(.{ ztg.Entity, Lifetime }), time: Time) !void {
-    for (q.items(0), q.items(1)) |ent, lt| {
+    for (q.items(ztg.Entity), q.items(Lifetime)) |ent, lt| {
         if (lt.is_dead) continue;
 
         lt.current += switch (lt.time_scale) {

@@ -149,7 +149,7 @@ Let's change our previous system so that it queries for entities that have the `
 Change line 13:
 ```zig
 13: fn mySystem(q: ztg.Query(.{Name})) void {
-14:     for (q.items(0)) |name| {
+14:     for (q.items(Name)) |name| {
 15:         // Here we use name[0] because Name is a single item tuple
 16:         std.debug.print("Hello {s}!\n", .{name[0]});
 17:     }
@@ -162,13 +162,13 @@ Change line 13:
 >```zig
 >ztg.Query(.{Name, Player, Score})
 >```
->`q.items(0)` returns a `[]const *Name`<br>
->`q.items(1)` returns a `[]const *Player`<br>
->`q.items(2)` returns a `[]const *Score`<br>
+>`q.items(Name)` returns a `[]const *Name`<br>
+>`q.items(Player)` returns a `[]const *Player`<br>
+>`q.items(Score)` returns a `[]const *Score`<br>
 >
 >Which you can iterate over all at the same time because they are of equal lengths:
 >```zig
->for (q.items(0), q.items(1), q.items(2)) |name, player, score| {
+>for (q.items(Name), q.items(Player), q.items(Score)) |name, player, score| {
 >    if (score.value > 100 and player.health > 0) std.debug.print("{s} has won!", .{name});
 >}
 >```

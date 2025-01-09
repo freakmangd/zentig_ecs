@@ -106,7 +106,7 @@ pub fn init(comptime includes: []const type) Self {
 ///
 /// `player.zig:`
 /// ```zig
-/// pub fn include(comptime wb: *WorldBuilder) void {
+/// pub fn include(wb: *WorldBuilder) void {
 ///     wb.addComponents(&.{ Player });
 /// }
 /// ```
@@ -132,20 +132,7 @@ pub fn include(comptime self: *Self, comptime includes: []const type) void {
     }
 }
 
-/// Creates a new stage that can be ran and have events added to it
-///
-/// Example:
-/// ```zig
-/// wb.addStage(.my_custom_stage);
-/// wb.addSystemsToStage(.my_custom_stage, .{mySystem});
-///
-/// // @TypeOf(world) == wb.Build();
-/// world.runStage(.my_custom_stage); // Prints "Hello."
-///
-/// fn mySystem() void {
-///   std.debug.print("Hello.\n", .{});
-/// }
-/// ```
+/// Creates a new stage that can be ran and have systems added to it
 pub fn addStage(comptime self: *Self, comptime stage_name: ztg.meta.EnumLiteral) void {
     for (self.stage_defs.items) |sdef| {
         if (std.mem.eql(u8, sdef.name, @tagName(stage_name))) {
@@ -207,14 +194,6 @@ fn labelIndexFromName(comptime stage: StageDef, comptime label_name: []const u8)
 ///
 /// Each stage has a default label of `.body` which all systems are added
 /// to by default.
-///
-/// Example:
-/// ```zig
-/// wb.addLabel(.update, .my_early_label, .{ .before = .body });
-/// wb.addLabel(.update, .my_label, .default); // default appends it to the end of the label list
-///
-/// wb.addSystemsToStage(.update, ztg.after(.my_label, mySystem));
-/// ```
 pub fn addLabel(comptime self: *Self, comptime stage_name: ztg.meta.EnumLiteral, comptime label_name: ztg.meta.EnumLiteral, comptime order: union(enum) {
     before: ztg.meta.EnumLiteral,
     after: ztg.meta.EnumLiteral,
@@ -279,23 +258,7 @@ test addLabel {
     try std.testing.expectEqual(@as(usize, 4), namespace.counter);
 }
 
-/// After you add a component, you can then query for it in your systems:
-///
-/// ```zig
-/// const Player = struct { score: usize };
-///
-/// // ...
-///
-/// wb.addComponents(&.{ Player });
-///
-/// // ...
-///
-/// pub fn mySystem(q: Query(.{ Player })) void {
-///     for (q.items(0)) |pl| {
-///         std.debug.print("My score is {}\n", .{ pl.score });
-///     }
-/// }
-/// ```
+/// After you add a component, you can then query for it in your systems
 pub fn addComponents(comptime self: *Self, comptime comps: []const type) void {
     for (comps) |T| {
         if (comptime self.comp_types.has(T)) util.compileError("Attempted to add type `{s}` to worldbuilder more than once.", .{@typeName(T)});
@@ -328,30 +291,17 @@ test addComponents {
     defer w.deinit();
 }
 
-/// Resources are unique struct instances that you can request within your systems:
-///
-/// Example:
-/// ```zig
-/// const Timer = struct { current: usize };
-///
-/// wb.addResource(Timer, .{ .current = 0 });
-///
-/// pub fn mySystem(timer: Timer) void {
-///     std.debug.print("{}\n", .{ timer.current });
-/// }
-///
-/// pub fn updateTimer(timer: *Timer) void {
-///     timer.current += 1;
-/// }
-/// ```
+/// Adds a resource, which is a struct instance that you can request within your systems
 pub fn addResource(comptime self: *Self, comptime T: type, comptime default_value: T) void {
     if (comptime T == ztg.Commands) @compileError("`Commands` cannot be a resource type.");
-    if (comptime util.isContainer(T) and (@hasDecl(T, "IsQueryType") or @hasDecl(T, "EventSendType") or @hasDecl(T, "EventRecvType"))) @compileError("Queries and Events cannot be resources.");
+    if (comptime util.isContainer(T) and (@hasDecl(T, "IsQueryType") or @hasDecl(T, "EventSendType") or @hasDecl(T, "EventRecvType")))
+        @compileError("Queries and Events cannot be resources.");
 
     {
         const DT = DerefTypeUntilNonPtr(T);
         for (self.added_resources.types) |ART| {
-            if (DT == DerefTypeUntilNonPtr(ART)) @compileError("Cannot add a pointer to a type and the type as different resources, ie a resource of *u32 and u32 cannot exist at the same time. Use a wrapper.");
+            if (DT == DerefTypeUntilNonPtr(ART)) @compileError("Cannot add a pointer to a type and the type as different resources, " ++
+                "ie a resource of *u32 and u32 cannot exist at the same time. Use a wrapper.");
         }
     }
 
@@ -380,11 +330,18 @@ test addResource {
         var w = try testWorld(struct {
             pub fn include(comptime wb: *Self) void {
                 wb.addResource(MyResource, .{ .data = 10 });
+                wb.addSystemsToStage(.update, update);
+            }
+
+            fn update(res: *MyResource) void {
+                res.data += 1;
             }
         });
         defer w.deinit();
 
         try std.testing.expectEqual(@as(i32, 10), w.getRes(MyResource).data);
+        try w.runStage(.update);
+        try std.testing.expectEqual(@as(i32, 11), w.getRes(MyResource).data);
     }
 
     // allow resources to be pointers
@@ -423,24 +380,6 @@ test addResource {
 }
 
 /// Registers an event that has a payload of type `T`
-///
-/// Example:
-/// ```zig
-/// const Score = struct { total: usize };
-/// const PointsGained = struct { amount: usize };
-///
-/// wb.addEvent(PointsGained);
-///
-/// pub fn playerUpdate(q: Query(.{ Player, Transform, Box }), points_event: EventSender(PointsGained)) void {
-///   for (q.items(0), q.items(1), q.items(2)) |pl, tr, box| {
-///     if (pl.isTouchingCoin(tr, box)) points_event.send(.{ .amount = 50 });
-///   }
-/// }
-///
-/// pub fn scoreUpdate(score: *Score, points_event: EventReceiver(PointsGained)) void {
-///   for (points_event.items) |pe| score.total += pe.amount;
-/// }
-/// ```
 pub fn addEvent(comptime self: *Self, comptime T: type) void {
     if (self.event_types.has(T)) {
         self.warn(std.fmt.comptimePrint("Tried to add event type `{s}` to world more than once.", .{@typeName(T)}));
@@ -630,12 +569,8 @@ fn warn(comptime self: *Self, comptime message: []const u8) void {
     self.warnings = std.fmt.comptimePrint("{s}{s}\n", .{ self.warnings, message });
 }
 
-fn TestWorld(comptime namespace: type) type {
-    return Self.init(&.{namespace}).Build();
-}
-
-fn testWorld(comptime namespace: type) !TestWorld(namespace) {
-    return TestWorld(namespace).init(std.testing.allocator);
+fn testWorld(comptime namespace: type) !Self.init(&.{namespace}).Build() {
+    return .init(std.testing.allocator);
 }
 
 test Self {

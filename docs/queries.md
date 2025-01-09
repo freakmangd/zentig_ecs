@@ -7,7 +7,7 @@ const MyComponent = struct {
 };
 
 pub fn mySystem(q: ztg.Query(.{ MyComponent })) void {
-    for (q.items(0)) |comp| {
+    for (q.items(MyComponent)) |comp| {
         // @TypeOf(comp) == *MyComponent
 
         comp.data += 1;
@@ -24,7 +24,7 @@ When you query for `ztg.Entity`, it retrieves the entity the other components ar
 
 ```zig
 pub fn mySystem(q: ztg.Query(.{ ztg.Entity, MyComponent })) void {
-    for (q.items(0), q.items(1)) |ent, comp| {
+    for (q.items(ztg.Entity), q.items(MyComponent)) |ent, comp| {
         // @TypeOf(ent) == ztg.Entity
         // @TypeOf(comp) == *MyComponent
 
@@ -39,9 +39,8 @@ Query filters are ways to filter your queries without collecting the items of th
 
 Example:
 ```zig
-//                 use ztg.QueryOpts to add filters
-pub fn mySystem(q: ztg.QueryOpts(.{ ztg.Entity }, .{ ztg.With(MyComponent) })) void {
-    for (q.items(0)) |ent| {
+pub fn mySystem(q: ztg.Query(.{ ztg.Entity, ztg.With(MyComponent) })) void {
+    for (q.items(ztg.Entity)) |ent| {
         std.debug.print("{} has a MyComponent", .{ ent });
     }
 }
@@ -51,8 +50,8 @@ A common use case is querying for empty structs:
 ```zig
 const Player = struct {};
 
-pub fn mySystem(q: ztg.QueryOpts(.{ ztg.base.Transform }, .{ ztg.With(Player) })) void {
-    for (q.items(0)) |tr| {
+pub fn mySystem(q: ztg.Query(.{ ztg.base.Transform, ztg.With(Player) })) void {
+    for (q.items(ztg.base.Transform)) |tr| {
         tr.translate(.{
             .x = 100.0,
             .y = 50.0,

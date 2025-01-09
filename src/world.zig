@@ -704,12 +704,6 @@ pub fn World(
         }
 
         /// The method used for generating queries for systems
-        ///
-        /// Example:
-        /// ```zig
-        /// const q = try world.query(ztg.Query(.{ztg.base.Transform});
-        /// for (q.items(0)) |tr| std.debug.print("{d:0.1}\n", .{tr.pos.x});
-        /// ```
         pub fn query(self: *Self, alloc: std.mem.Allocator, comptime QT: type) !QT {
             if (comptime QT.has_entities and QT.req_types.types.len == 0) return self.queryJustEntities(alloc, QT);
 
@@ -1029,7 +1023,7 @@ const my_file = struct {
 
     // systems that error will bubble up the error to the run*Stage call
     fn up_MyComponent(q: ztg.Query(.{MyComponent}), mr: MyResource) !void {
-        for (q.items(0)) |mc| {
+        for (q.items(MyComponent)) |mc| {
             mc.position = try std.math.add(i32, mc.position, mc.speed);
 
             if (mc.position >= mr.finish_line) mc.score += 1;
@@ -1070,11 +1064,11 @@ test "adding/removing entities" {
     var q = try world.query(std.testing.allocator, ztg.Query(.{my_file.MyComponent}));
     defer q.deinit(std.testing.allocator);
 
-    try testing.expectEqual(@as(usize, 0), q.single(0).score);
+    try testing.expectEqual(@as(usize, 0), q.single(my_file.MyComponent).score);
 
     try world.runStage(.update);
 
-    try testing.expectEqual(@as(usize, 1), q.single(0).score);
+    try testing.expectEqual(@as(usize, 1), q.single(my_file.MyComponent).score);
 
     try world.removeEntAndAssociatedComponents(ent);
 
@@ -1174,12 +1168,12 @@ test "querying" {
         },
     });
 
-    var q = try world.query(std.testing.allocator, ztg.QueryOpts(.{ my_file.MyComponent, ?ztg.base.Lifetime }, .{ ztg.Without(ztg.base.Transform), ztg.With(ztg.base.Name) }));
+    var q = try world.query(std.testing.allocator, ztg.Query(.{ my_file.MyComponent, ?ztg.base.Lifetime, ztg.Without(ztg.base.Transform), ztg.With(ztg.base.Name) }));
     defer q.deinit(std.testing.allocator);
 
     try testing.expectEqual(@as(usize, 1), q.len);
 
-    var q2 = try world.query(std.testing.allocator, ztg.QueryOpts(.{ztg.Entity}, .{ ztg.Without(ztg.base.Transform), ztg.With(ztg.base.Name) }));
+    var q2 = try world.query(std.testing.allocator, ztg.Query(.{ ztg.Entity, ztg.Without(ztg.base.Transform), ztg.With(ztg.base.Name) }));
     defer q2.deinit(std.testing.allocator);
 
     try testing.expectEqual(@as(usize, 1), q.len);

@@ -16,14 +16,14 @@ pub fn include(comptime wb: *ztg.WorldBuilder) void {
 }
 
 fn mySystem(q: ztg.Query(.{Name})) void {
-    for (q.items(0)) |name| {
+    for (q.items(Name)) |name| {
         // Here we use name[0] because Name is a single item tuple
         std.debug.print("Hello {s}!\n", .{name[0]});
     }
 }
 
 fn updateScore(q: ztg.Query(.{ Name, Score })) void {
-    for (q.items(0), q.items(1)) |name, score| {
+    for (q.items(Name), q.items(Score)) |name, score| {
         score.total += 1;
         std.debug.print("{s}'s score is {}\n", .{ name[0], score.total });
     }

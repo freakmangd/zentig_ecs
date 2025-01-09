@@ -220,7 +220,7 @@ const test_mod = struct {
     };
 
     pub fn update_MyComponent(q: ztg.Query(.{ ztg.base.Transform, MyComponent })) void {
-        for (q.items(0), q.items(1)) |tr, c| {
+        for (q.items(ztg.base.Transform), q.items(MyComponent)) |tr, c| {
             tr.translate(c.dir.mul(c.speed).extend(0));
         }
     }
@@ -288,9 +288,9 @@ test "adding/removing entities" {
     const q = try w.query(std.testing.allocator, ztg.Query(.{ ztg.base.Transform, test_mod.MyComponent }));
     defer q.deinit(std.testing.allocator);
 
-    try std.testing.expectEqual(@as(f32, 0), q.single(0).getPos().x);
+    try std.testing.expectEqual(@as(f32, 0), q.single(ztg.base.Transform).getPos().x);
     try com.runStage(.update);
-    try std.testing.expectEqual(@as(f32, 50), q.single(0).getPos().x);
+    try std.testing.expectEqual(@as(f32, 50), q.single(ztg.base.Transform).getPos().x);
 
     try com.removeEnt(my_ent.ent);
     try w.postSystemUpdate();
