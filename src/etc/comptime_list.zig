@@ -27,7 +27,8 @@ pub fn ComptimeList(comptime T: type) type {
             @memcpy(items[index + 1 ..], self.items[index..]);
             items[index] = t;
 
-            self.items = &items;
+            const items_const = items;
+            self.items = &items_const;
         }
 
         pub fn set(comptime self: *Self, comptime index: usize, comptime t: T) void {
@@ -36,7 +37,8 @@ pub fn ComptimeList(comptime T: type) type {
 
             items[index] = t;
 
-            self.items = &items;
+            const items_const = items;
+            self.items = &items_const;
         }
 
         pub fn dereference(comptime self: Self, comptime len: usize) [len]T {

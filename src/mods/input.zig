@@ -25,7 +25,7 @@ pub fn Build(
                 .type = []const Wrapper.ButtonType,
                 .alignment = 0,
                 .is_comptime = false,
-                .default_value = @ptrCast(&@as([]const Wrapper.ButtonType, &.{})),
+                .default_value_ptr = @ptrCast(&@as([]const Wrapper.ButtonType, &.{})),
             };
         }
         break :blk @Type(.{ .@"struct" = .{
@@ -44,7 +44,7 @@ pub fn Build(
                 .type = []const Wrapper.AxisType,
                 .alignment = 0,
                 .is_comptime = false,
-                .default_value = @ptrCast(&@as([]const Wrapper.AxisType, &.{})),
+                .default_value_ptr = @ptrCast(&@as([]const Wrapper.AxisType, &.{})),
             };
         }
         break :blk @Type(.{ .@"struct" = .{

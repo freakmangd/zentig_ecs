@@ -28,7 +28,7 @@ pub fn addFieldExtra(
     self.fields = self.fields ++ &[_]Type.StructField{.{
         .type = T,
         .name = name,
-        .default_value = default_value,
+        .default_value_ptr = default_value,
         .alignment = alignment orelse 0,
         .is_comptime = is_comptime orelse false,
     }};

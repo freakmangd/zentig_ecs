@@ -147,6 +147,13 @@ pub fn declsToTuple(comptime T: type) DeclsToTuple(T) {
     return out;
 }
 
+pub fn checkMixin(comptime T: type, comptime Mixin: type) void {
+    for (@typeInfo(Mixin).@"struct".decls) |decl| {
+        if (!@hasDecl(T, decl.name) or @field(T, decl.name) != @field(Mixin, decl.name))
+            @compileError("Mixin receptor " ++ @typeName(T) ++ " is missing decl " ++ decl.name);
+    }
+}
+
 pub fn EnumFromLiterals(comptime literals: []const EnumLiteral) type {
     var fields: [literals.len]std.builtin.Type.EnumField = undefined;
 

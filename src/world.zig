@@ -75,17 +75,6 @@ pub fn World(
 
         /// User must call `.deinit()` once the world is to be descoped. (in a defer block preferrably)
         /// All systems that request an `Allocator` will get the one passed here.
-        ///
-        /// Also runs the `.init` stage, useful for things that will only run once and need to be done before
-        /// anything else, without relying on most anything else. Requesting a pointer to a resource
-        /// returns an **UNSTABLE** pointer and it will be pointing to garbage after the `.init` stage ends.
-        /// The `Allocator` and `Random` resources point to stable objects, but aren't stable themselves.
-        ///
-        /// Example:
-        /// ```zig
-        /// var world = try MyWorld.init(alloc);
-        /// defer world.deinit();
-        /// ```
         pub fn init(user_allocator: std.mem.Allocator) !Self {
             if (comptime builtin.mode == .Debug) {
                 if (warnings.len > 0)
@@ -712,16 +701,16 @@ pub fn World(
             const with_ids = util.idsFromTypes(QT.with_types.types);
             const without_ids = util.idsFromTypes(QT.without_types.types);
 
-            const checked_entities, const qlists = try self.initQueryLists(alloc, &req_ids, &opt_ids, &with_ids);
-            defer alloc.free(qlists);
-
-            const comp_mask, const negative_mask = getCompMasks(&.{ &req_ids, &with_ids }, &.{&without_ids});
+            var qlists: [req_ids.len + opt_ids.len]QueryList = undefined;
+            const checked_entities = try self.initQueryLists(&req_ids, &opt_ids, &with_ids, &qlists);
 
             var out = try QT.init(alloc, checked_entities.len);
             if (checked_entities.len == 0) return out;
 
+            const comp_mask, const negative_mask = getCompMasks(&.{ &req_ids, &with_ids }, &.{&without_ids});
+
             // Link qlists and the result query
-            for (qlists) |*list| {
+            for (&qlists) |*list| {
                 switch (list.out) {
                     .required => |*req| req.* = out.comp_ptrs[list.out_idx],
                     .optional => |*opt| opt.* = if (comptime QT.opt_types.types.len > 0) out.opt_ptrs[list.out_idx] else unreachable,
@@ -730,7 +719,7 @@ pub fn World(
 
             out.len = self.fillQuery(
                 checked_entities,
-                qlists,
+                &qlists,
                 comp_mask,
                 negative_mask,
                 if (comptime QT.has_entities) out.entities else null,
@@ -781,16 +770,13 @@ pub fn World(
             }
         };
 
-        // TODO: Check if passing req_ids and opt_ids as anytype to avoid
-        // alloc here is worth it.
         fn initQueryLists(
             self: *Self,
-            alloc: std.mem.Allocator,
             req_ids: []const util.CompId,
             opt_ids: []const util.CompId,
             with_ids: []const util.CompId,
-        ) !struct { []const ztg.Entity, []QueryList } {
-            var lists = try alloc.alloc(QueryList, req_ids.len + opt_ids.len);
+            lists: []QueryList,
+        ) ![]const ztg.Entity {
             var idx: usize = 0;
 
             const first_arr = self.getListById(req_ids[0]) catch unreachable;
@@ -816,7 +802,7 @@ pub fn World(
                 if (check.len() < smallest.len) smallest = check.entities.items;
             }
 
-            return .{ smallest, lists };
+            return smallest;
         }
 
         fn getCompMasks(
@@ -910,7 +896,7 @@ pub fn World(
             } else if (comptime util.typeArrayHas(added_resources, ztg.meta.DerefType(T)) or util.typeArrayHas(added_resources, T)) {
                 if (comptime util.typeArrayHas(added_resources, T)) {
                     return self.getRes(T);
-                } else if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .One) {
+                } else if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .one) {
                     return self.getResPtr(@typeInfo(T).pointer.child);
                 }
             }

@@ -11,7 +11,7 @@ const builtin = std.builtin;
 pub fn GenerateFunctions(comptime Self: type) type {
     if (@typeInfo(Self).@"struct".layout != .@"extern") @compileError("To implement vec_funcs into a struct it must be marked extern.");
 
-    const vec_len = std.meta.fields(Self).len;
+    const vec_len = @typeInfo(Self).@"struct".fields.len;
 
     return struct {
         pub inline fn equals(a: Self, b: Self) bool {
@@ -72,9 +72,14 @@ pub fn GenerateFunctions(comptime Self: type) type {
             }
         }
 
+        /// Access a vector component by runtime index
+        pub inline fn axis(self: Self, i: std.math.IntFittingRange(0, vec_len - 1)) f32 {
+            return @as(*const [vec_len]f32, @ptrCast(&self))[i];
+        }
+
         /// Returns a vector with every element set to s
         pub inline fn splat(s: f32) Self {
-            return fromSimd(@splat(s));
+            return fromArray(@splat(s));
         }
 
         pub inline fn copy(self: Self) Self {
@@ -86,6 +91,14 @@ pub fn GenerateFunctions(comptime Self: type) type {
         }
 
         inline fn fromSimd(self: @Vector(vec_len, f32)) Self {
+            return @bitCast(self);
+        }
+
+        pub inline fn intoArray(self: Self) [vec_len]f32 {
+            return @bitCast(self);
+        }
+
+        inline fn fromArray(self: [vec_len]f32) Self {
             return @bitCast(self);
         }
 
@@ -187,7 +200,7 @@ pub fn GenerateFunctions(comptime Self: type) type {
         }
 
         /// Returns a vector with random components between 0 and 1
-        pub inline fn random01(rand: std.rand.Random) Self {
+        pub inline fn random01(rand: std.Random) Self {
             return Self.random(rand, 0, 1);
         }
 
@@ -197,7 +210,7 @@ pub fn GenerateFunctions(comptime Self: type) type {
             break :blk @Type(.{ .@"enum" = info });
         };
 
-        /// Returns the vector with it's components ordered in the method defined in `comps`
+        /// Returns the vector with its components ordered in the method defined in `comps`
         /// Example:
         /// ```zig
         /// const a = Vec2.init(10, 20);
@@ -213,7 +226,7 @@ pub fn GenerateFunctions(comptime Self: type) type {
         /// Example:
         /// ```zig
         /// const a = Vec2.init(10, 20);
-        /// const b = Vec2.init(20, 10);vecf
+        /// const b = Vec2.init(20, 10);
         /// const c = Vec2.shuffle(a, b, .{ -1, 1 });
         /// try c.expectEqual(.{ .x = 20, .y = 20 });
         /// ```
@@ -323,6 +336,7 @@ pub fn isBitcastable(comptime Self: type, comptime Other: type) bool {
 }
 
 const Vec2 = @import("vec2.zig").Vec2;
+const Vec4 = @import("vec4.zig").Vec4;
 
 test "angle" {
     const v = Vec2.right;
@@ -376,4 +390,12 @@ test isBitcastable {
 
     try std.testing.expect(!isBitcastable(Vec2, MyVec));
     try Vec2.expectEqual(Vec2.init(0xDEAD, 0xBEEF), Vec2.from(MyVec{}));
+}
+
+test "axis" {
+    const vec: Vec4 = .init(10, 20, 30, 40);
+    try std.testing.expectEqual(10, vec.axis(0));
+    try std.testing.expectEqual(20, vec.axis(1));
+    try std.testing.expectEqual(30, vec.axis(2));
+    try std.testing.expectEqual(40, vec.axis(3));
 }

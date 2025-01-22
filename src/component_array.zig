@@ -19,12 +19,6 @@ pub fn ComponentArray(comptime Index: type) type {
         ent_to_comp_idx: std.AutoHashMapUnmanaged(ztg.Entity, Index) = .{},
 
         pub fn init(comptime T: type) Self {
-            //const max_cap = comptime blk: {
-            //    if (std.meta.trait.isContainer(T) and @hasDecl(T, "max_entities")) break :blk T.max_entities;
-            //    break :blk max_ents;
-            //};
-            //_ = max_cap;
-
             return .{
                 .component_id = if (comptime debug_info) util.compId(T) else {},
                 .component_name = if (comptime debug_info) @typeName(T) else {},
@@ -34,7 +28,6 @@ pub fn ComponentArray(comptime Index: type) type {
 
         pub fn deinit(self: *Self, alloc: std.mem.Allocator) void {
             self.components_data.deinit(alloc);
-
             self.entities.deinit(alloc);
             self.ent_to_comp_idx.deinit(alloc);
         }

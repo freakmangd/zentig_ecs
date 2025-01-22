@@ -3,20 +3,17 @@ const std = @import("std");
 const Self = @This();
 
 entry_size: usize,
-bytes: std.ArrayListUnmanaged(u8),
+bytes: std.ArrayListUnmanaged(u8) = .empty,
 len: usize = 0,
 
 pub fn init(comptime T: type) Self {
-    return .{
-        .entry_size = @sizeOf(T),
-        .bytes = .{},
-    };
+    return .{ .entry_size = @sizeOf(T) };
 }
 
 pub fn initCapacity(comptime T: type, alloc: std.mem.Allocator, num: usize) !Self {
     return .{
         .entry_size = @sizeOf(T),
-        .bytes = try std.ArrayListUnmanaged(u8).initCapacity(alloc, @sizeOf(T) * num),
+        .bytes = try .initCapacity(alloc, @sizeOf(T) * num),
     };
 }
 
@@ -187,10 +184,10 @@ test "iterator" {
     try arr.append(alloc, Data{ .lmao = 40 });
 
     const expected = [_]Data{
-        Data{ .lmao = 10 },
-        Data{ .lmao = 20 },
-        Data{ .lmao = 30 },
-        Data{ .lmao = 40 },
+        .{ .lmao = 10 },
+        .{ .lmao = 20 },
+        .{ .lmao = 30 },
+        .{ .lmao = 40 },
     };
 
     var i: usize = 0;

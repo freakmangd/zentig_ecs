@@ -191,6 +191,9 @@ pub const Vec4 = extern struct {
 
     const vec_funcs = @import("vec_funcs.zig");
     const generated_funcs = vec_funcs.GenerateFunctions(Vec4);
+    comptime {
+        ztg.meta.checkMixin(Vec4, generated_funcs);
+    }
 
     pub const equals = generated_funcs.equals;
     pub const approxEqRelBy = generated_funcs.approxEqRelBy;
@@ -203,6 +206,7 @@ pub const Vec4 = extern struct {
     pub const splat = generated_funcs.splat;
     pub const copy = generated_funcs.copy;
     pub const intoSimd = generated_funcs.intoSimd;
+    pub const intoArray = generated_funcs.intoArray;
     pub const abs = generated_funcs.abs;
     pub const angle = generated_funcs.angle;
     pub const angleSigned = generated_funcs.angleSigned;
@@ -237,4 +241,5 @@ pub const Vec4 = extern struct {
     pub const mulEql = generated_funcs.mulEql;
     pub const divEql = generated_funcs.divEql;
     pub const scaleEql = generated_funcs.scaleEql;
+    pub const axis = generated_funcs.axis;
 };
