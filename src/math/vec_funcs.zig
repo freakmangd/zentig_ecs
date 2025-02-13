@@ -14,8 +14,11 @@ pub fn GenerateFunctions(comptime Self: type) type {
     const vec_len = @typeInfo(Self).@"struct".fields.len;
 
     return struct {
-        pub inline fn equals(a: Self, b: Self) bool {
-            return @reduce(.And, a.intoSimd() == b.intoSimd());
+        pub fn equals(a: Self, b: Self) bool {
+            inline for (@typeInfo(Self).@"struct".fields) |field| {
+                if (@field(a, field.name) != @field(b, field.name)) return false;
+            }
+            return true;
         }
 
         /// Compares a and b using the same method as `std.math.approxEqRel` with a custom tolerance
@@ -39,12 +42,12 @@ pub fn GenerateFunctions(comptime Self: type) type {
         }
 
         /// Compares a and b using the same method as `std.math.approxEqRel`
-        pub inline fn approxEqRel(a: Self, b: Self) bool {
+        pub fn approxEqRel(a: Self, b: Self) bool {
             return Self.approxEqRelBy(a, b, std.math.floatEps(f32));
         }
 
         /// Compares a and b using the same method as `std.math.approxEqAbs`
-        pub inline fn approxEqAbs(a: Self, b: Self) bool {
+        pub fn approxEqAbs(a: Self, b: Self) bool {
             return Self.approxEqAbsBy(a, b, std.math.floatEps(f32));
         }
 
@@ -73,41 +76,37 @@ pub fn GenerateFunctions(comptime Self: type) type {
         }
 
         /// Access a vector component by runtime index
-        pub inline fn axis(self: Self, i: std.math.IntFittingRange(0, vec_len - 1)) f32 {
+        pub fn axis(self: Self, i: std.math.IntFittingRange(0, vec_len - 1)) f32 {
             return @as(*const [vec_len]f32, @ptrCast(&self))[i];
         }
 
         /// Returns a vector with every element set to s
-        pub inline fn splat(s: f32) Self {
+        pub fn splat(s: f32) Self {
             return fromArray(@splat(s));
         }
 
-        pub inline fn copy(self: Self) Self {
-            return self;
-        }
-
-        pub inline fn intoSimd(self: Self) @Vector(vec_len, f32) {
+        pub fn intoSimd(self: Self) @Vector(vec_len, f32) {
             return @bitCast(self);
         }
 
-        inline fn fromSimd(self: @Vector(vec_len, f32)) Self {
+        fn fromSimd(self: @Vector(vec_len, f32)) Self {
             return @bitCast(self);
         }
 
-        pub inline fn intoArray(self: Self) [vec_len]f32 {
+        pub fn intoArray(self: Self) [vec_len]f32 {
             return @bitCast(self);
         }
 
-        inline fn fromArray(self: [vec_len]f32) Self {
+        fn fromArray(self: [vec_len]f32) Self {
             return @bitCast(self);
         }
 
-        pub inline fn abs(v: Self) Self {
+        pub fn abs(v: Self) Self {
             return fromSimd(@abs(v.toSimd()));
         }
 
         /// Returns the angle between to vectors in radians
-        pub inline fn angle(a: Self, b: Self) ztg.math.Radians {
+        pub fn angle(a: Self, b: Self) ztg.math.Radians {
             const denominator = math.sqrt(Self.sqrLength(a) * Self.sqrLength(b));
             if (math.approxEqAbs(f32, denominator, 0, 1e-15)) return 0;
 
@@ -116,52 +115,52 @@ pub fn GenerateFunctions(comptime Self: type) type {
         }
 
         /// Returns the signed angle between to vectors in radians
-        pub inline fn angleSigned(a: Self, b: Self) ztg.math.Radians {
+        pub fn angleSigned(a: Self, b: Self) ztg.math.Radians {
             const unsigned = Self.angle(a, b);
             const sign = math.sign(a.x * b.y - a.y * b.x);
             return unsigned * sign;
         }
 
         /// Returns a normalized vector that points from `orig` to `to`
-        pub inline fn directionTo(orig: Self, to: Self) Self {
+        pub fn directionTo(orig: Self, to: Self) Self {
             return sub(to, orig).getNormalized();
         }
 
-        pub inline fn distance(a: Self, b: Self) f32 {
+        pub fn distance(a: Self, b: Self) f32 {
             return length(sub(a, b));
         }
 
-        pub inline fn sqrDistance(a: Self, b: Self) f32 {
+        pub fn sqrDistance(a: Self, b: Self) f32 {
             return sqrLength(sub(a, b));
         }
 
-        pub inline fn dot(a: Self, b: Self) f32 {
+        pub fn dot(a: Self, b: Self) f32 {
             return ztg.math.dotVec(a.intoSimd(), b.intoSimd());
         }
 
-        pub inline fn getNormalized(self: Self) Self {
+        pub fn getNormalized(self: Self) Self {
             const m = Self.length(self);
             if (m == 0) return self;
             return Self.div(self, m);
         }
 
-        pub inline fn setNormalized(self: *Self) void {
+        pub fn setNormalized(self: *Self) void {
             self.* = self.getNormalized();
         }
 
-        pub inline fn length(self: Self) f32 {
+        pub fn length(self: Self) f32 {
             return ztg.math.lengthVec(self.intoSimd());
         }
 
-        pub inline fn sqrLength(self: Self) f32 {
+        pub fn sqrLength(self: Self) f32 {
             return ztg.math.sqrLengthVec(self.intoSimd());
         }
 
-        pub inline fn lerp(a: Self, b: Self, t: f32) Self {
+        pub fn lerp(a: Self, b: Self, t: f32) Self {
             return fromSimd(ztg.math.lerpVec(a.intoSimd(), b.intoSimd(), t));
         }
 
-        pub inline fn lerpUnclamped(a: Self, b: Self, t: f32) Self {
+        pub fn lerpUnclamped(a: Self, b: Self, t: f32) Self {
             return fromSimd(ztg.math.lerpUnclampedVec(a.intoSimd(), b.intoSimd(), t));
         }
 
@@ -181,26 +180,26 @@ pub fn GenerateFunctions(comptime Self: type) type {
         }
 
         /// Returns a vector containing the max values of a and b
-        pub inline fn max(a: Self, b: Self) Self {
+        pub fn max(a: Self, b: Self) Self {
             return @max(a.intoSimd(), b.intoSimd());
         }
 
         /// Returns a vector containing the min values of a and b
-        pub inline fn min(a: Self, b: Self) Self {
+        pub fn min(a: Self, b: Self) Self {
             return @min(a.intoSimd(), b.intoSimd());
         }
 
-        pub inline fn project(a: Self, b: Self) Self {
+        pub fn project(a: Self, b: Self) Self {
             return Self.mul(b, Self.dot(a, b) / Self.dot(b, b));
         }
 
-        pub inline fn reflect(dir: Self, normal: Self) Self {
+        pub fn reflect(dir: Self, normal: Self) Self {
             const factor = -2 * Self.dot(dir, normal);
             return Self.add(dir, Self.mul(dir, factor));
         }
 
         /// Returns a vector with random components between 0 and 1
-        pub inline fn random01(rand: std.Random) Self {
+        pub fn random01(rand: std.Random) Self {
             return Self.random(rand, 0, 1);
         }
 
@@ -217,7 +216,7 @@ pub fn GenerateFunctions(comptime Self: type) type {
         /// const b = a.swizzle(.{ .y, .x });
         /// try b.expectEqual(.{ .x = 20, .y = 10 });
         /// ```
-        pub inline fn swizzle(self: Self, comptime comps: [vec_len]Component) Self {
+        pub fn swizzle(self: Self, comptime comps: [vec_len]Component) Self {
             return fromSimd(@shuffle(f32, self.intoSimd(), undefined, @as(@Vector(vec_len, i32), @bitCast(comps))));
         }
 
@@ -230,12 +229,12 @@ pub fn GenerateFunctions(comptime Self: type) type {
         /// const c = Vec2.shuffle(a, b, .{ -1, 1 });
         /// try c.expectEqual(.{ .x = 20, .y = 20 });
         /// ```
-        pub inline fn shuffle(a: Self, b: Self, comptime comps: @Vector(vec_len, i32)) Self {
+        pub fn shuffle(a: Self, b: Self, comptime comps: @Vector(vec_len, i32)) Self {
             return fromSimd(@shuffle(f32, a.intoSimd(), b.intoSimd(), comps));
         }
 
         /// Returns a copy of `vec` with it's length clamped to max_len
-        pub inline fn withClampedLength(vec: Self, max_len: f32) Self {
+        pub fn withClampedLength(vec: Self, max_len: f32) Self {
             const sqr_len = Self.sqrLength(vec);
 
             if (sqr_len > max_len * max_len) {
@@ -247,51 +246,51 @@ pub fn GenerateFunctions(comptime Self: type) type {
             return vec;
         }
 
-        pub inline fn getNegated(self: Self) Self {
+        pub fn getNegated(self: Self) Self {
             return fromSimd(-self.intoSimd());
         }
 
-        pub inline fn setNegated(self: *Self) void {
+        pub fn setNegated(self: *Self) void {
             self.* = self.getNegated();
         }
 
-        pub inline fn add(v0: Self, v1: Self) Self {
+        pub fn add(v0: Self, v1: Self) Self {
             return fromSimd(v0.intoSimd() + v1.intoSimd());
         }
 
-        pub inline fn sub(v0: Self, v1: Self) Self {
+        pub fn sub(v0: Self, v1: Self) Self {
             return fromSimd(v0.intoSimd() - v1.intoSimd());
         }
 
-        pub inline fn mul(v0: Self, s: f32) Self {
+        pub fn mul(v0: Self, s: f32) Self {
             return fromSimd(v0.intoSimd() * @as(@Vector(vec_len, f32), @splat(s)));
         }
 
-        pub inline fn div(v0: Self, s: f32) Self {
+        pub fn div(v0: Self, s: f32) Self {
             return fromSimd(v0.intoSimd() / @as(@Vector(vec_len, f32), @splat(s)));
         }
 
-        pub inline fn scale(v0: Self, v1: Self) Self {
+        pub fn scale(v0: Self, v1: Self) Self {
             return fromSimd(v0.intoSimd() * v1.intoSimd());
         }
 
-        pub inline fn addEql(self: *Self, other: Self) void {
+        pub fn addEql(self: *Self, other: Self) void {
             self.* = self.add(other);
         }
 
-        pub inline fn subEql(self: *Self, other: Self) void {
+        pub fn subEql(self: *Self, other: Self) void {
             self.* = self.sub(other);
         }
 
-        pub inline fn mulEql(self: *Self, scalar: f32) void {
+        pub fn mulEql(self: *Self, scalar: f32) void {
             self.* = self.mul(scalar);
         }
 
-        pub inline fn divEql(self: *Self, scalar: f32) void {
+        pub fn divEql(self: *Self, scalar: f32) void {
             self.* = self.div(scalar);
         }
 
-        pub inline fn scaleEql(self: *Self, other: Self) void {
+        pub fn scaleEql(self: *Self, other: Self) void {
             self.* = self.scale(other);
         }
     };
