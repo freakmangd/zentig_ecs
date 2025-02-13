@@ -1,7 +1,12 @@
 .{
     .name = "zentig-ecs",
     .version = "0.1.0",
-    .paths = .{"."},
+    .paths = .{
+        "src",
+        "deps",
+        "build.zig",
+        "build.zig.zon",
+    },
     .dependencies = .{
         .zmath = .{ .path = "deps/zmath" },
     },
