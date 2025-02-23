@@ -23,8 +23,8 @@ pub fn ComptimeList(comptime T: type) type {
         pub fn insert(comptime self: *Self, comptime index: usize, comptime t: T) void {
             var items: [self.items.len + 1]T = undefined;
 
-            @memcpy(items[0..index], self.items[0..index]);
-            @memcpy(items[index + 1 ..], self.items[index..]);
+            items[0..index].* = self.items[0..index].*;
+            items[index + 1 ..].* = self.items[index..].*;
             items[index] = t;
 
             const items_const = items;

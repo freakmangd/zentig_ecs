@@ -570,7 +570,7 @@ pub fn World(
                 // only because we have an alignment at runtime instead of comptime :,(
                 //
                 // TODO: amortize this
-                const alloced_data = self.frame_alloc.rawAlloc(arr.components_data.entry_size, std.math.log2_int(u29, alignment), @returnAddress()) orelse return error.OutOfMemory;
+                const alloced_data = self.frame_alloc.rawAlloc(arr.components_data.entry_size, .fromByteUnits(alignment), @returnAddress()) orelse return error.OutOfMemory;
                 @memcpy(alloced_data, @as([*]const u8, @ptrCast(data))[0..arr.components_data.entry_size]);
                 try self.changes_queue.append(.{ .added_component = .{
                     .ent = ent,
