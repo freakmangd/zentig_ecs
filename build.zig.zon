@@ -4,11 +4,13 @@
     .fingerprint = 0x9714046f761a8cf1,
     .paths = .{
         "src",
-        "deps",
         "build.zig",
         "build.zig.zon",
     },
     .dependencies = .{
-        .zmath = .{ .path = "deps/zmath" },
+        .zmath = .{
+            .url = "git+https://github.com/zig-gamedev/zmath#f40bb8a935b4878c707c3fccfd5c234cfcb43bf2",
+            .hash = "zmath-0.11.0-dev-AAAAAIk0AwDBq30eSRBvWcattABL79uVUlpyBWNkpmN1",
+        },
     },
 }
