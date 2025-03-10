@@ -1,6 +1,7 @@
 .{
-    .name = "zentig-ecs",
+    .name = .zentig_ecs,
     .version = "0.1.0",
+    .fingerprint = 0x9714046f761a8cf1,
     .paths = .{
         "src",
         "deps",
