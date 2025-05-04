@@ -325,17 +325,17 @@ pub fn Build(
                     for (ct.axis_bindings.items) |ab| ct.axes[ab.index] = 0;
                 }
             }
-            for (&self.controllers) |*ct| {
+            for (&self.controllers, 0..) |*ct, ci| {
                 if (comptime std.meta.fields(Button).len > 0) {
                     for (ct.button_bindings.items) |bb| {
-                        if (Wrapper.isButtonDown(bb.binding)) ct.buttons.set(@as(usize, bb.index) * 3);
-                        if (Wrapper.isButtonPressed(bb.binding)) ct.buttons.set(@as(usize, bb.index) * 3 + 1);
-                        if (Wrapper.isButtonReleased(bb.binding)) ct.buttons.set(@as(usize, bb.index) * 3 + 2);
+                        if (Wrapper.isButtonDown(ci, bb.binding)) ct.buttons.set(@as(usize, bb.index) * 3);
+                        if (Wrapper.isButtonPressed(ci, bb.binding)) ct.buttons.set(@as(usize, bb.index) * 3 + 1);
+                        if (Wrapper.isButtonReleased(ci, bb.binding)) ct.buttons.set(@as(usize, bb.index) * 3 + 2);
                     }
                 }
                 if (comptime std.meta.fields(Axis).len > 0) {
                     for (ct.axis_bindings.items) |ab| {
-                        const value = Wrapper.getAxis(ab.binding);
+                        const value = Wrapper.getAxis(ci, ab.binding);
                         if (@abs(value) > @abs(ct.axes[ab.index])) ct.axes[ab.index] = value;
                     }
                 }

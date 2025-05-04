@@ -14,21 +14,21 @@ const Buttons = enum(usize) {
 // This is a barebones version of an InputWrapper.
 //
 // a user made wrapper must have `ButtonType`, `AxisType`, `getButtonPressed`, `getButtonDown`,
-// `getButtonReleased`, and `getAxis`. All errors from functions are passed back through `.update()`
+// `getButtonReleased`, and `getAxis`. All errors from functions are passed back through input's update stage (.pre_update by default)
 const InputWrapper = struct {
     pub const ButtonType = Buttons;
     // there are no axes in this example
     pub const AxisType = void;
 
-    pub fn isButtonPressed(button: ButtonType) bool {
+    pub fn isButtonPressed(_: usize, button: ButtonType) bool {
         return input_state[@intFromEnum(button)].pressed;
     }
 
-    pub fn isButtonDown(button: ButtonType) bool {
+    pub fn isButtonDown(_: usize, button: ButtonType) bool {
         return input_state[@intFromEnum(button)].down;
     }
 
-    pub fn isButtonReleased(button: ButtonType) bool {
+    pub fn isButtonReleased(_: usize, button: ButtonType) bool {
         return input_state[@intFromEnum(button)].released;
     }
 
