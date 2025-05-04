@@ -17,14 +17,14 @@ Fetching for zig master:
 zig fetch --save git+https://github.com/freakmangd/zentig_ecs
 ```
 
-Fetching for zig 0.13.0:
+Fetching for zig 0.14.0:
 ```
-zig fetch --save https://github.com/freakmangd/zentig_ecs/archive/refs/tags/0.13.0.tar.gz
+zig fetch --save https://github.com/freakmangd/zentig_ecs/archive/refs/tags/0.14.0.tar.gz
 ```
 
 In both cases, place this in your `build.zig`:
 ```zig
-const zentig = b.dependency("zentig-ecs", .{});
+const zentig = b.dependency("zentig_ecs", .{});
 exe.root_module.addImport("ztg", zentig.module("zentig"));
 ```
 
@@ -50,7 +50,7 @@ A basic system:
 ```zig
 pub fn playerSpeak(q: ztg.Query(.{Player})) !void {
   for (q.items(Player)) |plr| {
-    std.debug.print("My name is {s}\n", .{self.name});
+    std.debug.print("My name is {s}\n", .{plr.name});
   }
 }
 ```
