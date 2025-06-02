@@ -36,7 +36,7 @@ fn isIntegral(comptime T: type) bool {
     };
 }
 
-pub inline fn toFloat(comptime T: type, x: anytype) T {
+pub fn toFloat(comptime T: type, x: anytype) T {
     if (T == @TypeOf(x)) return x;
     if (comptime !isFloat(T)) @compileError("toFloat requires it's first argument `T` to be a Float type to convert `x` to.");
 
@@ -56,7 +56,7 @@ test toFloat {
     try expectEqual(@as(f32, 1.0), toFloat(f32, @as(f16, 1.0)));
 }
 
-pub inline fn toInt(comptime T: type, x: anytype) T {
+pub fn toInt(comptime T: type, x: anytype) T {
     if (comptime T == @TypeOf(x)) return x;
     if (comptime !isIntegral(T)) @compileError("toInt requires it's first argument `T` to be an Integral type to convert `x` to.");
 
@@ -77,10 +77,7 @@ test toInt {
     try expectEqual(@as(i32, 1), toInt(i32, @as(u16, 1)));
 }
 
-pub const mulAsFloat = @compileError("mulAsFloat has been renamed to mul");
-pub const divAsFloat = @compileError("divAsFloat has been renamed to div");
-
-inline fn checkUnnecessary(comptime name: []const u8, comptime T: type, comptime A: type, comptime B: type) void {
+fn checkUnnecessary(comptime name: []const u8, comptime T: type, comptime A: type, comptime B: type) void {
     if (comptime isFloat(T) and isFloat(A) and isFloat(B)) {
         @compileError(std.fmt.comptimePrint("Unnecessary use of automatic conversion {s}, both types are floats", .{name}));
     } else if (comptime isIntegral(T) and isIntegral(A) and isIntegral(B)) {
@@ -89,7 +86,7 @@ inline fn checkUnnecessary(comptime name: []const u8, comptime T: type, comptime
 }
 
 /// Converts a and b to T (if neeeded) and adds them, returning a float or integer of type T
-pub inline fn add(comptime T: type, a: anytype, b: anytype) T {
+pub fn add(comptime T: type, a: anytype, b: anytype) T {
     comptime checkUnnecessary("add", T, @TypeOf(a), @TypeOf(b));
 
     if (comptime isFloat(T)) {
@@ -102,7 +99,7 @@ pub inline fn add(comptime T: type, a: anytype, b: anytype) T {
 }
 
 /// Converts a and b to T (if neeeded) and subtracts them, returning a float or integer of type T
-pub inline fn sub(comptime T: type, a: anytype, b: anytype) T {
+pub fn sub(comptime T: type, a: anytype, b: anytype) T {
     comptime checkUnnecessary("sub", T, @TypeOf(a), @TypeOf(b));
 
     if (comptime isFloat(T)) {
@@ -115,7 +112,7 @@ pub inline fn sub(comptime T: type, a: anytype, b: anytype) T {
 }
 
 /// Converts a and b to T (if neeeded) and multiplies them, returning a float or integer of type T
-pub inline fn mul(comptime T: type, a: anytype, b: anytype) T {
+pub fn mul(comptime T: type, a: anytype, b: anytype) T {
     comptime checkUnnecessary("mul", T, @TypeOf(a), @TypeOf(b));
 
     if (comptime isFloat(T)) {
@@ -133,7 +130,8 @@ test mul {
 }
 
 /// Converts a and b to T (if neeeded) and divides them, returning a float or integer of type T
-pub inline fn div(comptime T: type, a: anytype, b: anytype) error{DivideByZero}!T {
+/// may return DivideByZero if b isn't comptime known to be non-zero
+pub fn div(comptime T: type, a: anytype, b: anytype) error{DivideByZero}!f32 {
     comptime checkUnnecessary("div", T, @TypeOf(a), @TypeOf(b));
     if (b == 0) return error.DivideByZero;
 
@@ -153,22 +151,22 @@ test div {
 }
 
 /// Converts a and b to f32 and adds them
-pub inline fn addf32(a: anytype, b: anytype) f32 {
+pub fn addf32(a: anytype, b: anytype) f32 {
     return add(f32, a, b);
 }
 
 /// Converts a and b to f32 and subtracts them
-pub inline fn subf32(a: anytype, b: anytype) f32 {
+pub fn subf32(a: anytype, b: anytype) f32 {
     return sub(f32, a, b);
 }
 
 /// Converts a and b to f32 and multiplies them
-pub inline fn mulf32(a: anytype, b: anytype) f32 {
+pub fn mulf32(a: anytype, b: anytype) f32 {
     return mul(f32, a, b);
 }
 
-/// Converts a and b to f32 and divides them
-pub inline fn divf32(a: anytype, b: anytype) error{DivideByZero}!f32 {
+/// Converts a and b to f32 and divides them, may return DivideByZero if b isn't comptime known
+pub fn divf32(a: anytype, b: anytype) error{DivideByZero}!f32 {
     return div(f32, a, b);
 }
 
@@ -178,8 +176,8 @@ fn angleDifference(from: anytype, to: anytype) @TypeOf(from, to) {
 }
 
 /// Clamps v between 0 and 1
-pub inline fn clamp01(v: anytype) @TypeOf(v) {
-    return @call(.always_inline, std.math.clamp, .{ v, 0, 1 });
+pub fn clamp01(v: anytype) @TypeOf(v) {
+    return std.math.clamp(v, 0, 1);
 }
 
 test clamp01 {
@@ -216,7 +214,7 @@ pub fn inverseLerp(from: anytype, to: anytype, weight: anytype) @TypeOf(from, to
 }
 
 /// Returns the length of a @Vector object
-pub inline fn lengthVec(vec: anytype) f32 {
+pub fn lengthVec(vec: anytype) f32 {
     return @sqrt(@reduce(.Add, vec * vec));
 }
 
@@ -227,28 +225,28 @@ test lengthVec {
 }
 
 /// Returns the square length of a @Vector object
-pub inline fn sqrLengthVec(vec: anytype) f32 {
+pub fn sqrLengthVec(vec: anytype) f32 {
     return @reduce(.Add, vec * vec);
 }
 
 /// Returns the distance between the a and b vectors
-pub inline fn distanceVec(a: anytype, b: anytype) f32 {
+pub fn distanceVec(a: anytype, b: anytype) f32 {
     return lengthVec(a - b);
 }
 
 /// Returns the square distance between the a and b vectors
-pub inline fn sqrDistanceVec(a: anytype, b: anytype) f32 {
+pub fn sqrDistanceVec(a: anytype, b: anytype) f32 {
     return sqrLengthVec(a - b);
 }
 
 /// Lerps between two @Vector objects by a scalar t clamped between 0 and 1
-pub inline fn lerpVec(a: anytype, b: anytype, t: f32) @TypeOf(a, b) {
+pub fn lerpVec(a: anytype, b: anytype, t: f32) @TypeOf(a, b) {
     const t_clamped = clamp01(t);
     return @mulAdd(@TypeOf(a, b), b - a, @splat(t_clamped), a);
 }
 
 /// Lerps between two @Vector objects by a scalar t
-pub inline fn lerpUnclampedVec(a: anytype, b: anytype, t: f32) @TypeOf(a, b) {
+pub fn lerpUnclampedVec(a: anytype, b: anytype, t: f32) @TypeOf(a, b) {
     return @mulAdd(@TypeOf(a, b), b - a, @splat(t), a);
 }
 
@@ -266,7 +264,7 @@ test normalizeVec {
 }
 
 /// Returns the dot product of two @Vector objects
-pub inline fn dotVec(vec0: anytype, vec1: @TypeOf(vec0)) f32 {
+pub fn dotVec(vec0: anytype, vec1: @TypeOf(vec0)) f32 {
     return @reduce(.Add, vec0 * vec1);
 }
 
@@ -277,7 +275,7 @@ test dotVec {
 }
 
 /// Swizzles a @Vector object by a comptime mask
-pub inline fn swizzleVec(vec: anytype, comptime mask: @TypeOf(vec)) @TypeOf(vec) {
+pub fn swizzleVec(vec: anytype, comptime mask: @TypeOf(vec)) @TypeOf(vec) {
     const Vector = @typeInfo(@TypeOf(vec)).vector;
     comptime for (@as([Vector.len]Vector.child, mask)) |m| if (m < 0) @compileError(std.fmt.comptimePrint("Swizzle mask must be all positive, found {}.", .{m}));
     return @shuffle(f32, vec, undefined, mask);
