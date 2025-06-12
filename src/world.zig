@@ -61,7 +61,7 @@ pub fn World(
         frame_alloc: Allocator,
         rand: std.Random,
 
-        next_ent: ztg.Entity = 0,
+        next_ent: ztg.Entity = @enumFromInt(0),
         entities: *EntityArray = undefined,
 
         comp_arrays: [comp_types_len]ComponentArray = undefined,
@@ -388,18 +388,18 @@ pub fn World(
         /// `.overwrite_first` => returns the first entity in the entity list, after removing all of its components
         pub fn newEnt(self: *Self) ztg.Entity {
             const ent = blk: {
-                if (self.next_ent >= max_entities) {
-                    break :blk getOpenEntityId(self.entities, 0) orelse self.handleEntOverflow();
+                if (self.next_ent.toInt() >= max_entities) {
+                    break :blk getOpenEntityId(self.entities, @enumFromInt(0)) orelse self.handleEntOverflow();
                 } else if (!self.entities.hasEntity(self.next_ent)) {
                     break :blk self.next_ent;
                 } else {
-                    break :blk getOpenEntityId(self.entities, self.next_ent + 1) orelse self.handleEntOverflow();
+                    break :blk getOpenEntityId(self.entities, @enumFromInt(self.next_ent.toInt() + 1)) orelse self.handleEntOverflow();
                 }
             };
 
             self.entities.append(ent);
             self.entities.setParent(ent, null) catch unreachable;
-            self.next_ent += 1;
+            self.next_ent = @enumFromInt(self.next_ent.toInt() + 1);
 
             return ent;
         }
@@ -412,8 +412,8 @@ pub fn World(
         }
 
         fn getOpenEntityId(entities: *const EntityArray, from: ztg.Entity) ?ztg.Entity {
-            for (from..max_entities) |e| if (!entities.hasEntity(e)) return @intCast(e);
-            for (0..from) |e| if (!entities.hasEntity(e)) return @intCast(e);
+            for (from.toInt()..max_entities) |e| if (!entities.hasEntity(@enumFromInt(e))) return @enumFromInt(e);
+            for (0..from.toInt()) |e| if (!entities.hasEntity(@enumFromInt(e))) return @enumFromInt(e);
             return null;
         }
 
@@ -494,7 +494,7 @@ pub fn World(
             const comp_id = comptime util.indexOfType(comp_types, Component) orelse
                 util.compileError("Tried to give entity Component of type `{s}`, which was not registred.", .{@typeName(Component)});
 
-            self.entities.comp_masks[ent].set(comp_id);
+            self.entities.comp_masks[ent.toInt()].set(comp_id);
             const comp_ptr = try self.comp_arrays[comp_id].assign(self.alloc, ent, comp);
             try self.on_added_fns[comp_id](self, comp_ptr, ent);
         }
@@ -555,7 +555,7 @@ pub fn World(
             if (component_id >= comp_types.len) return error.UnregisteredComponent;
             if (!self.entities.hasEntity(ent)) return error.EntityDoesntExist;
 
-            self.entities.comp_masks[ent].set(component_id);
+            self.entities.comp_masks[ent.toInt()].set(component_id);
             var arr = try self.getListById(component_id);
 
             if (self.getComponentPtr_fromCompId(ent, component_id)) |comp_ptr| {
@@ -742,7 +742,7 @@ pub fn World(
                 if (!entPassesCompMasks(self.entities.comp_masks[@intFromEnum(ent)], comp_mask, negative_mask)) continue;
                 inline for (out.opt_ptrs, QT.opt_types.types) |opt_ptrs, O| opt_ptrs[i] = self.getListOf(O).get(@intFromEnum(ent));
 
-                out.entities[len] = @intFromEnum(ent);
+                out.entities[len] = ent.toEntity();
                 len += 1;
             }
 
@@ -832,7 +832,7 @@ pub fn World(
         ) usize {
             var len: usize = 0;
             for (checked_entities) |ent| {
-                const ent_mask = self.entities.comp_masks[ent];
+                const ent_mask = self.entities.comp_masks[@intFromEnum(ent)];
 
                 if (entPassesCompMasks(ent_mask, comp_mask, negative_mask)) {
                     for (qlists) |*list| {
@@ -1090,7 +1090,7 @@ test "adding/removing components" {
 
     try testing.expect(!ent.checkHas(my_file.MyComponent));
 
-    try std.testing.expectError(error.EntityDoesntExist, world.giveComponents(512, .{ztg.base.Name{"bad"}}));
+    try std.testing.expectError(error.EntityDoesntExist, world.giveComponents(@enumFromInt(512), .{ztg.base.Name{"bad"}}));
 }
 
 test "overwriting components" {

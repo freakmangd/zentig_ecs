@@ -4,7 +4,7 @@ const std = @import("std");
 pub const zmath = @import("zmath");
 
 /// A unique ID that is assigned to each entity
-pub const Entity = usize;
+pub const Entity = @import("entity.zig").Entity;
 
 /// An Entity and a Commands grouped together for acting on a specific entity
 pub const EntityHandle = @import("entity_handle.zig");

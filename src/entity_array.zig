@@ -9,6 +9,14 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
         pub const Index = enum(IndexTagType) {
             NULL = std.math.maxInt(IndexTagType),
             _,
+
+            pub fn toEntity(idx: Index) ztg.Entity {
+                return @enumFromInt(@intFromEnum(idx));
+            }
+
+            pub fn fromEntity(ent: ztg.Entity) Index {
+                return @enumFromInt(@intFromEnum(ent));
+            }
         };
 
         ents: [size]Index = .{Index.NULL} ** size,
@@ -19,30 +27,30 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
         len: usize = 0,
 
         pub fn getIndexOf(self: *const Self, ent: ztg.Entity) ?usize {
-            if (self.idx_lookup[ent] == Index.NULL) return null;
-            return @intFromEnum(self.idx_lookup[ent]);
+            if (self.idx_lookup[ent.toInt()] == Index.NULL) return null;
+            return @intFromEnum(self.idx_lookup[ent.toInt()]);
         }
 
         pub fn getEntityAt(self: *const Self, idx: usize) ?ztg.Entity {
             if (self.ents[idx] == Index.NULL) return null;
-            return @intFromEnum(self.ents[idx]);
+            return self.ents[idx].toEntity();
         }
 
         pub fn set(self: *Self, idx: usize, ent: ztg.Entity, comp_mask: ComponentMask) void {
-            self.ents[idx] = @enumFromInt(ent);
-            self.idx_lookup[ent] = @enumFromInt(idx);
-            self.comp_masks[ent] = comp_mask;
+            self.ents[idx] = .fromEntity(ent);
+            self.idx_lookup[ent.toInt()] = @enumFromInt(idx);
+            self.comp_masks[ent.toInt()] = comp_mask;
         }
 
         pub fn setParent(self: *Self, ent: ztg.Entity, parent: ?ztg.Entity) !void {
             if (!self.hasEntity(ent)) return error.EntityDoesntExist;
             if (parent) |p| if (!self.hasEntity(p)) return error.ParentDoesntExist;
-            self.parent_lookup[ent] = if (parent) |p| @enumFromInt(p) else Index.NULL;
+            self.parent_lookup[ent.toInt()] = if (parent) |p| .fromEntity(p) else Index.NULL;
         }
 
         pub fn getParent(self: *const Self, ent: ztg.Entity) !?ztg.Entity {
             if (!self.hasEntity(ent)) return error.EntityDoesntExist;
-            if (self.parent_lookup[ent] != Index.NULL) return @intFromEnum(self.parent_lookup[ent]);
+            if (self.parent_lookup[ent.toInt()] != Index.NULL) return self.parent_lookup[ent.toInt()].toEntity();
             return null;
         }
 
@@ -50,7 +58,7 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
         pub fn getChildren(self: *const Self, alloc: std.mem.Allocator, ent: ztg.Entity) ![]const ztg.Entity {
             if (!self.hasEntity(ent)) return error.EntityDoesntExist;
             var children = std.ArrayList(ztg.Entity).init(alloc);
-            for (self.parent_lookup, 0..) |pl, ch| if (@intFromEnum(pl) == ent) try children.append(ch);
+            for (self.parent_lookup, 0..) |pl, ch| if (@intFromEnum(pl) == ent.toInt()) try children.append(@enumFromInt(ch));
             return children.toOwnedSlice();
         }
 
@@ -75,16 +83,16 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
                 self.len -= 1;
             }
 
-            self.idx_lookup[ent] = Index.NULL;
-            self.comp_masks[ent] = ComponentMask.initEmpty();
+            self.idx_lookup[ent.toInt()] = Index.NULL;
+            self.comp_masks[ent.toInt()] = ComponentMask.initEmpty();
             return true;
         }
 
         pub fn pop(self: *Self) struct { ent: ztg.Entity, mask: ComponentMask } {
             const last = self.getEntityAt(self.len - 1).?;
-            self.idx_lookup[last] = Index.NULL;
-            const mask = self.comp_masks[last];
-            self.comp_masks[last] = ComponentMask.initEmpty();
+            self.idx_lookup[last.toInt()] = Index.NULL;
+            const mask = self.comp_masks[last.toInt()];
+            self.comp_masks[last.toInt()] = ComponentMask.initEmpty();
 
             self.len -= 1;
 
@@ -113,23 +121,27 @@ test EntityArray {
     const CompMask = std.bit_set.StaticBitSet(0);
     var arr = EntityArray(CompMask, 10){};
 
-    arr.append(0);
-    arr.append(1);
-    arr.append(2);
+    const zero: ztg.Entity = @enumFromInt(0);
+    const one: ztg.Entity = @enumFromInt(1);
+    const two: ztg.Entity = @enumFromInt(2);
 
-    try std.testing.expect(arr.hasEntity(0));
-    try std.testing.expectEqual(@as(usize, 3), arr.constSlice().len);
+    arr.append(zero);
+    arr.append(one);
+    arr.append(two);
 
-    _ = arr.swapRemoveEnt(1);
+    try std.testing.expect(arr.hasEntity(zero));
+    try std.testing.expectEqual(3, arr.constSlice().len);
 
-    try std.testing.expect(!arr.hasEntity(1));
-    try std.testing.expectEqual(@as(usize, 2), arr.constSlice().len);
+    _ = arr.swapRemoveEnt(one);
+
+    try std.testing.expect(!arr.hasEntity(one));
+    try std.testing.expectEqual(2, arr.constSlice().len);
     try std.testing.expectEqualSlices(EntityArray(CompMask, 10).Index, &.{
-        @as(EntityArray(CompMask, 10).Index, @enumFromInt(0)),
-        @as(EntityArray(CompMask, 10).Index, @enumFromInt(2)),
+        @enumFromInt(0),
+        @enumFromInt(2),
     }, arr.constSlice());
 
-    _ = arr.swapRemoveEnt(2);
+    _ = arr.swapRemoveEnt(two);
 
-    try std.testing.expect(!arr.hasEntity(2));
+    try std.testing.expect(!arr.hasEntity(two));
 }

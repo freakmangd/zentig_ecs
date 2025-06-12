@@ -136,11 +136,11 @@ test "simple test" {
     var arr = initForTests(usize, u32);
     defer arr.deinit(std.testing.allocator);
 
-    _ = try arr.assign(std.testing.allocator, 0, @as(u32, 1));
-    _ = try arr.assign(std.testing.allocator, 1, @as(u32, 1));
-    _ = try arr.assign(std.testing.allocator, 2, @as(u32, 1));
+    _ = try arr.assign(std.testing.allocator, @enumFromInt(0), @as(u32, 1));
+    _ = try arr.assign(std.testing.allocator, @enumFromInt(1), @as(u32, 1));
+    _ = try arr.assign(std.testing.allocator, @enumFromInt(2), @as(u32, 1));
 
-    _ = arr.swapRemove(2);
+    _ = arr.swapRemove(@enumFromInt(2));
 
     for (arr.components_data.slicedAs(u32)) |val| {
         try std.testing.expectEqual(@as(u32, 1), val);
@@ -151,40 +151,49 @@ test "data" {
     var arr = initForTests(usize, Data);
     defer arr.deinit(std.testing.allocator);
 
-    _ = try arr.assign(std.testing.allocator, 2, Data{ .val = 100_000 });
-    _ = try arr.assignData(std.testing.allocator, 5, &Data{ .val = 20_000 });
+    const two: ztg.Entity = @enumFromInt(2);
+    const five: ztg.Entity = @enumFromInt(5);
 
-    try std.testing.expectEqual(@as(u32, 100_000), arr.getAs(Data, 2).?.val);
-    try std.testing.expectEqual(@as(u32, 20_000), arr.getAs(Data, 5).?.val);
+    _ = try arr.assign(std.testing.allocator, two, Data{ .val = 100_000 });
+    _ = try arr.assignData(std.testing.allocator, five, &Data{ .val = 20_000 });
 
-    try std.testing.expect(arr.contains(2));
-    arr.swapRemove(2);
-    try std.testing.expect(!arr.contains(2));
+    try std.testing.expectEqual(100_000, arr.getAs(Data, two).?.val);
+    try std.testing.expectEqual(20_000, arr.getAs(Data, five).?.val);
 
-    try std.testing.expectEqual(@as(f32, 100.0), arr.getAs(Data, 5).?.xd);
+    try std.testing.expect(arr.contains(two));
+    arr.swapRemove(two);
+    try std.testing.expect(!arr.contains(two));
 
-    arr.swapRemove(5);
+    try std.testing.expectEqual(100, arr.getAs(Data, five).?.xd);
 
-    try std.testing.expectEqual(@as(usize, 0), arr.len());
+    arr.swapRemove(five);
+
+    try std.testing.expectEqual(0, arr.len());
 }
 
 test "remove" {
     var arr = initForTests(usize, usize);
     defer arr.deinit(std.testing.allocator);
 
-    _ = try arr.assign(std.testing.allocator, 1, @as(usize, 100));
-    _ = try arr.assign(std.testing.allocator, 2, @as(usize, 200));
+    const one: ztg.Entity = @enumFromInt(1);
+    const two: ztg.Entity = @enumFromInt(2);
 
-    arr.swapRemove(2);
+    _ = try arr.assign(std.testing.allocator, one, @as(usize, 100));
+    _ = try arr.assign(std.testing.allocator, two, @as(usize, 200));
 
-    try std.testing.expectEqual(@as(usize, 100), arr.getAs(usize, 1).?.*);
-    try std.testing.expectEqual(@as(usize, 1), arr.len());
+    arr.swapRemove(two);
+
+    try std.testing.expectEqual(100, arr.getAs(usize, one).?.*);
+    try std.testing.expectEqual(1, arr.len());
 }
 
 test "capacity" {
     var arr = initForTests(usize, usize);
     defer arr.deinit(std.testing.allocator);
 
-    _ = try arr.assign(std.testing.allocator, 0, @as(usize, 10));
-    _ = try arr.assign(std.testing.allocator, 1, @as(usize, 20));
+    const zero: ztg.Entity = @enumFromInt(0);
+    const one: ztg.Entity = @enumFromInt(1);
+
+    _ = try arr.assign(std.testing.allocator, zero, @as(usize, 10));
+    _ = try arr.assign(std.testing.allocator, one, @as(usize, 20));
 }
