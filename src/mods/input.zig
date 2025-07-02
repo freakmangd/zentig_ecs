@@ -105,36 +105,36 @@ pub fn Build(
             }
         }
 
-        pub inline fn clearAllBindings(self: *Self) void {
+        pub fn clearAllBindings(self: *Self) void {
             for (0..self.controllers.len) |c| self.clearBindings(c);
         }
 
-        pub inline fn clearBindings(self: *Self, controller: usize) void {
+        pub fn clearBindings(self: *Self, controller: usize) void {
             self.clearButtonBindings(controller);
             self.clearAxisBindings(controller);
         }
 
-        pub inline fn clearButtonBindings(self: *Self, controller: usize) void {
+        pub fn clearButtonBindings(self: *Self, controller: usize) void {
             self.controllers[controller].button_bindings.clearRetainingCapacity();
         }
 
-        pub inline fn clearAxisBindings(self: *Self, controller: usize) void {
+        pub fn clearAxisBindings(self: *Self, controller: usize) void {
             self.controllers[controller].axis_bindings.clearRetainingCapacity();
         }
 
-        pub inline fn isDown(self: Self, controller: usize, button: Button) bool {
+        pub fn isDown(self: Self, controller: usize, button: Button) bool {
             return self.controllers[controller].buttons.isSet(@as(usize, @intCast(@intFromEnum(button))) * 3);
         }
 
-        pub inline fn isPressed(self: Self, controller: usize, button: Button) bool {
+        pub fn isPressed(self: Self, controller: usize, button: Button) bool {
             return self.controllers[controller].buttons.isSet((@as(usize, @intCast(@intFromEnum(button))) * 3) + 1);
         }
 
-        pub inline fn isReleased(self: Self, controller: usize, button: Button) bool {
+        pub fn isReleased(self: Self, controller: usize, button: Button) bool {
             return self.controllers[controller].buttons.isSet((@as(usize, @intCast(@intFromEnum(button))) * 3) + 2);
         }
 
-        pub inline fn getAxis(self: Self, controller: usize, axis: Axis) f32 {
+        pub fn getAxis(self: Self, controller: usize, axis: Axis) f32 {
             return self.controllers[controller].axes[@intFromEnum(axis)];
         }
 
@@ -193,7 +193,7 @@ pub fn Build(
             return res;
         }
 
-        inline fn importBindingsInternal(self: *Self, reader: anytype) bool {
+        fn importBindingsInternal(self: *Self, reader: anytype) bool {
             var current_controller: usize = 0;
             var read_mode: enum {
                 buttons,

@@ -18,15 +18,15 @@ pub const identity: Self = .{
     },
 };
 
-pub inline fn getPos(self: Self) ztg.Vec3 {
+pub fn getPos(self: Self) ztg.Vec3 {
     return ztg.Vec3.fromZMath(self.basis[3]);
 }
 
-pub inline fn getRot(self: Self) ztg.Vec4 {
+pub fn getRot(self: Self) ztg.Vec4 {
     return self.__data.rot;
 }
 
-pub inline fn getScale(self: Self) ztg.Vec3 {
+pub fn getScale(self: Self) ztg.Vec3 {
     return self.__data.scale;
 }
 

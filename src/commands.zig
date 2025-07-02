@@ -105,7 +105,7 @@ pub fn giveEntChild(self: Self, ent: ztg.Entity, child: ztg.Entity) !void {
     return self.vtable.set_ent_parent(self.ctx, child, ent);
 }
 
-inline fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void {
+fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void {
     const Component = @TypeOf(component);
     if (Component == type) util.compileError("You have passed `{}` to giveComponents, which is of type `type`, you might have forgotten to instantiate it.", .{component});
 

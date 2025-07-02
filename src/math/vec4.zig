@@ -21,7 +21,7 @@ pub const Vec4 = extern struct {
     pub const inward: Vec4 = .{ .w = 1 };
     pub const outward: Vec4 = .{ .w = -1 };
 
-    pub inline fn init(x: anytype, y: anytype, z: anytype, w: anytype) Vec4 {
+    pub fn init(x: anytype, y: anytype, z: anytype, w: anytype) Vec4 {
         return .{
             .x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x,
             .y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y,
@@ -30,7 +30,7 @@ pub const Vec4 = extern struct {
         };
     }
 
-    pub inline fn set(self: *Vec4, x: anytype, y: anytype, z: anytype, w: anytype) void {
+    pub fn set(self: *Vec4, x: anytype, y: anytype, z: anytype, w: anytype) void {
         self.x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x;
         self.y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y;
         self.z = if (comptime @typeInfo(@TypeOf(z)) == .int) @floatFromInt(z) else z;
@@ -42,26 +42,26 @@ pub const Vec4 = extern struct {
 
     /// Returns T with all of it's components set to the original vector's
     /// T's only required components must be `x`, `y`, `z`, and `w`
-    pub inline fn into(self: Vec4, comptime T: type) T {
+    pub fn into(self: Vec4, comptime T: type) T {
         if (comptime vec_funcs.isBitcastable(Vec4, T)) return @bitCast(self);
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z), .w = @floatCast(self.w) };
     }
 
     /// Returns T with it's x and y components set to the original vector's x and y
     /// T's only required components must be `x` and `y`
-    pub inline fn intoVec2(self: Vec4, comptime T: type) T {
+    pub fn intoVec2(self: Vec4, comptime T: type) T {
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y) };
     }
 
     /// Returns T with it's x and y components set to the original vector's x, y and z
     /// T's only required components must be `x`, `y`, and `z`
-    pub inline fn intoVec3(self: Vec4, comptime T: type) T {
+    pub fn intoVec3(self: Vec4, comptime T: type) T {
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z) };
     }
 
     /// Converts the Vector into a @Vector object of type `T`, doing
     /// the necessary conversions.
-    pub inline fn intoVectorOf(self: Vec4, comptime T: type) @Vector(4, T) {
+    pub fn intoVectorOf(self: Vec4, comptime T: type) @Vector(4, T) {
         if (@typeInfo(T) == .float or @typeInfo(T) == .comptime_float) {
             if (comptime T == f32) {
                 return self.intoSimd();
@@ -76,35 +76,35 @@ pub const Vec4 = extern struct {
     }
 
     /// For use when integrating with the zmath library, sets z and w to 0
-    pub inline fn intoZMath(self: Vec4) @Vector(4, f32) {
+    pub fn intoZMath(self: Vec4) @Vector(4, f32) {
         return @bitCast(self);
     }
 
     /// For use when integrating with the zmath library, discards z and w components
-    pub inline fn fromZMath(vec: @Vector(4, f32)) Vec4 {
+    pub fn fromZMath(vec: @Vector(4, f32)) Vec4 {
         return @bitCast(vec);
     }
 
     /// Creates a Vec4 from other, other must have `x`, `y`, `z`, and `w` components
-    pub inline fn from(other: anytype) Vec4 {
+    pub fn from(other: anytype) Vec4 {
         if (comptime vec_funcs.isBitcastable(Vec4, @TypeOf(other))) return @bitCast(other);
         return .{ .x = @floatCast(other.x), .y = @floatCast(other.y), .z = @floatCast(other.z), .w = @floatCast(other.w) };
     }
 
     /// Creates a Vec4 from other, other must have `x`, and `y` components
-    pub inline fn fromVec2(vec2: anytype, z: f32, w: f32) Vec4 {
+    pub fn fromVec2(vec2: anytype, z: f32, w: f32) Vec4 {
         return .{ .x = @floatCast(vec2.x), .y = @floatCast(vec2.y), .z = z, .w = w };
     }
 
     /// Creates a Vec4 from other, other must have `x`, `y`, and `z` components
-    pub inline fn fromVec3(vec3: anytype, w: f32) Vec4 {
+    pub fn fromVec3(vec3: anytype, w: f32) Vec4 {
         return .{ .x = @floatCast(vec3.x), .y = @floatCast(vec3.y), .z = @floatCast(vec3.z), .w = w };
     }
 
     /// Will try to convert vec to a Vec4
     /// e.g. if vec has an x field, it will use it,
     /// same goes for the y, z, and w fields.
-    pub inline fn fromAny(vec: anytype) Vec4 {
+    pub fn fromAny(vec: anytype) Vec4 {
         return .{
             .x = vec_funcs.convertFieldToF32(vec, "x", 0),
             .y = vec_funcs.convertFieldToF32(vec, "y", 0),
@@ -114,20 +114,20 @@ pub const Vec4 = extern struct {
     }
 
     /// Returns a `Vec3` from self, discarding the `w` component
-    pub inline fn flatten(self: Vec4) ztg.Vec3 {
+    pub fn flatten(self: Vec4) ztg.Vec3 {
         return self.flattenInto(ztg.Vec3);
     }
 
     /// Creates a `T`, which must have `x`, `y`, and `z` components, from self and discards the `w` component
-    pub inline fn flattenInto(self: Vec4, comptime T: type) T {
+    pub fn flattenInto(self: Vec4, comptime T: type) T {
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z) };
     }
 
-    pub inline fn quatMultiply(v0: Vec4, v1: Vec4) Vec4 {
+    pub fn quatMultiply(v0: Vec4, v1: Vec4) Vec4 {
         return Vec4.fromZMath(ztg.zmath.qmul(v0.intoZMath(), v1.intoZMath()));
     }
 
-    pub inline fn quatRotatePoint(q: Vec4, p: ztg.Vec3) ztg.Vec3 {
+    pub fn quatRotatePoint(q: Vec4, p: ztg.Vec3) ztg.Vec3 {
         return ztg.Vec3.fromZMath(ztg.zmath.rotate(q.intoZMath(), p.intoZMath()));
     }
 

@@ -88,15 +88,15 @@ pub fn ComponentArray(comptime Index: type) type {
             return cast(T, g);
         }
 
-        pub inline fn contains(self: *const Self, ent: ztg.Entity) bool {
+        pub fn contains(self: *const Self, ent: ztg.Entity) bool {
             return self.ent_to_comp_idx.contains(ent);
         }
 
-        pub inline fn len(self: *const Self) usize {
+        pub fn len(self: *const Self) usize {
             return self.entities.items.len;
         }
 
-        inline fn cast(comptime T: type, data: *anyopaque) *T {
+        fn cast(comptime T: type, data: *anyopaque) *T {
             if (comptime @alignOf(T) == 0) return @ptrCast(data);
             return @ptrCast(@alignCast(data));
         }

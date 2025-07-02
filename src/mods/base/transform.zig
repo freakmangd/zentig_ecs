@@ -47,47 +47,47 @@ pub fn getPos(self: Self) ztg.Vec3 {
     return ztg.Vec3.fromZMath(self.basis[3]);
 }
 
-pub inline fn setPos(self: *Self, new_pos: ztg.Vec3) void {
+pub fn setPos(self: *Self, new_pos: ztg.Vec3) void {
     zmath.storeArr4(&self.basis[3], new_pos.intoZMath());
 }
 
-pub inline fn translate(self: *Self, by: ztg.Vec3) void {
+pub fn translate(self: *Self, by: ztg.Vec3) void {
     self.basis[3] += by.intoZMath();
 }
 
-pub inline fn getRot(self: Self) ztg.Vec4 {
+pub fn getRot(self: Self) ztg.Vec4 {
     return self.__data.rot;
 }
 
-pub inline fn setRot(self: *Self, new_rot: ztg.Vec4) void {
+pub fn setRot(self: *Self, new_rot: ztg.Vec4) void {
     self.__data.rot = new_rot;
     self.__data.basis_is_dirty = true;
 }
 
-pub inline fn setRotEuler(self: *Self, x: f32, y: f32, z: f32) void {
+pub fn setRotEuler(self: *Self, x: f32, y: f32, z: f32) void {
     self.__data.rot = ztg.Vec4.fromEulerAngles(.{ .x = x, .y = y, .z = z });
     self.__data.basis_is_dirty = true;
 }
 
-pub inline fn rotate(self: *Self, by: ztg.Vec4) void {
+pub fn rotate(self: *Self, by: ztg.Vec4) void {
     self.__data.rot = self.__data.rot.quatMultiply(by);
     self.__data.basis_is_dirty = true;
 }
 
-pub inline fn rotateEuler(self: *Self, x: f32, y: f32, z: f32) void {
+pub fn rotateEuler(self: *Self, x: f32, y: f32, z: f32) void {
     self.rotate(ztg.Vec4.fromEulerAngles(.{ .x = x, .y = y, .z = z }));
 }
 
-pub inline fn getScale(self: Self) ztg.Vec3 {
+pub fn getScale(self: Self) ztg.Vec3 {
     return self.__data.scale;
 }
 
-pub inline fn setScale(self: *Self, new_scale: ztg.Vec3) void {
+pub fn setScale(self: *Self, new_scale: ztg.Vec3) void {
     self.__data.scale = new_scale;
     self.__data.basis_is_dirty = true;
 }
 
-pub inline fn scale(self: *Self, scalar: ztg.Vec3) void {
+pub fn scale(self: *Self, scalar: ztg.Vec3) void {
     self.__data.scale.scaleEql(scalar);
     self.__data.basis_is_dirty = true;
 }

@@ -98,7 +98,7 @@ pub fn swapRemove(self: *Self, index: usize) void {
     self.set(index, bytes.ptr);
 }
 
-inline fn cast(comptime T: type, data: *anyopaque) *T {
+fn cast(comptime T: type, data: *anyopaque) *T {
     if (@alignOf(T) == 0) return @as(*T, @ptrCast(data));
     return @ptrCast(@alignCast(data));
 }

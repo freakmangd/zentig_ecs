@@ -17,28 +17,28 @@ pub const Vec2 = extern struct {
     pub const up: Vec2 = .{ .y = 1 };
     pub const down: Vec2 = .{ .y = -1 };
 
-    pub inline fn init(x: anytype, y: anytype) Vec2 {
+    pub fn init(x: anytype, y: anytype) Vec2 {
         return .{
             .x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x,
             .y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y,
         };
     }
 
-    pub inline fn set(self: *Vec2, x: anytype, y: anytype) void {
+    pub fn set(self: *Vec2, x: anytype, y: anytype) void {
         self.x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x;
         self.y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y;
     }
 
     /// Returns T with all of it's components set to the original vector's
     /// T's only required components must be `x`, and `y`
-    pub inline fn into(self: Vec2, comptime T: type) T {
+    pub fn into(self: Vec2, comptime T: type) T {
         if (comptime vec_funcs.isBitcastable(Vec2, T)) return @bitCast(self);
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y) };
     }
 
     /// Converts the Vector into a @Vector object of type `T`, doing
     /// the necessary conversions.
-    pub inline fn intoVectorOf(self: Vec2, comptime T: type) @Vector(2, T) {
+    pub fn intoVectorOf(self: Vec2, comptime T: type) @Vector(2, T) {
         if (@typeInfo(T) == .float or @typeInfo(T) == .comptime_float) {
             if (comptime T == f32) {
                 return self.intoSimd();
@@ -59,7 +59,7 @@ pub const Vec2 = extern struct {
 
     /// Converts vector to an angle in radians
     /// starting at .{ 1, 0 } and going ccw towards .{ 0, 1 }
-    pub inline fn intoDirAngle(self: Vec2) ztg.math.Radians {
+    pub fn intoDirAngle(self: Vec2) ztg.math.Radians {
         return math.atan2(self.y, self.x);
     }
 
@@ -71,7 +71,7 @@ pub const Vec2 = extern struct {
 
     /// Converts angle theta to a unit vector representation
     /// starting at .{ 1, 0 } and going ccw towards .{ 0, 1 }
-    pub inline fn fromDirAngle(theta: ztg.math.Radians) Vec2 {
+    pub fn fromDirAngle(theta: ztg.math.Radians) Vec2 {
         return .{
             .x = math.cos(theta),
             .y = math.sin(theta),
@@ -84,17 +84,17 @@ pub const Vec2 = extern struct {
     }
 
     /// For use when integrating with the zmath library, sets z and w to 0
-    pub inline fn intoZMath(self: Vec2) @Vector(4, f32) {
+    pub fn intoZMath(self: Vec2) @Vector(4, f32) {
         return .{ self.x, self.y, 0.0, 0.0 };
     }
 
     /// For use when integrating with the zmath library, discards z and w components
-    pub inline fn fromZMath(vec: @Vector(4, f32)) Vec2 {
+    pub fn fromZMath(vec: @Vector(4, f32)) Vec2 {
         return .{ vec[0], vec[1] };
     }
 
     /// Creates a new Vec2 from the components of other
-    pub inline fn from(other: anytype) Vec2 {
+    pub fn from(other: anytype) Vec2 {
         if (comptime vec_funcs.isBitcastable(Vec2, @TypeOf(other))) return @bitCast(other);
         return .{ .x = @floatCast(other.x), .y = @floatCast(other.y) };
     }
@@ -102,7 +102,7 @@ pub const Vec2 = extern struct {
     /// Will try to convert vec to a Vec2
     /// e.g. if vec has an x field, it will use it,
     /// same goes for the y field.
-    pub inline fn fromAny(vec: anytype) Vec2 {
+    pub fn fromAny(vec: anytype) Vec2 {
         return .{
             .x = vec_funcs.convertFieldToF32(vec, "x", 0),
             .y = vec_funcs.convertFieldToF32(vec, "y", 0),
@@ -125,22 +125,22 @@ pub const Vec2 = extern struct {
     }
 
     /// Creates a Vec3 from self and sets the z component
-    pub inline fn extend(self: Vec2, z: f32) ztg.Vec3 {
+    pub fn extend(self: Vec2, z: f32) ztg.Vec3 {
         return self.extendInto(ztg.Vec3, z);
     }
 
     /// Creates a T, which must have `x`, `y`, and `z` components, from self and sets the w component
-    pub inline fn extendInto(self: Vec2, comptime T: type, z: f32) T {
+    pub fn extendInto(self: Vec2, comptime T: type, z: f32) T {
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = z };
     }
 
     /// Just returns the x component
-    pub inline fn flatten(self: Vec2) f32 {
+    pub fn flatten(self: Vec2) f32 {
         return self.x;
     }
 
     /// Returns a new Vec2 with all of it's components set to a number within [min, max)
-    pub inline fn random(rand: std.Random, _min: f32, _max: f32) Vec2 {
+    pub fn random(rand: std.Random, _min: f32, _max: f32) Vec2 {
         return .{
             .x = std.math.lerp(_min, _max, rand.float(f32)),
             .y = std.math.lerp(_min, _max, rand.float(f32)),
@@ -148,12 +148,12 @@ pub const Vec2 = extern struct {
     }
 
     /// Returns a new random Vec2 that lies on the outside of a unit circle
-    pub inline fn randomOnUnitCircle(rand: std.Random) Vec2 {
+    pub fn randomOnUnitCircle(rand: std.Random) Vec2 {
         return fromDirAngle(rand.float(f32) * std.math.pi * 2);
     }
 
     /// Returns the perpendicular of the vector
-    pub inline fn perpendicular(dir: Vec2) Vec2 {
+    pub fn perpendicular(dir: Vec2) Vec2 {
         return .{
             .x = -dir.y,
             .y = dir.x,
@@ -165,7 +165,7 @@ pub const Vec2 = extern struct {
     }
 
     /// Returns a new copy of the vector rotated ccw by `theta` radians
-    pub inline fn getRotated(self: Vec2, theta: ztg.math.Radians) Vec2 {
+    pub fn getRotated(self: Vec2, theta: ztg.math.Radians) Vec2 {
         return Vec2{
             .x = @mulAdd(f32, std.math.cos(theta), self.x, -std.math.sin(theta) * self.y),
             .y = @mulAdd(f32, std.math.sin(theta), self.x, std.math.cos(theta) * self.y),
@@ -177,7 +177,7 @@ pub const Vec2 = extern struct {
     }
 
     /// Rotates the vector ccw in place by `theta` radians
-    pub inline fn setRotated(self: *Vec2, theta: ztg.math.Radians) void {
+    pub fn setRotated(self: *Vec2, theta: ztg.math.Radians) void {
         self.* = self.getRotated(theta);
     }
 

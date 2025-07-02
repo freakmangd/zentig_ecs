@@ -602,7 +602,7 @@ pub fn World(
             try commandsCast(ptr).removeComponent_fromCompId(ent, comp_id);
         }
 
-        inline fn removeComponent_fromCompId(
+        fn removeComponent_fromCompId(
             self: *Self,
             ent: ztg.Entity,
             comp_id: util.CompId,
@@ -849,7 +849,7 @@ pub fn World(
             return len;
         }
 
-        inline fn entPassesCompMasks(ent_mask: ComponentMask, comp_mask: ComponentMask, negative_mask: ComponentMask) bool {
+        fn entPassesCompMasks(ent_mask: ComponentMask, comp_mask: ComponentMask, negative_mask: ComponentMask) bool {
             return ent_mask.supersetOf(comp_mask) and ent_mask.intersectWith(negative_mask).eql(ComponentMask.initEmpty());
         }
 
@@ -879,7 +879,7 @@ pub fn World(
             return out;
         }
 
-        inline fn initParam(self: *Self, alloc: std.mem.Allocator, comptime T: type) !T {
+        fn initParam(self: *Self, alloc: std.mem.Allocator, comptime T: type) !T {
             if (comptime T == ztg.Commands) {
                 return self.commands();
             } else if (comptime @typeInfo(T) == .@"struct" and @hasDecl(T, "IsQueryType")) {
@@ -923,21 +923,21 @@ pub fn World(
             return util.typeArrayHasUtp(included, type_utp);
         }
 
-        inline fn getListOf(self: *Self, comptime T: type) *ComponentArray {
+        fn getListOf(self: *Self, comptime T: type) *ComponentArray {
             const idx = comptime util.indexOfType(comp_types, T) orelse util.compileError("Tried to get list of Component `{s}`, which was not registred.", .{@typeName(T)});
             return &self.comp_arrays[idx];
         }
 
-        inline fn getListById(self: *Self, id: util.CompId) !*ComponentArray {
+        fn getListById(self: *Self, id: util.CompId) !*ComponentArray {
             if (comptime builtin.mode == .Debug) if (id >= self.comp_arrays.len) return error.UnregisteredComponent;
             return &self.comp_arrays[id];
         }
 
-        inline fn commandsCast(ptr: *anyopaque) *Self {
+        fn commandsCast(ptr: *anyopaque) *Self {
             return @ptrCast(@alignCast(ptr));
         }
 
-        inline fn commandsCastConst(ptr: *const anyopaque) *const Self {
+        fn commandsCastConst(ptr: *const anyopaque) *const Self {
             return @ptrCast(@alignCast(ptr));
         }
 
