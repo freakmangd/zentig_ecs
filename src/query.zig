@@ -85,7 +85,7 @@ pub fn Query(comptime query_types: anytype) type {
                 return @ptrCast(self.opt_ptrs[comp_idx][0..self.len]);
             }
 
-            @compileError(std.fmt.comptimePrint("There is no type {} in query", .{@typeName(T)}));
+            @compileError(std.fmt.comptimePrint("There is no type {} in query", .{T}));
         }
 
         /// Asserts there is only one item in the query and
