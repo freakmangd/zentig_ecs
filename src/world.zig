@@ -175,7 +175,6 @@ pub fn World(
             self.alloc.destroy(self.entities);
             self.alloc.destroy(self.resources);
             self.info.deinit(self.alloc);
-            //self.alloc.destroy(self);
         }
 
         fn generateAddRemSystem(comptime CT: type, comptime fn_name: []const u8) *const fn (*Self, *anyopaque, ztg.Entity) anyerror!void {
@@ -218,11 +217,6 @@ pub fn World(
         }
 
         /// If you are going to run multiple stages in a row, consider `.runStageList()`
-        ///
-        /// Example:
-        /// ```zig
-        /// try world.runStage(.render);
-        /// ```
         pub fn runStage(self: *Self, comptime stage_id: StagesList.StageField) anyerror!void {
             try StagesList.runStage(self, stage_id, false, void{});
         }
@@ -231,27 +225,17 @@ pub fn World(
             try StagesList.runStageInParallel(self, stage_id, false, void{});
         }
 
-        /// For discarding errors in systems so that every system runs. Useful for stages
+        /// Runs a stage and catches every error ensures every system in the stage is run. Useful for stages
         /// that are run at the end to free resources.
         /// Calls errCallback whenever an error occurs and passes it the error.
-        ///
-        /// Example:
-        /// ```zig
-        /// try world.runStage(.render);
-        /// ```
         pub fn runStageCatchErrors(self: *Self, comptime stage_id: StagesList.StageField, comptime errCallback: fn (anyerror) void) error{OutOfMemory}!void {
             StagesList.runStage(self, stage_id, true, errCallback) catch |err| switch (err) {
-                error.OutOfMemory => return error.OutOfMemory,
+                error.OutOfMemory => return error.OutOfMemory, // this is from allocating slices for queries
                 else => unreachable, // all other errors are sent to errCallback
             };
         }
 
         /// If you are going to run multiple stages in a row, consider `.runStageNameList()`
-        ///
-        /// Example:
-        /// ```zig
-        /// world.runStageByName("render");
-        /// ```
         pub fn runStageByName(self: *Self, stage_name: []const u8) anyerror!void {
             StagesList.runStageByName(self, stage_name, false, void{}) catch |err| switch (err) {
                 error.UnknownStage => std.debug.panic("Cannot find stage {s} in stage list.", .{stage_name}),
@@ -263,20 +247,12 @@ pub fn World(
             try commandsCast(ptr).runStageByName(stage_name);
         }
 
-        /// Example:
-        /// ```zig
-        /// try world.runStageList(&.{ .ping_send, .ping_receive, .ping_read });
-        /// ```
         pub fn runStageList(self: *Self, comptime stage_ids: []const StagesList.StageField) anyerror!void {
             inline for (stage_ids) |sid| {
                 try runStage(self, sid);
             }
         }
 
-        /// Example:
-        /// ```zig
-        /// try world.runStageList(&.{ "ping_send", "ping_receive", "ping_read" });
-        /// ```
         pub fn runStageNameList(self: *Self, stage_ids: []const []const u8) anyerror!void {
             for (stage_ids) |sid| {
                 try runStageByName(self, sid);
@@ -361,18 +337,6 @@ pub fn World(
         }
 
         /// Call when a "frame" of your game loop has completed, most commonly after the draw call
-        ///
-        /// Example:
-        ///
-        /// ```zig
-        /// try world.runStage(.load);
-        ///
-        /// while(game.isRunning) {
-        ///   try world.runUpdateStages();
-        ///   try world.runStage(.draw);
-        ///   world.cleanForNextFrame();
-        /// }
-        /// ```
         pub fn cleanForNextFrame(self: *Self) void {
             self.event_pools.clear();
             if (!self.frame_arena.reset(.{ .retain_with_limit = 5_000_000 })) ztg.log.err("Failed to reset frame arena.", .{});
@@ -501,22 +465,13 @@ pub fn World(
 
         /// Adds the components to the entity `ent`.
         ///
-        /// Possible types for components:
+        /// Possible types for `components`:
         /// + tuple { T, V, ... }, where types within the tuple are registered components
         /// + struct { t: T, v: V, ... }, where types within the struct are registered components,
         ///     and the struct itself has an `is_component_bundle` public decl
         ///
         /// If any of the types passed in the tuple/struct components have the `is_component_bundle`
         /// public decl, they will be treated as component bundles and recursively added
-        ///
-        /// Example:
-        /// ```zig
-        /// giveComponents(my_ent, .{
-        ///     SpriteBundle.init(), // every component within SpriteBundle will be added individually
-        ///     Transform.default(),
-        ///     Name{"Entity"},
-        /// });
-        /// ```
         ///
         /// This has a chance to invalidate component pointers
         pub fn giveComponents(self: *Self, ent: ztg.Entity, components: anytype) !void {
@@ -861,14 +816,6 @@ pub fn World(
 
         /// Generates the arguments tuple for a desired system based on its parameters.
         /// You shouldn't need to use this, just add the function to the desired stage.
-        ///
-        /// Example:
-        /// ```zig
-        /// const params = try world.initParamsForSystem(@typeInfo(@TypeOf(myFunction)).@"fn".params);
-        /// defer world.deinitParamsForSystem(params);
-        ///
-        /// @call(.auto, myFunction, params);
-        /// ```
         pub fn initParamsForSystem(self: *Self, alloc: std.mem.Allocator, comptime params: []const std.builtin.Type.Fn.Param) !ParamsForSystem(params) {
             if (comptime params.len == 0) return ParamsForSystem(params){};
 

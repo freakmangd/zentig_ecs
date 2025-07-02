@@ -6,7 +6,7 @@ It's heavily inspired by everything that makes [bevy_ecs](https://github.com/bev
 so great and [Unity](https://unity.com/) so approachable.
 
 ##### WARNING:
-It is not recommended to use zentig for anything major in it's current state.
+It is not recommended to use zentig for anything major in its current state.
 While it is functional and I use it frequently, it is far from battle tested.
 
 That being said, if you encounter any problems please feel free to open an issue!

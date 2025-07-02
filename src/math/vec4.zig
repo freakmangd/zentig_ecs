@@ -40,20 +40,20 @@ pub const Vec4 = extern struct {
     /// Shorthand for .{ .w = 1 }
     pub const identity: Vec4 = .{ .w = 1 };
 
-    /// Returns T with all of it's components set to the original vector's
+    /// Returns T with all of its components set to the original vector's
     /// T's only required components must be `x`, `y`, `z`, and `w`
     pub fn into(self: Vec4, comptime T: type) T {
         if (comptime vec_funcs.isBitcastable(Vec4, T)) return @bitCast(self);
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z), .w = @floatCast(self.w) };
     }
 
-    /// Returns T with it's x and y components set to the original vector's x and y
+    /// Returns T with its x and y components set to the original vector's x and y
     /// T's only required components must be `x` and `y`
     pub fn intoVec2(self: Vec4, comptime T: type) T {
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y) };
     }
 
-    /// Returns T with it's x and y components set to the original vector's x, y and z
+    /// Returns T with its x and y components set to the original vector's x, y and z
     /// T's only required components must be `x`, `y`, and `z`
     pub fn intoVec3(self: Vec4, comptime T: type) T {
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z) };

@@ -12,9 +12,9 @@ You can create your own, but there are 7 default stages:
 + `draw`
 + `deinit` - `Run when World.deinit` is called. Used for deinitializing resources and assets
 
-By default, zentig doesn't add any systems to any of your stages. So you can use any
+By default, zentig doesn't add any components or systems to any of your stages. So you can use any
 of these stages for whatever purpose you want. It's only when you include @import("zentig").base
-that default stages and components get added to your world.
+that systems and components get added to your world.
 
 ### Stage layout
 

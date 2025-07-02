@@ -37,39 +37,21 @@ pub const Vtable = struct {
 };
 
 /// If you are going to run multiple stages in a row, consider `.runStageList()`
-///
-/// Example:
-/// ```zig
-/// com.runStage(.render);
-/// ```
 pub fn runStage(self: Self, comptime stage_id: ztg.meta.EnumLiteral) anyerror!void {
     try self.vtable.run_stage(self.ctx, @tagName(stage_id));
 }
 
 /// If you are going to run multiple stages in a row, consider `.runStageNameList()`
-///
-/// Example:
-/// ```zig
-/// com.runStageByName("render");
-/// ```
 pub fn runStageByName(self: Self, stage_id: []const u8) anyerror!void {
     try self.vtable.run_stage(self.ctx, stage_id);
 }
 
-/// Example:
-/// ```zig
-/// com.runStageList(&.{ .ping_send, .ping_receive, .ping_read });
-/// ```
 pub fn runStageList(self: Self, comptime stage_ids: []const ztg.meta.EnumLiteral) anyerror!void {
     inline for (stage_ids) |sid| {
         try runStage(self, sid);
     }
 }
 
-/// Example:
-/// ```zig
-/// com.runStageList(&.{ "ping_send", "ping_receive", "ping_read" });
-/// ```
 pub fn runStageNameList(self: Self, stage_ids: []const []const u8) anyerror!void {
     for (stage_ids) |sid| {
         try runStageByName(self, sid);
@@ -125,15 +107,6 @@ fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void {
 ///
 /// If any of the types passed in the tuple/struct components have the `is_component_bundle`
 /// public decl, they will be treated as component bundles and recursively added
-///
-/// Example:
-/// ```zig
-/// giveComponents(my_ent, .{
-///     SpriteBundle.init(), // every component within SpriteBundle will be added individually
-///     Transform.default(),
-///     Name{"Entity"},
-/// });
-/// ```
 pub fn giveComponents(self: Self, ent: Entity, components: anytype) !void {
     const Components = @TypeOf(components);
 

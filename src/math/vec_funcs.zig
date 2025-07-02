@@ -210,30 +210,17 @@ pub fn GenerateFunctions(comptime Self: type) type {
         };
 
         /// Returns the vector with its components ordered in the method defined in `comps`
-        /// Example:
-        /// ```zig
-        /// const a = Vec2.init(10, 20);
-        /// const b = a.swizzle(.{ .y, .x });
-        /// try b.expectEqual(.{ .x = 20, .y = 10 });
-        /// ```
         pub fn swizzle(self: Self, comptime comps: [vec_len]Component) Self {
             return fromSimd(@shuffle(f32, self.intoSimd(), undefined, @as(@Vector(vec_len, i32), @bitCast(comps))));
         }
 
         /// Returns a vector with components chosen from a and b based on `comps`.
         /// Behaves similarly to `@shuffle`
-        /// Example:
-        /// ```zig
-        /// const a = Vec2.init(10, 20);
-        /// const b = Vec2.init(20, 10);
-        /// const c = Vec2.shuffle(a, b, .{ -1, 1 });
-        /// try c.expectEqual(.{ .x = 20, .y = 20 });
-        /// ```
         pub fn shuffle(a: Self, b: Self, comptime comps: @Vector(vec_len, i32)) Self {
             return fromSimd(@shuffle(f32, a.intoSimd(), b.intoSimd(), comps));
         }
 
-        /// Returns a copy of `vec` with it's length clamped to max_len
+        /// Returns a copy of `vec` with its length clamped to max_len
         pub fn withClampedLength(vec: Self, max_len: f32) Self {
             const sqr_len = Self.sqrLength(vec);
 

@@ -95,21 +95,9 @@ pub fn init(comptime includes: []const type) Self {
 }
 
 /// Calls `include(comptime wb: *WorldBuilder) (!)void` on all structs passed into the `includes` slice.
-/// `.init(...)` passes it's arguments to this function.
+/// `.init(...)` passes its arguments to this function.
 ///
-/// You can include a struct more than once without errors/warnings, it's effects will only be applied once.
-///
-/// Example:
-/// ```zig
-/// wb.include(&.{ @import("player.zig") });
-/// ```
-///
-/// `player.zig:`
-/// ```zig
-/// pub fn include(wb: *WorldBuilder) void {
-///     wb.addComponents(&.{ Player });
-/// }
-/// ```
+/// You can include a struct more than once without errors/warnings, its effects will only be applied once.
 pub fn include(comptime self: *Self, comptime includes: []const type) void {
     for (includes) |TI| {
         if (comptime std.meta.hasFn(TI, "include")) {
@@ -418,14 +406,8 @@ test addEvent {
     try std.testing.expect(namespace.system_was_run);
 }
 
-/// Adds the system to the specified stage
-///
-/// Example:
-/// ```zig
-/// wb.addSystemsToStage(.draw, drawPlayer);
-/// // or for multiple
-/// wb.addSystemsToStage(.draw, .{ drawPlayer, drawEnemy });
-/// ```
+/// Adds the system to the specified stage,
+/// second argument can take a single system (`sysName`) or multiple in a tuple (`.{sysName1, sysName2}`)
 pub fn addSystemsToStage(comptime self: *Self, comptime stage_tag: ztg.meta.EnumLiteral, systems: anytype) void {
     self.addSystemsToStageByName(@tagName(stage_tag), systems);
 }

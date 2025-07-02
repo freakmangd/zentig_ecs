@@ -32,14 +32,14 @@ pub const Vec3 = extern struct {
         self.z = if (comptime @typeInfo(@TypeOf(z)) == .int) @floatFromInt(z) else z;
     }
 
-    /// Returns T with all of it's components set to the original vector's
+    /// Returns T with all of its components set to the original vector's
     /// T's only required components must be `x`, `y`, and `z`
     pub fn into(self: Vec3, comptime T: type) T {
         if (comptime vec_funcs.isBitcastable(Vec3, T)) return @bitCast(self);
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y), .z = @floatCast(self.z) };
     }
 
-    /// Returns T with it's x and y components set to the original vector's x and y
+    /// Returns T with its x and y components set to the original vector's x and y
     /// T's only required components must be `x` and `y`
     pub fn intoVec2(self: Vec3, comptime T: type) T {
         return .{ .x = @floatCast(self.x), .y = @floatCast(self.y) };
@@ -127,7 +127,7 @@ pub const Vec3 = extern struct {
         };
     }
 
-    /// Returns a new Vec3 with all of it's components set to a number within [min, max)
+    /// Returns a new Vec3 with all of its components set to a number within [min, max)
     pub fn random(rand: std.Random, _min: f32, _max: f32) Vec3 {
         return .{
             .x = std.math.lerp(_min, _max, rand.float(f32)),

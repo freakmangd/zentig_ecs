@@ -38,7 +38,7 @@ fn isIntegral(comptime T: type) bool {
 
 pub fn toFloat(comptime T: type, x: anytype) T {
     if (T == @TypeOf(x)) return x;
-    if (comptime !isFloat(T)) @compileError("toFloat requires it's first argument `T` to be a Float type to convert `x` to.");
+    if (comptime !isFloat(T)) @compileError("toFloat requires its first argument `T` to be a Float type to convert `x` to.");
 
     return switch (@typeInfo(@TypeOf(x))) {
         .int => @floatFromInt(x),
@@ -58,7 +58,7 @@ test toFloat {
 
 pub fn toInt(comptime T: type, x: anytype) T {
     if (comptime T == @TypeOf(x)) return x;
-    if (comptime !isIntegral(T)) @compileError("toInt requires it's first argument `T` to be an Integral type to convert `x` to.");
+    if (comptime !isIntegral(T)) @compileError("toInt requires its first argument `T` to be an Integral type to convert `x` to.");
 
     return switch (@typeInfo(@TypeOf(x))) {
         .int => @intCast(x),

@@ -8,25 +8,25 @@ const TypeBuilder = ztg.meta.TypeBuilder;
 
 pub fn Init(comptime stage_defs: []const StageDef) type {
     const Inner = CompileStagesList(stage_defs);
+    // inner: struct {
+    //   update: struct {
+    //     body: struct {
+    //       before: tuple {
+    //       },
+    //       during: tuple {
+    //         fn (Alloc, Query(...)) anyerror!void = @import("...").system_fn,
+    //         fn (Alloc, Query(...), Query(...)) anyerror!void = @import("...").system_fn,
+    //       },
+    //       after: tuple {
+    //       },
+    //     },
+    //     ...
+    //   },
+    //   ...
+    // }
     const inner = Inner{};
 
     return struct {
-        // inner: struct {
-        //   UPDATE: struct {
-        //     body: struct {
-        //       before: tuple {
-        //       },
-        //       during: tuple {
-        //         fn (Alloc, Query(...)) anyerror!void = @import("...").system_fn,
-        //         fn (Alloc, Query(...), Query(...)) anyerror!void = @import("...").system_fn,
-        //       },
-        //       after: tuple {
-        //       },
-        //     },
-        //     ...
-        //   },
-        //   ...
-        // }
         pub const StageField = std.meta.FieldEnum(Inner);
 
         var thread_pool: std.Thread.Pool = undefined;

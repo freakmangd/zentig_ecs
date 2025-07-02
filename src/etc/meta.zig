@@ -58,15 +58,6 @@ pub fn ReturnType(comptime f: anytype) type {
 /// Combines two struct types by their fields,
 /// returning a new type that contains all of the fields
 /// of the types passed in.
-///
-/// Example:
-/// ```zig
-/// const A = struct { a: i32, b: i16 };
-/// const B = struct { c: f32, d: f16 };
-///
-/// const C = CombineStructTypes(&.{ A, B });
-/// // C == struct { a: i32, b: i16, c: f32, d: f16 };
-/// ```
 pub fn CombineStructTypes(comptime types: []const type) type {
     var field_count: usize = 0;
 

@@ -33,9 +33,8 @@ pub fn build(b: *std.Build) void {
     b.modules.put("zmath", zmath) catch @panic("OOM");
     b.modules.put("zmath_options", zmath.import_table.get("zmath_options").?) catch @panic("OOM");
 
-    // LOCAL TESTING
+    // local testing
 
-    // MAKE SURE EVERYTHING WORKS
     const all_tests = b.addTest(.{
         .root_source_file = b.path("src/init.zig"),
         .target = target,
