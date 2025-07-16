@@ -181,23 +181,23 @@ pub const Vec2 = extern struct {
         self.* = self.getRotated(theta);
     }
 
-    pub fn format(value: Vec2, comptime _fmt: []const u8, opt: std.fmt.FormatOptions, writer: anytype) !void {
-        const start_str, const fmt = comptime blk: {
-            if (_fmt.len > 0 and _fmt[0] == 's') break :blk .{ "(", _fmt[1..] };
-            break :blk .{ "Vec2(", _fmt };
-        };
-        try writer.writeAll(start_str);
-        try util.formatFloatValue(value.x, fmt, opt, writer);
+    pub fn format(value: Vec2, writer: *std.Io.Writer) !void {
+        try writer.print("Vec2({}, {})", .{ value.x, value.y });
+    }
+
+    pub fn formatNumber(value: Vec2, writer: *std.Io.Writer, options: std.fmt.Number) !void {
+        try writer.writeAll("(");
+        try writer.printFloat(value.x, options);
         try writer.writeAll(", ");
-        try util.formatFloatValue(value.y, fmt, opt, writer);
+        try writer.printFloat(value.y, options);
         try writer.writeAll(")");
     }
 
     test format {
         const v = init(0, 1);
-        try std.testing.expectFmt("Vec2(0e0, 1e0)", "{}", .{v});
-        try std.testing.expectFmt("Vec2(0, 1)", "{d}", .{v});
-        try std.testing.expectFmt("(0, 1)", "{sd}", .{v});
+        try std.testing.expectFmt("Vec2(0, 1)", "{f}", .{v});
+        try std.testing.expectFmt("(0e0, 1e0)", "{e}", .{v});
+        try std.testing.expectFmt("(0, 1)", "{d}", .{v});
     }
 
     const vec_funcs = @import("vec_funcs.zig");

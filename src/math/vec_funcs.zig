@@ -54,7 +54,7 @@ pub fn GenerateFunctions(comptime Self: type) type {
         /// Only to be used in tests, returns an error if `equals` returned false between the two
         pub fn expectEqual(expected: Self, actual: Self) !void {
             if (!Self.equals(expected, actual)) {
-                std.debug.print("expected {}, found {}", .{ expected, actual });
+                std.debug.print("expected {f}, found {f}", .{ expected, actual });
                 return error.TestExpectedEqual;
             }
         }
@@ -62,7 +62,7 @@ pub fn GenerateFunctions(comptime Self: type) type {
         /// Only to be used in tests, returns an error if `approxEqAbs` returned false between the two
         pub fn expectApproxEqAbs(expected: Self, actual: Self) !void {
             if (!approxEqAbs(expected, actual)) {
-                std.debug.print("expected {}, found {}", .{ expected, actual });
+                std.debug.print("expected {f}, found {f}", .{ expected, actual });
                 return error.TestExpectedEqual;
             }
         }
@@ -70,7 +70,7 @@ pub fn GenerateFunctions(comptime Self: type) type {
         /// Only to be used in tests, returns an error if `approxEqRel` returned false between the two
         pub fn expectApproxEqRel(expected: Self, actual: Self) !void {
             if (!approxEqRel(expected, actual)) {
-                std.debug.print("expected {}, found {}", .{ expected, actual });
+                std.debug.print("expected {f}, found {f}", .{ expected, actual });
                 return error.TestExpectedEqual;
             }
         }
@@ -311,10 +311,8 @@ pub fn isBitcastable(comptime Self: type, comptime Other: type) bool {
         const o_fields: []const builtin.Type.StructField = other_ti.@"struct".fields;
         if (s_fields.len != o_fields.len) break :blk false;
 
-        const OtherField = std.meta.FieldEnum(Other);
         for (s_fields) |sf| {
-            const other_field = std.meta.stringToEnum(OtherField, sf.name) orelse break :blk false;
-            if (sf.type != std.meta.FieldType(Other, other_field)) break :blk false;
+            if (sf.type != @FieldType(Other, sf.name)) break :blk false;
         }
 
         break :blk true;

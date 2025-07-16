@@ -124,32 +124,3 @@ pub fn typeArrayHasUtp(comptime type_array: anytype, utp: ztg.meta.Utp) bool {
     }
     return false;
 }
-
-pub fn formatFloatValue(
-    value: anytype,
-    comptime fmt: []const u8,
-    options: std.fmt.FormatOptions,
-    writer: anytype,
-) !void {
-    var buf: [std.fmt.format_float.bufferSize(.decimal, f64)]u8 = undefined;
-
-    if (fmt.len == 0 or comptime std.mem.eql(u8, fmt, "e")) {
-        const s = std.fmt.formatFloat(&buf, value, .{ .mode = .scientific, .precision = options.precision }) catch |err| switch (err) {
-            error.BufferTooSmall => "(float)",
-        };
-        return std.fmt.formatBuf(s, options, writer);
-    } else if (comptime std.mem.eql(u8, fmt, "d")) {
-        const s = std.fmt.formatFloat(&buf, value, .{ .mode = .decimal, .precision = options.precision }) catch |err| switch (err) {
-            error.BufferTooSmall => "(float)",
-        };
-        return std.fmt.formatBuf(s, options, writer);
-    } else if (comptime std.mem.eql(u8, fmt, "x")) {
-        var buf_stream = std.io.fixedBufferStream(&buf);
-        std.fmt.formatFloatHexadecimal(value, options, buf_stream.writer()) catch |err| switch (err) {
-            error.NoSpaceLeft => unreachable,
-        };
-        return std.fmt.formatBuf(buf_stream.getWritten(), options, writer);
-    } else {
-        std.fmt.invalidFmtError(fmt, value);
-    }
-}

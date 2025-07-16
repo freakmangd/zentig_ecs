@@ -8,16 +8,14 @@ pub fn build(b: *std.Build) void {
 
     const zentig_mod = b.addModule("zentig", .{
         .root_source_file = b.path("src/init.zig"),
+        .target = target,
+        .optimize = optimize,
         .imports = &.{
             .{ .name = "zmath", .module = zmath },
         },
     });
 
-    const autodoc_test = b.addTest(.{
-        .root_source_file = b.path("src/init.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+    const autodoc_test = b.addTest(.{ .root_module = zentig_mod });
     autodoc_test.root_module.addImport("zentig", zentig_mod);
     autodoc_test.root_module.addImport("zmath", zmath);
 
@@ -35,11 +33,7 @@ pub fn build(b: *std.Build) void {
 
     // local testing
 
-    const all_tests = b.addTest(.{
-        .root_source_file = b.path("src/init.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+    const all_tests = b.addTest(.{ .root_module = zentig_mod });
     all_tests.root_module.addImport("zentig", zentig_mod);
     all_tests.root_module.addImport("zmath", zmath);
 
@@ -58,9 +52,11 @@ pub fn build(b: *std.Build) void {
     for (examples) |ex_info| {
         const example = b.addExecutable(.{
             .name = ex_info[0],
-            .root_source_file = b.path(ex_info[1]),
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(ex_info[1]),
+                .target = target,
+                .optimize = optimize,
+            }),
         });
 
         example.root_module.addImport("zentig", zentig_mod);
@@ -79,9 +75,11 @@ pub fn build(b: *std.Build) void {
 
     for (tests) |test_info| {
         const t = b.addTest(.{
-            .root_source_file = b.path(test_info[1]),
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(test_info[1]),
+                .target = target,
+                .optimize = optimize,
+            }),
         });
         t.root_module.addImport("zentig", zentig_mod);
         t.root_module.addImport("zmath", zmath);

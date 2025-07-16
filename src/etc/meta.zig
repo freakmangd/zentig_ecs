@@ -89,10 +89,10 @@ test CombineStructTypes {
     const C = CombineStructTypes(&.{ A, B });
 
     try std.testing.expectEqualDeep(std.meta.fieldNames(C), &[_][]const u8{ "a", "b", "c", "d" });
-    try std.testing.expectEqual(i32, std.meta.FieldType(C, .a));
-    try std.testing.expectEqual(i16, std.meta.FieldType(C, .b));
-    try std.testing.expectEqual(f32, std.meta.FieldType(C, .c));
-    try std.testing.expectEqual(f16, std.meta.FieldType(C, .d));
+    try std.testing.expectEqual(i32, @FieldType(C, "a"));
+    try std.testing.expectEqual(i16, @FieldType(C, "b"));
+    try std.testing.expectEqual(f32, @FieldType(C, "c"));
+    try std.testing.expectEqual(f16, @FieldType(C, "d"));
 }
 
 pub fn CombineEnumTypes(comptime types: []const type) type {

@@ -143,17 +143,17 @@ pub const Vec3 = extern struct {
         return from(rand_vec);
     }
 
-    pub fn format(value: Vec3, comptime _fmt: []const u8, opt: std.fmt.FormatOptions, writer: anytype) !void {
-        const start_str, const fmt = comptime blk: {
-            if (_fmt.len > 0 and _fmt[0] == 's') break :blk .{ "(", _fmt[1..] };
-            break :blk .{ "Vec3(", _fmt };
-        };
-        try writer.writeAll(start_str);
-        try util.formatFloatValue(value.x, fmt, opt, writer);
+    pub fn format(value: Vec3, writer: *std.Io.Writer) !void {
+        try writer.print("Vec3({}, {}, {})", .{ value.x, value.y, value.z });
+    }
+
+    pub fn formatNumber(value: Vec3, writer: *std.Io.Writer, options: std.fmt.Number) !void {
+        try writer.writeAll("(");
+        try writer.printFloat(value.x, options);
         try writer.writeAll(", ");
-        try util.formatFloatValue(value.y, fmt, opt, writer);
+        try writer.printFloat(value.y, options);
         try writer.writeAll(", ");
-        try util.formatFloatValue(value.z, fmt, opt, writer);
+        try writer.printFloat(value.z, options);
         try writer.writeAll(")");
     }
 
