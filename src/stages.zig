@@ -145,7 +145,7 @@ pub fn Init(comptime stage_defs: []const StageDef) type {
             stage_name: []const u8,
             comptime catch_errs: bool,
             comptime errCallback: if (catch_errs) fn (anyerror) void else void,
-        ) anyerror!void {
+        ) !void {
             inline for (std.meta.fields(Inner), 0..) |field, i| {
                 if (std.mem.eql(u8, field.name, stage_name)) {
                     return runStage(world, @enumFromInt(i), catch_errs, errCallback);

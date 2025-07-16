@@ -49,12 +49,12 @@ pub fn resetCompIds() void {
 }
 
 pub const CompId = usize;
-var last_reset_id: if (builtin.mode == .Debug) usize else void = if (builtin.mode == .Debug) 0 else void{};
+var last_reset_id: if (builtin.mode == .Debug) usize else void = if (builtin.mode == .Debug) 0 else {};
 var id_counter: CompId = 0;
 pub var allow_new_ids: bool = false;
 pub fn compId(comptime T: type) CompId {
     const static = struct {
-        var reset_id: if (builtin.mode == .Debug) usize else void = if (builtin.mode == .Debug) 0 else void{};
+        var reset_id: if (builtin.mode == .Debug) usize else void = if (builtin.mode == .Debug) 0 else {};
         var id: ?CompId = null;
 
         const Parent = T;

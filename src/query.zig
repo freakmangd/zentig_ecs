@@ -36,13 +36,13 @@ pub fn Query(comptime query_types: anytype) type {
         entities: if (has_entities) []Entity else void = undefined,
         len: usize = 0,
 
-        pub fn init(alloc: std.mem.Allocator, list_len: usize) !Self {
+        pub fn init(alloc: std.mem.Allocator, list_len: usize) std.mem.Allocator.Error!Self {
             var self = Self{
                 .comp_ptrs = undefined,
                 .opt_ptrs = undefined,
             };
 
-            self.entities = if (comptime has_entities) try alloc.alloc(Entity, list_len) else void{};
+            self.entities = if (comptime has_entities) try alloc.alloc(Entity, list_len) else {};
             errdefer if (comptime has_entities) alloc.free(self.entities);
 
             var last_inited_slice: usize = 0;

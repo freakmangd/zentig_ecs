@@ -8,7 +8,7 @@ const World = ztg.WorldBuilder.init(&.{
 const Comp1 = struct { a: i32 = 0 };
 const Comp2 = struct { b: f32 = 0.0 };
 const Comp3 = struct { c: bool = false };
-const Comp4 = struct { d: void = void{} };
+const Comp4 = struct { d: void = {} };
 const Comp5 = struct { e: enum { a, b, c } = .a };
 const Comp6 = struct { f: struct { a: i32, b: i32 } = .{ .a = 1, .b = 2 } };
 const Comp7 = struct { g: union { a: f32, b: i32 } = .{ .a = 3 } };

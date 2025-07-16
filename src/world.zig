@@ -217,12 +217,12 @@ pub fn World(
         }
 
         /// If you are going to run multiple stages in a row, consider `.runStageList()`
-        pub fn runStage(self: *Self, comptime stage_id: StagesList.StageField) anyerror!void {
-            try StagesList.runStage(self, stage_id, false, void{});
+        pub fn runStage(self: *Self, comptime stage_id: StagesList.StageField) !void {
+            try StagesList.runStage(self, stage_id, false, {});
         }
 
-        pub fn runStageInParallel(self: *Self, comptime stage_id: StagesList.StageField) anyerror!void {
-            try StagesList.runStageInParallel(self, stage_id, false, void{});
+        pub fn runStageInParallel(self: *Self, comptime stage_id: StagesList.StageField) !void {
+            try StagesList.runStageInParallel(self, stage_id, false, {});
         }
 
         /// Runs a stage and catches every error ensures every system in the stage is run. Useful for stages
@@ -230,14 +230,14 @@ pub fn World(
         /// Calls errCallback whenever an error occurs and passes it the error.
         pub fn runStageCatchErrors(self: *Self, comptime stage_id: StagesList.StageField, comptime errCallback: fn (anyerror) void) error{OutOfMemory}!void {
             StagesList.runStage(self, stage_id, true, errCallback) catch |err| switch (err) {
-                error.OutOfMemory => return error.OutOfMemory, // this is from allocating slices for queries
+                error.OutOfMemory => |e| return e, // this is from allocating slices for queries
                 else => unreachable, // all other errors are sent to errCallback
             };
         }
 
         /// If you are going to run multiple stages in a row, consider `.runStageNameList()`
-        pub fn runStageByName(self: *Self, stage_name: []const u8) anyerror!void {
-            StagesList.runStageByName(self, stage_name, false, void{}) catch |err| switch (err) {
+        pub fn runStageByName(self: *Self, stage_name: []const u8) !void {
+            StagesList.runStageByName(self, stage_name, false, {}) catch |err| switch (err) {
                 error.UnknownStage => std.debug.panic("Cannot find stage {s} in stage list.", .{stage_name}),
                 else => |e| return e,
             };
@@ -247,26 +247,26 @@ pub fn World(
             try commandsCast(ptr).runStageByName(stage_name);
         }
 
-        pub fn runStageList(self: *Self, comptime stage_ids: []const StagesList.StageField) anyerror!void {
+        pub fn runStageList(self: *Self, comptime stage_ids: []const StagesList.StageField) !void {
             inline for (stage_ids) |sid| {
                 try runStage(self, sid);
             }
         }
 
-        pub fn runStageNameList(self: *Self, stage_ids: []const []const u8) anyerror!void {
+        pub fn runStageNameList(self: *Self, stage_ids: []const []const u8) !void {
             for (stage_ids) |sid| {
                 try runStageByName(self, sid);
             }
         }
 
         /// Runs the .pre_update, .update, and .post_update systems
-        pub fn runUpdateStages(self: *Self) anyerror!void {
+        pub fn runUpdateStages(self: *Self) !void {
             inline for (&.{ .pre_update, .update, .post_update }) |stage| {
                 try runStage(self, stage);
             }
         }
 
-        pub fn runUpdateStagesIp(self: *Self) anyerror!void {
+        pub fn runUpdateStagesIp(self: *Self) !void {
             inline for (&.{ .pre_update, .update, .post_update }) |stage| {
                 try runStageInParallel(self, stage);
             }
@@ -274,7 +274,7 @@ pub fn World(
 
         /// For forcing the evaluation of the change queue,
         /// you shouldn't have to call this.
-        pub fn postSystemUpdate(self: *Self) anyerror!void {
+        pub fn postSystemUpdate(self: *Self) !void {
             if (comptime comp_types_len == 0) return;
 
             // using a while loop since the changes_queue.items can be realloced
@@ -310,7 +310,7 @@ pub fn World(
             self.changes_queue.clearAndFree();
         }
 
-        fn removeEntAndAssociatedComponents(self: *Self, ent: ztg.Entity) anyerror!void {
+        fn removeEntAndAssociatedComponents(self: *Self, ent: ztg.Entity) !void {
             if (!self.entities.hasEntity(ent)) return;
 
             const children = try self.getEntChildren(self.frame_alloc, ent);
@@ -328,11 +328,11 @@ pub fn World(
             _ = self.entities.swapRemoveEnt(ent);
         }
 
-        fn invokeOnRemoveForComponent(self: *Self, comptime T: type, comp: *T, ent: ztg.Entity) anyerror!void {
+        fn invokeOnRemoveForComponent(self: *Self, comptime T: type, comp: *T, ent: ztg.Entity) !void {
             try self.invokeOnRemoveForComponentById(comp, util.compId(T), ent);
         }
 
-        fn invokeOnRemoveForComponentById(self: *Self, comp: *anyopaque, comp_id: util.CompId, ent: ztg.Entity) anyerror!void {
+        fn invokeOnRemoveForComponentById(self: *Self, comp: *anyopaque, comp_id: util.CompId, ent: ztg.Entity) !void {
             try self.on_removed_fns[comp_id](self, comp, ent);
         }
 
@@ -648,7 +648,7 @@ pub fn World(
         }
 
         /// The method used for generating queries for systems
-        pub fn query(self: *Self, alloc: std.mem.Allocator, comptime QT: type) !QT {
+        pub fn query(self: *Self, alloc: std.mem.Allocator, comptime QT: type) Allocator.Error!QT {
             if (comptime QT.has_entities and QT.req_types.types.len == 0) return self.queryJustEntities(alloc, QT);
 
             const req_ids = util.idsFromTypes(QT.req_types.types);
@@ -657,7 +657,7 @@ pub fn World(
             const without_ids = util.idsFromTypes(QT.without_types.types);
 
             var qlists: [req_ids.len + opt_ids.len]QueryList = undefined;
-            const checked_entities = try self.initQueryLists(&req_ids, &opt_ids, &with_ids, &qlists);
+            const checked_entities = self.initQueryLists(&req_ids, &opt_ids, &with_ids, &qlists);
 
             var out = try QT.init(alloc, checked_entities.len);
             if (checked_entities.len == 0) return out;
@@ -684,7 +684,7 @@ pub fn World(
         }
 
         // For queries which the only required type is Entity
-        fn queryJustEntities(self: *Self, alloc: std.mem.Allocator, comptime QT: type) !QT {
+        fn queryJustEntities(self: *Self, alloc: std.mem.Allocator, comptime QT: type) Allocator.Error!QT {
             const comp_mask, const negative_mask = getCompMasks(
                 &.{&util.idsFromTypes(QT.with_types.types)},
                 &.{&util.idsFromTypes(QT.without_types.types)},
@@ -731,7 +731,7 @@ pub fn World(
             opt_ids: []const util.CompId,
             with_ids: []const util.CompId,
             lists: []QueryList,
-        ) ![]const ztg.Entity {
+        ) []const ztg.Entity {
             var idx: usize = 0;
 
             const first_arr = self.getListById(req_ids[0]) catch unreachable;
@@ -816,8 +816,8 @@ pub fn World(
 
         /// Generates the arguments tuple for a desired system based on its parameters.
         /// You shouldn't need to use this, just add the function to the desired stage.
-        pub fn initParamsForSystem(self: *Self, alloc: std.mem.Allocator, comptime params: []const std.builtin.Type.Fn.Param) !ParamsForSystem(params) {
-            if (comptime params.len == 0) return ParamsForSystem(params){};
+        pub fn initParamsForSystem(self: *Self, alloc: std.mem.Allocator, comptime params: []const std.builtin.Type.Fn.Param) Allocator.Error!ParamsForSystem(params) {
+            if (comptime params.len == 0) return .{};
 
             var out: ParamsForSystem(params) = undefined;
             inline for (out, 0..) |param, i| {
@@ -826,7 +826,7 @@ pub fn World(
             return out;
         }
 
-        fn initParam(self: *Self, alloc: std.mem.Allocator, comptime T: type) !T {
+        fn initParam(self: *Self, alloc: std.mem.Allocator, comptime T: type) Allocator.Error!T {
             if (comptime T == ztg.Commands) {
                 return self.commands();
             } else if (comptime @typeInfo(T) == .@"struct" and @hasDecl(T, "IsQueryType")) {
