@@ -17,9 +17,9 @@ Fetching for zig master:
 zig fetch --save git+https://github.com/freakmangd/zentig_ecs
 ```
 
-Fetching for zig 0.14.0:
+Fetching for a specific zig version (for example, 0.15.1):
 ```
-zig fetch --save https://github.com/freakmangd/zentig_ecs/archive/refs/tags/0.14.0.tar.gz
+zig fetch --save https://github.com/freakmangd/zentig_ecs/archive/refs/tags/0.15.1.tar.gz
 ```
 
 In both cases, place this in your `build.zig`:
