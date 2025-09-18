@@ -1,7 +1,7 @@
 const std = @import("std");
 const ztg = @import("../../init.zig");
 
-const Self = @This();
+const GlobalTransform = @This();
 
 basis: ztg.zmath.Mat,
 __data: struct {
@@ -10,7 +10,7 @@ __data: struct {
     basis_is_dirty: bool = true,
 },
 
-pub const identity: Self = .{
+pub const identity: GlobalTransform = .{
     .basis = ztg.zmath.identity(),
     .__data = .{
         .rot = ztg.Vec4.identity,
@@ -18,19 +18,19 @@ pub const identity: Self = .{
     },
 };
 
-pub fn getPos(self: Self) ztg.Vec3 {
+pub fn getPos(self: GlobalTransform) ztg.Vec3 {
     return ztg.Vec3.fromZMath(self.basis[3]);
 }
 
-pub fn getRot(self: Self) ztg.Vec4 {
+pub fn getRot(self: GlobalTransform) ztg.Vec4 {
     return self.__data.rot;
 }
 
-pub fn getScale(self: Self) ztg.Vec3 {
+pub fn getScale(self: GlobalTransform) ztg.Vec3 {
     return self.__data.scale;
 }
 
-fn updateBasis(self: *Self, com: ztg.Commands, ent: ztg.Entity) void {
+fn updateBasis(self: *GlobalTransform, com: ztg.Commands, ent: ztg.Entity) void {
     var local_tr = com.getComponentPtr(ent, ztg.base.Transform).?;
 
     const parent_ent = (com.getEntParent(ent) catch unreachable) orelse {
@@ -42,7 +42,7 @@ fn updateBasis(self: *Self, com: ztg.Commands, ent: ztg.Entity) void {
         return;
     };
 
-    var parent_gtr = com.getComponentPtr(parent_ent, ztg.base.GlobalTransform) orelse {
+    var parent_gtr = com.getComponentPtr(parent_ent, GlobalTransform) orelse {
         // parent doesnt have a transform
         self.basis = local_tr.getUpdatedBasis();
         self.__data.rot = local_tr.getRot();
@@ -57,20 +57,20 @@ fn updateBasis(self: *Self, com: ztg.Commands, ent: ztg.Entity) void {
     self.__data.basis_is_dirty = false;
 }
 
-fn getUpdatedBasis(self: *Self, com: ztg.Commands, ent: ztg.Entity) ztg.zmath.Mat {
+fn getUpdatedBasis(self: *GlobalTransform, com: ztg.Commands, ent: ztg.Entity) ztg.zmath.Mat {
     if (self.__data.basis_is_dirty) self.updateBasis(com, ent);
     return self.basis;
 }
 
 pub fn include(comptime wb: *ztg.WorldBuilder) void {
-    wb.addComponents(&.{Self});
+    wb.addComponents(&.{GlobalTransform});
     wb.addLabel(.post_update, .gtr_update, .default);
     wb.addSystemsToStage(.post_update, ztg.during(.gtr_update, pou_updateGlobals));
 }
 
-fn pou_updateGlobals(com: ztg.Commands, q: ztg.Query(.{ ztg.Entity, Self })) void {
-    for (q.items(ztg.Entity), q.items(Self)) |ent, gtr| {
+fn pou_updateGlobals(com: ztg.Commands, q: ztg.Query(.{ ztg.Entity, GlobalTransform })) void {
+    for (q.items(ztg.Entity), q.items(GlobalTransform)) |ent, gtr| {
         gtr.updateBasis(com, ent);
     }
-    for (q.items(Self)) |gtr| gtr.__data.basis_is_dirty = true;
+    for (q.items(GlobalTransform)) |gtr| gtr.__data.basis_is_dirty = true;
 }

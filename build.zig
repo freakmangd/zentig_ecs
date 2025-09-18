@@ -33,11 +33,18 @@ pub fn build(b: *std.Build) void {
 
     // local testing
 
-    const all_tests = b.addTest(.{ .root_module = zentig_mod });
+    const all_tests = b.addTest(.{
+        .root_module = zentig_mod,
+        .filters = b.option([]const []const u8, "filter", "Test filters") orelse &.{},
+    });
+
     all_tests.root_module.addImport("zentig", zentig_mod);
     all_tests.root_module.addImport("zmath", zmath);
-
     const run_all_tests = b.addRunArtifact(all_tests);
+
+    // i cant think of a good name im sorry
+    const test_blocks_step = b.step("test-code", "Run all tests");
+    test_blocks_step.dependOn(&run_all_tests.step);
 
     const all_tests_step = b.step("test", "Run all tests and try to build all examples.");
     all_tests_step.dependOn(&run_all_tests.step);

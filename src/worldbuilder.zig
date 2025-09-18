@@ -9,7 +9,7 @@ const TypeMap = ztg.meta.TypeMap;
 const TypeBuilder = ztg.meta.TypeBuilder;
 const World = world.World;
 
-const Self = @This();
+const WorldBuilder = @This();
 
 const StageLabel = struct {
     name: []const u8,
@@ -76,8 +76,8 @@ pub const OnEntOverflow = enum {
 
 /// Passes `includes` to `self.include(...)`
 /// Also adds `Allocator` and `Random` resources
-pub fn init(comptime includes: []const type) Self {
-    var self = Self{};
+pub fn init(comptime includes: []const type) WorldBuilder {
+    var self = WorldBuilder{};
 
     for (@typeInfo(default_stages).@"struct".decls) |decl| {
         self.stage_defs.append(.{
@@ -98,14 +98,14 @@ pub fn init(comptime includes: []const type) Self {
 /// `.init(...)` passes its arguments to this function.
 ///
 /// You can include a struct more than once without errors/warnings, its effects will only be applied once.
-pub fn include(comptime self: *Self, comptime includes: []const type) void {
+pub fn include(comptime self: *WorldBuilder, comptime includes: []const type) void {
     for (includes) |TI| {
         if (comptime std.meta.hasFn(TI, "include")) {
             if (comptime self.included.has(TI)) continue; // silent fail
 
             const ti = @typeInfo(@TypeOf(TI.include));
 
-            if (comptime !(ti.@"fn".params.len == 1 and ti.@"fn".params[0].type.? == *Self))
+            if (comptime !(ti.@"fn".params.len == 1 and ti.@"fn".params[0].type.? == *WorldBuilder))
                 util.compileError("{s}'s include function's signature must be fn(*WorldBuilder) (!)void", .{@typeName(TI)});
 
             if (comptime ztg.meta.canReturnError(@TypeOf(TI.include))) {
@@ -121,7 +121,7 @@ pub fn include(comptime self: *Self, comptime includes: []const type) void {
 }
 
 /// Creates a new stage that can be ran and have systems added to it
-pub fn addStage(comptime self: *Self, comptime stage_name: ztg.meta.EnumLiteral) void {
+pub fn addStage(comptime self: *WorldBuilder, comptime stage_name: ztg.meta.EnumLiteral) void {
     for (self.stage_defs.items) |sdef| {
         if (std.mem.eql(u8, sdef.name, @tagName(stage_name))) {
             self.warn(std.fmt.comptimePrint("Tried to add stage `{s}` to world more than once.", .{sdef.name}));
@@ -139,7 +139,7 @@ test addStage {
     const namespace = struct {
         var stage_was_run: bool = false;
 
-        pub fn include(comptime wb: *Self) void {
+        pub fn include(comptime wb: *WorldBuilder) void {
             wb.addStage(.my_stage);
             wb.addSystemsToStage(.my_stage, mySystem);
             try std.testing.expect(wb.hasStageName("my_stage"));
@@ -157,7 +157,7 @@ test addStage {
     try std.testing.expect(namespace.stage_was_run);
 }
 
-fn stageIndexFromName(comptime self: Self, comptime stage_name: []const u8) usize {
+fn stageIndexFromName(comptime self: WorldBuilder, comptime stage_name: []const u8) usize {
     // if stage is part of DEFAULT_STAGES, we already know the index
     if (@hasDecl(default_stages, stage_name)) return @field(default_stages, stage_name);
 
@@ -182,7 +182,7 @@ fn labelIndexFromName(comptime stage: StageDef, comptime label_name: []const u8)
 ///
 /// Each stage has a default label of `.body` which all systems are added
 /// to by default.
-pub fn addLabel(comptime self: *Self, comptime stage_name: ztg.meta.EnumLiteral, comptime label_name: ztg.meta.EnumLiteral, comptime order: union(enum) {
+pub fn addLabel(comptime self: *WorldBuilder, comptime stage_name: ztg.meta.EnumLiteral, comptime label_name: ztg.meta.EnumLiteral, comptime order: union(enum) {
     before: ztg.meta.EnumLiteral,
     after: ztg.meta.EnumLiteral,
     default,
@@ -206,7 +206,7 @@ test addLabel {
     const namespace = struct {
         var counter: usize = 0;
 
-        pub fn include(comptime wb: *Self) void {
+        pub fn include(comptime wb: *WorldBuilder) void {
             wb.addLabel(.load, .my_label, .{ .before = .body });
             wb.addSystems(.{
                 .load = .{
@@ -247,7 +247,7 @@ test addLabel {
 }
 
 /// After you add a component, you can then query for it in your systems
-pub fn addComponents(comptime self: *Self, comptime comps: []const type) void {
+pub fn addComponents(comptime self: *WorldBuilder, comptime comps: []const type) void {
     for (comps) |T| {
         if (comptime self.comp_types.has(T)) util.compileError("Attempted to add type `{s}` to worldbuilder more than once.", .{@typeName(T)});
     }
@@ -256,7 +256,7 @@ pub fn addComponents(comptime self: *Self, comptime comps: []const type) void {
 
 test addComponents {
     var w = try testWorld(struct {
-        pub fn include(comptime wb: *Self) void {
+        pub fn include(comptime wb: *WorldBuilder) void {
             wb.addComponents(&.{ MyComponent, MyEmpty, MyEnum, MyUnion });
         }
 
@@ -280,7 +280,7 @@ test addComponents {
 }
 
 /// Adds a resource, which is a struct instance that you can request within your systems
-pub fn addResource(comptime self: *Self, comptime T: type, comptime default_value: T) void {
+pub fn addResource(comptime self: *WorldBuilder, comptime T: type, comptime default_value: T) void {
     if (comptime T == ztg.Commands) @compileError("`Commands` cannot be a resource type.");
     if (comptime util.isContainer(T) and (@hasDecl(T, "IsQueryType") or @hasDecl(T, "EventSendType") or @hasDecl(T, "EventRecvType")))
         @compileError("Queries and Events cannot be resources.");
@@ -316,7 +316,7 @@ test addResource {
         const MyResource = struct { data: i32 = 0 };
 
         var w = try testWorld(struct {
-            pub fn include(comptime wb: *Self) void {
+            pub fn include(comptime wb: *WorldBuilder) void {
                 wb.addResource(MyResource, .{ .data = 10 });
                 wb.addSystemsToStage(.update, update);
             }
@@ -350,7 +350,7 @@ test addResource {
         };
 
         const MyWorld = comptime blk: {
-            var wb = Self.init(&.{});
+            var wb = WorldBuilder.init(&.{});
             wb.addResource(*u32, undefined);
             wb.addSystems(.{
                 .init = test_namespace.initResource,
@@ -368,7 +368,7 @@ test addResource {
 }
 
 /// Registers an event that has a payload of type `T`
-pub fn addEvent(comptime self: *Self, comptime T: type) void {
+pub fn addEvent(comptime self: *WorldBuilder, comptime T: type) void {
     if (self.event_types.has(T)) {
         self.warn(std.fmt.comptimePrint("Tried to add event type `{s}` to world more than once.", .{@typeName(T)}));
         return;
@@ -382,7 +382,7 @@ test addEvent {
     const namespace = struct {
         var system_was_run = false;
 
-        pub fn include(comptime wb: *Self) void {
+        pub fn include(comptime wb: *WorldBuilder) void {
             wb.addEvent(MyEvent);
             wb.addSystems(.{
                 .load = .{ sendEvent, ztg.after(.body, recvEvent) },
@@ -408,12 +408,12 @@ test addEvent {
 
 /// Adds the system to the specified stage,
 /// second argument can take a single system (`sysName`) or multiple in a tuple (`.{sysName1, sysName2}`)
-pub fn addSystemsToStage(comptime self: *Self, comptime stage_tag: ztg.meta.EnumLiteral, systems: anytype) void {
+pub fn addSystemsToStage(comptime self: *WorldBuilder, comptime stage_tag: ztg.meta.EnumLiteral, systems: anytype) void {
     self.addSystemsToStageByName(@tagName(stage_tag), systems);
 }
 
 /// Same as `addSystemsToStage` but with a string instead of an enum literal
-pub fn addSystemsToStageByName(comptime self: *Self, comptime stage_name: []const u8, _systems: anytype) void {
+pub fn addSystemsToStageByName(comptime self: *WorldBuilder, comptime stage_name: []const u8, _systems: anytype) void {
     const _systems_ti = @typeInfo(@TypeOf(_systems));
     const systems = if (comptime !(_systems_ti == .@"struct" and _systems_ti.@"struct".is_tuple)) .{_systems} else _systems;
     const stage_index = comptime self.stageIndexFromName(stage_name);
@@ -446,7 +446,7 @@ pub fn addSystemsToStageByName(comptime self: *Self, comptime stage_name: []cons
     }
 }
 
-fn appendToStageLabel(comptime self: *Self, comptime stage_index: usize, comptime label_name: []const u8, comptime offset: ztg.SystemOrder, sys: anytype) void {
+fn appendToStageLabel(comptime self: *WorldBuilder, comptime stage_index: usize, comptime label_name: []const u8, comptime offset: ztg.SystemOrder, sys: anytype) void {
     var stage = self.stage_defs.items[stage_index];
 
     const label_index = labelIndexFromName(stage, label_name);
@@ -472,7 +472,7 @@ fn appendToStageLabel(comptime self: *Self, comptime stage_index: usize, comptim
 ///   .draw = .{myDrawSystem}
 /// });
 /// ```
-pub fn addSystems(comptime self: *Self, system_lists: anytype) void {
+pub fn addSystems(comptime self: *WorldBuilder, system_lists: anytype) void {
     for (std.meta.fields(@TypeOf(system_lists))) |list_field| {
         if (!self.hasStageName(list_field.name)) util.compileError("Cannot add systems to stage `{s}` as it does not exist.", .{list_field.name});
         const list = @field(system_lists, list_field.name);
@@ -482,7 +482,7 @@ pub fn addSystems(comptime self: *Self, system_lists: anytype) void {
 
 /// Checks whether a stage with the name `stage_name` has been added
 /// to the worldbuilder.
-pub fn hasStageName(comptime self: *const Self, comptime stage_name: []const u8) bool {
+pub fn hasStageName(comptime self: *const WorldBuilder, comptime stage_name: []const u8) bool {
     for (self.stage_defs.items) |sdef| {
         if (std.mem.eql(u8, sdef.name, stage_name)) return true;
     }
@@ -495,7 +495,7 @@ fn defaultCrash(com: ztg.Commands, r: ztg.CrashReason) anyerror!void {
 }
 
 /// Returns the final World type
-pub fn Build(comptime self: Self) type {
+pub fn Build(comptime self: WorldBuilder) type {
     verifyQueryTypes(self.stage_defs.items, self.comp_types.types);
 
     const comp_types = self.comp_types.dereference(self.comp_types.types.len);
@@ -547,15 +547,15 @@ fn verifyQueryTypes(stages: []const StageDef, comp_types: []const type) void {
     };
 }
 
-fn warn(comptime self: *Self, comptime message: []const u8) void {
+fn warn(comptime self: *WorldBuilder, comptime message: []const u8) void {
     self.warnings = std.fmt.comptimePrint("{s}{s}\n", .{ self.warnings, message });
 }
 
-fn testWorld(comptime namespace: type) !Self.init(&.{namespace}).Build() {
+fn testWorld(comptime namespace: type) !WorldBuilder.init(&.{namespace}).Build() {
     return .init(std.testing.allocator);
 }
 
-test Self {
+test WorldBuilder {
     var w = try testWorld(ztg.base);
     defer w.deinit();
 }
@@ -564,7 +564,7 @@ test "adding systems" {
     const namespace = struct {
         var stages_were_run = [_]bool{false} ** 5;
 
-        pub fn include(comptime wb: *Self) void {
+        pub fn include(comptime wb: *WorldBuilder) void {
             wb.addSystemsToStage(.load, sys0);
             wb.addSystemsToStageByName("load", sys1);
             wb.addSystems(.{ .load = load, .update = update, .draw = draw });

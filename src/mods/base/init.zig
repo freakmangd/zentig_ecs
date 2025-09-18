@@ -13,3 +13,12 @@ pub fn include(comptime world: *ztg.WorldBuilder) !void {
     world.addComponents(&.{ Active, Name, Transform });
     world.include(&.{ Lifetime, Time, GlobalTransform });
 }
+
+test {
+    _ = Time;
+    _ = Lifetime;
+    _ = Transform;
+    _ = GlobalTransform;
+    _ = Active;
+    _ = Name;
+}

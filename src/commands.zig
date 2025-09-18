@@ -10,7 +10,7 @@ const Allocator = std.mem.Allocator;
 const TypeMap = ztg.meta.TypeMap;
 const Entity = ztg.Entity;
 
-const Self = @This();
+const Commands = @This();
 
 pub const ComponentError = error{UnregisteredComponent};
 pub const RemoveComponentError = ComponentError || error{EntityDoesntExist} || Allocator.Error;
@@ -37,34 +37,34 @@ pub const Vtable = struct {
 };
 
 /// If you are going to run multiple stages in a row, consider `.runStageList()`
-pub fn runStage(self: Self, comptime stage_id: ztg.meta.EnumLiteral) anyerror!void {
+pub fn runStage(self: Commands, comptime stage_id: ztg.meta.EnumLiteral) anyerror!void {
     try self.vtable.run_stage(self.ctx, @tagName(stage_id));
 }
 
 /// If you are going to run multiple stages in a row, consider `.runStageNameList()`
-pub fn runStageByName(self: Self, stage_id: []const u8) anyerror!void {
+pub fn runStageByName(self: Commands, stage_id: []const u8) anyerror!void {
     try self.vtable.run_stage(self.ctx, stage_id);
 }
 
-pub fn runStageList(self: Self, comptime stage_ids: []const ztg.meta.EnumLiteral) anyerror!void {
+pub fn runStageList(self: Commands, comptime stage_ids: []const ztg.meta.EnumLiteral) anyerror!void {
     inline for (stage_ids) |sid| {
         try runStage(self, sid);
     }
 }
 
-pub fn runStageNameList(self: Self, stage_ids: []const []const u8) anyerror!void {
+pub fn runStageNameList(self: Commands, stage_ids: []const []const u8) anyerror!void {
     for (stage_ids) |sid| {
         try runStageByName(self, sid);
     }
 }
 
 /// Returns an EntityHandle to a new entity
-pub fn newEnt(self: Self) ztg.EntityHandle {
+pub fn newEnt(self: Commands) ztg.EntityHandle {
     return .{ .ent = self.vtable.new_ent(self.ctx), .com = self };
 }
 
 /// Shortcut for creating a new entity and adding components to it
-pub fn newEntWith(self: Self, components: anytype) !ztg.EntityHandle {
+pub fn newEntWith(self: Commands, components: anytype) !ztg.EntityHandle {
     const ent = self.vtable.new_ent(self.ctx);
     try self.giveComponents(ent, components);
     return .{ .ent = ent, .com = self };
@@ -72,22 +72,22 @@ pub fn newEntWith(self: Self, components: anytype) !ztg.EntityHandle {
 
 /// Returns the entity's parent if it has one
 /// Can error if the entity doesn't exist
-pub fn getEntParent(self: Self, ent: ztg.Entity) !?ztg.Entity {
+pub fn getEntParent(self: Commands, ent: ztg.Entity) !?ztg.Entity {
     return self.vtable.get_ent_parent(self.ctx, ent);
 }
 
 /// Sets the entity's parent or removes it depending on the null-ness of `parent`
 /// Can error if the entity doesn't exist or the parent isnt null but doesnt exist
-pub fn setEntParent(self: Self, ent: ztg.Entity, parent: ?ztg.Entity) !void {
+pub fn setEntParent(self: Commands, ent: ztg.Entity, parent: ?ztg.Entity) !void {
     return self.vtable.set_ent_parent(self.ctx, ent, parent);
 }
 
 /// Inverse of setEntParent
-pub fn giveEntChild(self: Self, ent: ztg.Entity, child: ztg.Entity) !void {
+pub fn giveEntChild(self: Commands, ent: ztg.Entity, child: ztg.Entity) !void {
     return self.vtable.set_ent_parent(self.ctx, child, ent);
 }
 
-fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void {
+fn giveComponentSingle(self: Commands, ent: Entity, component: anytype) !void {
     const Component = @TypeOf(component);
     if (Component == type) util.compileError("You have passed `{}` to giveComponents, which is of type `type`, you might have forgotten to instantiate it.", .{component});
 
@@ -107,7 +107,7 @@ fn giveComponentSingle(self: Self, ent: Entity, component: anytype) !void {
 ///
 /// If any of the types passed in the tuple/struct components have the `is_component_bundle`
 /// public decl, they will be treated as component bundles and recursively added
-pub fn giveComponents(self: Self, ent: Entity, components: anytype) !void {
+pub fn giveComponents(self: Commands, ent: Entity, components: anytype) !void {
     const Components = @TypeOf(components);
 
     if (@typeInfo(Components) == .@"struct" and
@@ -130,7 +130,7 @@ pub fn giveComponents(self: Self, ent: Entity, components: anytype) !void {
 }
 
 /// Removes the component of type `Component` given to `ent`
-pub fn removeComponent(self: Self, ent: Entity, comptime Component: type) !void {
+pub fn removeComponent(self: Commands, ent: Entity, comptime Component: type) !void {
     return self.vtable.remove_component(self.ctx, ent, util.compId(Component)) catch |err| switch (err) {
         error.UnregisteredComponent => panicOnUnregistered(Component, .component),
         else => return err,
@@ -138,14 +138,14 @@ pub fn removeComponent(self: Self, ent: Entity, comptime Component: type) !void 
 }
 
 /// Returns true or false depending on whether ent has the component of type `Component`
-pub fn checkEntHas(self: Self, ent: Entity, comptime Component: type) bool {
+pub fn checkEntHas(self: Commands, ent: Entity, comptime Component: type) bool {
     return self.vtable.check_ent_has(self.ctx, ent, util.compId(Component)) catch |err| switch (err) {
         error.UnregisteredComponent => panicOnUnregistered(Component, .component),
     };
 }
 
 /// Returns a copy of the component data associated with `ent`
-pub fn getComponent(self: Self, ent: Entity, comptime Component: type) ?Component {
+pub fn getComponent(self: Commands, ent: Entity, comptime Component: type) ?Component {
     const ptr = self.vtable.get_component_ptr(self.ctx, ent, util.compId(Component)) catch |err| switch (err) {
         error.UnregisteredComponent => panicOnUnregistered(Component, .component),
     };
@@ -154,7 +154,7 @@ pub fn getComponent(self: Self, ent: Entity, comptime Component: type) ?Componen
 }
 
 /// Returns a pointer to the component data associated with `ent`
-pub fn getComponentPtr(self: Self, ent: Entity, comptime Component: type) ?*Component {
+pub fn getComponentPtr(self: Commands, ent: Entity, comptime Component: type) ?*Component {
     const ptr = self.vtable.get_component_ptr(self.ctx, ent, util.compId(Component)) catch |err| switch (err) {
         error.UnregisteredComponent => panicOnUnregistered(Component, .component),
     };
@@ -162,12 +162,12 @@ pub fn getComponentPtr(self: Self, ent: Entity, comptime Component: type) ?*Comp
 }
 
 /// Queues the removal of all components in lists associated with `ent`
-pub fn removeEnt(self: Self, ent: Entity) !void {
+pub fn removeEnt(self: Commands, ent: Entity) !void {
     try self.vtable.remove_ent(self.ctx, ent);
 }
 
 /// Returns a pointer to the world resource T
-pub fn getResPtr(self: Self, comptime T: type) *T {
+pub fn getResPtr(self: Commands, comptime T: type) *T {
     const ptr = self.vtable.get_res(self.ctx, ztg.meta.utpOf(T)) catch |err| switch (err) {
         error.UnregisteredResource => panicOnUnregistered(T, .resource),
     };
@@ -175,7 +175,7 @@ pub fn getResPtr(self: Self, comptime T: type) *T {
 }
 
 /// Returns whether or not the world included the type `Namespace` in the `WorldBuilder`
-pub fn hasIncluded(self: Self, comptime Namespace: type) bool {
+pub fn hasIncluded(self: Commands, comptime Namespace: type) bool {
     return self.vtable.has_included(ztg.meta.utpOf(Namespace));
 }
 
@@ -230,7 +230,7 @@ test "basic usage" {
         ztg.base.Transform{},
         test_mod.MyComponent{
             .speed = 1_000,
-            .dir = ztg.vec2(0.7, 2),
+            .dir = .init(0.7, 2),
         },
     });
 }

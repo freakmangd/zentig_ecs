@@ -1,7 +1,7 @@
 const std = @import("std");
 const ztg = @import("../init.zig");
 
-const Self = @This();
+const StateMachine = @This();
 
 alloc: std.mem.Allocator,
 
@@ -14,7 +14,7 @@ events_max_val: usize,
 
 const Transition = std.AutoHashMapUnmanaged(usize, usize);
 
-pub fn init(alloc: std.mem.Allocator, comptime States: type, comptime Events: type, default_state: States, onTransition: ?*const fn (ctx: ?*anyopaque, event: ?usize, from: usize, to: usize) anyerror!void) Self {
+pub fn init(alloc: std.mem.Allocator, comptime States: type, comptime Events: type, default_state: States, onTransition: ?*const fn (ctx: ?*anyopaque, event: ?usize, from: usize, to: usize) anyerror!void) StateMachine {
     return .{
         .alloc = alloc,
         .current_state = @intFromEnum(default_state),
@@ -25,7 +25,7 @@ pub fn init(alloc: std.mem.Allocator, comptime States: type, comptime Events: ty
     };
 }
 
-pub fn deinit(self: *Self) void {
+pub fn deinit(self: *StateMachine) void {
     var iter = self.transitions.valueIterator();
     while (iter.next()) |transition| {
         transition.deinit(self.alloc);
@@ -34,18 +34,18 @@ pub fn deinit(self: *Self) void {
     self.transitions.deinit(self.alloc);
 }
 
-pub fn readState(self: Self, comptime As: type) As {
+pub fn readState(self: StateMachine, comptime As: type) As {
     return @enumFromInt(self.current_state);
 }
 
-pub fn transitionTo(self: *Self, ctx: ?*anyopaque, state: anytype) !void {
+pub fn transitionTo(self: *StateMachine, ctx: ?*anyopaque, state: anytype) !void {
     const val = try self.convertTo(.state, state);
 
     if (self.onTransition) |ot| try ot(ctx, null, self.current_state, val);
     self.current_state = val;
 }
 
-pub fn invoke(self: *Self, ctx: ?*anyopaque, event: anytype) !void {
+pub fn invoke(self: *StateMachine, ctx: ?*anyopaque, event: anytype) !void {
     const val = try self.convertTo(.event, event);
 
     const transition = self.transitions.getPtr(val) orelse return error.EventHasNoTransitions;
@@ -53,7 +53,7 @@ pub fn invoke(self: *Self, ctx: ?*anyopaque, event: anytype) !void {
     try self.transitionTo(ctx, next);
 }
 
-pub fn addEventTransition(self: *Self, event: anytype, from: anytype, to: anytype) !void {
+pub fn addEventTransition(self: *StateMachine, event: anytype, from: anytype, to: anytype) !void {
     const event_val = try self.convertTo(.event, event);
     const from_val = try self.convertTo(.state, from);
     const to_val = try self.convertTo(.state, to);
@@ -62,7 +62,7 @@ pub fn addEventTransition(self: *Self, event: anytype, from: anytype, to: anytyp
     try entry.value_ptr.put(self.alloc, from_val, to_val);
 }
 
-pub fn convertTo(self: Self, comptime t: enum { state, event }, value: anytype) !usize {
+pub fn convertTo(self: StateMachine, comptime t: enum { state, event }, value: anytype) !usize {
     const ti = @typeInfo(@TypeOf(value));
     if (comptime !(ti == .@"enum" or ti == .int))
         @compileError(std.fmt.comptimePrint("Expected integer or enum as argument, found {s}", .{@typeName(@TypeOf(value))}));

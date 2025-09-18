@@ -2,13 +2,13 @@ const std = @import("std");
 const util = @import("../util.zig");
 const Type = std.builtin.Type;
 
-const Self = @This();
+const TypeBuilder = @This();
 
 fields: []const Type.StructField = &.{},
 is_tuple: bool = false,
 layout: Type.ContainerLayout = .auto,
 
-pub fn initFrom(comptime T: type) Self {
+pub fn initFrom(comptime T: type) TypeBuilder {
     const ti = @typeInfo(T).@"struct";
     return .{
         .fields = ti.fields,
@@ -18,7 +18,7 @@ pub fn initFrom(comptime T: type) Self {
 }
 
 pub fn addFieldExtra(
-    comptime self: *Self,
+    comptime self: *TypeBuilder,
     comptime name: [:0]const u8,
     comptime T: type,
     comptime default_value: ?*const anyopaque,
@@ -34,20 +34,20 @@ pub fn addFieldExtra(
     }};
 }
 
-pub fn addField(comptime self: *Self, comptime name: [:0]const u8, comptime T: type, comptime default_value: ?*const anyopaque) void {
+pub fn addField(comptime self: *TypeBuilder, comptime name: [:0]const u8, comptime T: type, comptime default_value: ?*const anyopaque) void {
     return addFieldExtra(self, name, T, default_value, null, null);
 }
 
-pub fn addTupleField(comptime self: *Self, comptime index: usize, comptime T: type, comptime default_value: ?*const anyopaque) void {
+pub fn addTupleField(comptime self: *TypeBuilder, comptime index: usize, comptime T: type, comptime default_value: ?*const anyopaque) void {
     return addField(self, std.fmt.comptimePrint("{}", .{index}), T, default_value);
 }
 
-pub fn appendTupleField(comptime self: *Self, comptime T: type, comptime default_value: ?*const anyopaque) void {
+pub fn appendTupleField(comptime self: *TypeBuilder, comptime T: type, comptime default_value: ?*const anyopaque) void {
     return addField(self, std.fmt.comptimePrint("{}", .{self.fields.len}), T, default_value);
 }
 
 pub fn addTupleFieldExtra(
-    comptime self: *Self,
+    comptime self: *TypeBuilder,
     comptime index: usize,
     comptime T: type,
     comptime default_value: ?*const anyopaque,
@@ -58,7 +58,7 @@ pub fn addTupleFieldExtra(
 }
 
 pub fn appendTupleFieldExtra(
-    comptime self: *Self,
+    comptime self: *TypeBuilder,
     comptime T: type,
     comptime default_value: ?*const anyopaque,
     comptime is_comptime: ?bool,
@@ -67,7 +67,7 @@ pub fn appendTupleFieldExtra(
     return addFieldExtra(self, std.fmt.comptimePrint("{}", .{self.fields.len}), T, default_value, is_comptime, alignment);
 }
 
-pub fn Build(comptime self: Self) type {
+pub fn Build(comptime self: TypeBuilder) type {
     return @Type(.{ .@"struct" = .{
         .fields = self.fields,
         .is_tuple = self.is_tuple,

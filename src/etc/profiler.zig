@@ -18,7 +18,7 @@
 const std = @import("std");
 const ztg = @import("../init.zig");
 const builtin = @import("builtin");
-const Self = @This();
+const Profiler = @This();
 
 pub const ProfilerSection = struct {
     name: []const u8,

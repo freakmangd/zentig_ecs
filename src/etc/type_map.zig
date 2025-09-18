@@ -1,60 +1,78 @@
 const std = @import("std");
+const base = @import("../mods/base/init.zig");
 const meta = @import("meta.zig");
 
-const Self = @This();
+const TypeMap = @This();
 
 types: []const type = &.{},
 
-pub fn dereference(comptime self: Self, comptime len: usize) [len]type {
+pub fn dereference(self: TypeMap, comptime len: usize) [len]type {
     return self.types[0..].*;
 }
 
-pub fn append(comptime self: *Self, comptime T: type) void {
+pub fn append(self: *TypeMap, T: type) void {
     self.types = self.types ++ &[_]type{T};
 }
 
-pub fn appendSlice(comptime self: *Self, comptime types: []const type) void {
-    self.types = self.types ++ types;
+pub fn appendSlice(self: *TypeMap, types: []const type) void {
+    const new_types_slce = self.types ++ @as([types.len]type, types[0..types.len].*);
+    self.types = new_types_slce;
 }
 
-pub fn has(comptime self: Self, comptime T: type) bool {
-    for (self.types) |t| {
-        @setEvalBranchQuota(20_000);
-        if (t == T) return true;
-    }
-    return false;
+pub fn has(self: TypeMap, T: type) bool {
+    return comptime has_type: {
+        for (self.types) |t| {
+            @setEvalBranchQuota(20_000);
+            if (t == T) break :has_type true;
+        }
+        break :has_type false;
+    };
 }
 
-pub fn indexOf(comptime self: Self, comptime T: type) ?usize {
-    for (self.types, 0..) |t, i| {
-        @setEvalBranchQuota(20_000);
-        if (t == T) return i;
-    }
-    return null;
+pub fn indexOf(self: TypeMap, T: type) ?usize {
+    return comptime index: {
+        for (self.types, 0..) |t, i| {
+            @setEvalBranchQuota(20_000);
+            if (t == T) break :index i;
+        }
+        break :index null;
+    };
 }
 
-pub fn nameFromIndex(comptime self: Self, idx: usize) []const u8 {
-    inline for (self.types, 0..) |T, i| {
-        @setEvalBranchQuota(20_000);
-        if (idx == i) return @typeName(T);
-    }
-    return "ERROR";
-}
+test "typemap" {
+    const ctx = struct {
+        fn appendFromOuter(tm: *TypeMap, types: []const type) void {
+            tm.appendSlice(types);
+        }
+    };
 
-pub fn hasUtp(comptime self: Self, utp: meta.Utp) bool {
-    inline for (self.types) |T| {
-        @setEvalBranchQuota(20_000);
-        if (meta.utpOf(T) == utp) return true;
-    }
-    return false;
-}
+    const Struct = struct {
+        x: f32,
+        y: f32,
+    };
+    const Union = union(enum) {
+        a: i32,
+        b: u32,
+    };
+    const Enum = enum { a, b, c };
 
-test {
     const typemap = comptime blk: {
-        var tm = Self{};
+        var tm = TypeMap{};
         tm.append(u32);
+        tm.appendSlice(&.{ i32, bool, Struct });
+        ctx.appendFromOuter(&tm, &.{ Union, Enum, base.Transform });
         break :blk tm;
     };
 
-    try std.testing.expectEqual(0, comptime typemap.indexOf(u32).?);
+    const expected_types = [_]type{ u32, i32, bool, Struct, Union, Enum, base.Transform };
+    inline for (expected_types, typemap.dereference(typemap.types.len), 0..) |E, Actual, i| {
+        _ = meta.utpOf(Actual);
+
+        if (E != Actual) {
+            @compileError("Expected " ++ @typeName(E) ++ " found " ++ @typeName(Actual));
+        }
+
+        try std.testing.expect(typemap.has(E));
+        try std.testing.expectEqual(i, typemap.indexOf(E).?);
+    }
 }
