@@ -57,9 +57,9 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
         /// Slow function, it's a lot easier to go up than go down
         pub fn getChildren(self: *const Self, alloc: std.mem.Allocator, ent: ztg.Entity) ![]const ztg.Entity {
             if (!self.hasEntity(ent)) return error.EntityDoesntExist;
-            var children = std.ArrayList(ztg.Entity).init(alloc);
-            for (self.parent_lookup, 0..) |pl, ch| if (@intFromEnum(pl) == ent.toInt()) try children.append(@enumFromInt(ch));
-            return children.toOwnedSlice();
+            var children: std.ArrayListUnmanaged(ztg.Entity) = .empty;
+            for (self.parent_lookup, 0..) |pl, ch| if (@intFromEnum(pl) == ent.toInt()) try children.append(alloc, @enumFromInt(ch));
+            return children.toOwnedSlice(alloc);
         }
 
         pub fn append(self: *Self, ent: ztg.Entity) void {

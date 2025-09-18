@@ -99,7 +99,7 @@ pub fn World(
                 .rand = info.rng.random(),
 
                 .event_pools = .{},
-                .changes_queue = ChangeQueue.init(frame_alloc),
+                .changes_queue = .empty,
             };
 
             self.resources = try user_allocator.create(Resources);
@@ -170,7 +170,7 @@ pub fn World(
             };
 
             self.event_pools.deinit(self.frame_alloc);
-            self.changes_queue.deinit();
+            self.changes_queue.deinit(self.frame_alloc);
 
             self.alloc.destroy(self.entities);
             self.alloc.destroy(self.resources);
@@ -196,9 +196,21 @@ pub fn World(
                         break :blk offset;
                     };
 
-                    const params = self.initParamsForSystem(self.frame_alloc, fn_params[params_offset..]) catch |err| {
-                        std.debug.panic("Failed to get args for deinit system for type `{}`. Error: {}", .{ CT, err });
+                    // replaced a initParamsForSystem call because of a bug in zig :(
+
+                    const fn_params_no_self = fn_params[params_offset..];
+                    const Params = comptime Params: {
+                        var types: [fn_params_no_self.len]type = undefined;
+                        for (fn_params_no_self, &types) |p, *t| t.* = p.type.?;
+                        break :Params std.meta.Tuple(&types);
                     };
+
+                    var params: Params = undefined;
+                    inline for (params, 0..) |param, i| {
+                        params[i] = self.initParam(self.frame_alloc, @TypeOf(param)) catch |err| {
+                            std.debug.panic("Failed to get args for deinit system for type `{}`. Error: {}", .{ CT, err });
+                        };
+                    }
 
                     const member_params = switch (member_fn_type) {
                         .non_member => .{},
@@ -307,7 +319,7 @@ pub fn World(
                 }
             }
 
-            self.changes_queue.clearAndFree();
+            self.changes_queue.clearAndFree(self.frame_alloc);
         }
 
         fn removeEntAndAssociatedComponents(self: *Self, ent: ztg.Entity) !void {
@@ -443,7 +455,7 @@ pub fn World(
 
         /// Queues the removal of all components in lists correlated with `ent` and `ent` itself
         pub fn removeEnt(self: *Self, ent: ztg.Entity) Allocator.Error!void {
-            try self.changes_queue.append(.{ .removed_ent = ent });
+            try self.changes_queue.append(self.frame_alloc, .{ .removed_ent = ent });
         }
 
         fn commands_removeEnt(ptr: *anyopaque, ent: ztg.Entity) Allocator.Error!void {
@@ -527,7 +539,7 @@ pub fn World(
                 // TODO: amortize this
                 const alloced_data = self.frame_alloc.rawAlloc(arr.components_data.entry_size, .fromByteUnits(alignment), @returnAddress()) orelse return error.OutOfMemory;
                 @memcpy(alloced_data, @as([*]const u8, @ptrCast(data))[0..arr.components_data.entry_size]);
-                try self.changes_queue.append(.{ .added_component = .{
+                try self.changes_queue.append(self.frame_alloc, .{ .added_component = .{
                     .ent = ent,
                     .component_id = component_id,
                     .data = alloced_data,
@@ -565,7 +577,7 @@ pub fn World(
             if (comptime comp_types.len == 0) @compileError("World has no registered components to remove.");
             if (!self.entities.hasEntity(ent)) return error.EntityDoesntExist;
 
-            try self.changes_queue.append(.{ .removed_component = .{
+            try self.changes_queue.append(self.frame_alloc, .{ .removed_component = .{
                 .ent = ent,
                 .component_id = comp_id,
             } });
@@ -816,6 +828,9 @@ pub fn World(
 
         /// Generates the arguments tuple for a desired system based on its parameters.
         /// You shouldn't need to use this, just add the function to the desired stage.
+        ///
+        /// There's a bug since 0.15.1 where passing a re-sliced slice of ?type to a function
+        /// causes a compiler segfault, so if you're calling this function be careful
         pub fn initParamsForSystem(self: *Self, alloc: std.mem.Allocator, comptime params: []const std.builtin.Type.Fn.Param) Allocator.Error!ParamsForSystem(params) {
             if (comptime params.len == 0) return .{};
 
@@ -901,7 +916,7 @@ const ComponentChange = struct {
 };
 
 /// For internal queueing of commands. Cleared after a stage is completed.
-const ChangeQueue = std.ArrayList(ChangeQueueItem);
+const ChangeQueue = std.ArrayListUnmanaged(ChangeQueueItem);
 const ChangeQueueItem = union(enum) {
     added_component: struct {
         ent: ztg.Entity,

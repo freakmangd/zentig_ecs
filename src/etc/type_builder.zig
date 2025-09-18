@@ -29,7 +29,7 @@ pub fn addFieldExtra(
         .type = T,
         .name = name,
         .default_value_ptr = default_value,
-        .alignment = alignment orelse 0,
+        .alignment = alignment orelse @alignOf(T),
         .is_comptime = is_comptime orelse false,
     }};
 }

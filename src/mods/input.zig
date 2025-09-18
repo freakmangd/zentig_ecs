@@ -23,7 +23,7 @@ pub fn Build(
             field.* = std.builtin.Type.StructField{
                 .name = @tagName(a),
                 .type = []const Wrapper.ButtonType,
-                .alignment = 0,
+                .alignment = @alignOf([]const Wrapper.ButtonType),
                 .is_comptime = false,
                 .default_value_ptr = @ptrCast(&@as([]const Wrapper.ButtonType, &.{})),
             };
