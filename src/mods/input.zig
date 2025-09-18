@@ -42,7 +42,7 @@ pub fn Build(
             field.* = std.builtin.Type.StructField{
                 .name = @tagName(a),
                 .type = []const Wrapper.AxisType,
-                .alignment = 0,
+                .alignment = @alignOf([]const Wrapper.AxisType),
                 .is_comptime = false,
                 .default_value_ptr = @ptrCast(&@as([]const Wrapper.AxisType, &.{})),
             };
