@@ -16,7 +16,7 @@ frame_count: usize = 0,
 const frames_sample_len = 10;
 var frames_sample_i: usize = 0;
 var frames_sample_counter: f32 = 0.0;
-var frames_sample = @Vector(frames_sample_len, usize){ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+var frames_sample: [frames_sample_len]usize = @splat(0);
 
 pub fn writeFpsStats(self: Time, writer: anytype) !void {
     return writer.print("FPS: {d:.0}\nAVG: {d:.1}\nMAX: {}\nMIN: {}", .{ 1.0 / if (self.real_dt == 0.0) 1.0 else self.real_dt, getAvgFps(), getMaxFps(), getMinFps() });

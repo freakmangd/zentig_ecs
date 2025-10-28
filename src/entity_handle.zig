@@ -6,8 +6,6 @@ const EntityHandle = @This();
 com: ztg.Commands,
 ent: Entity,
 
-pub const give = @compileError("EntityHandle.give has been renamed to giveComponents to be more in line with the Commands interface.");
-
 pub fn giveComponents(self: EntityHandle, comps: anytype) !void {
     try self.com.giveComponents(self.ent, comps);
 }
@@ -20,7 +18,7 @@ pub fn checkHas(self: EntityHandle, comptime Comp: type) bool {
     return self.com.checkEntHas(self.ent, Comp);
 }
 
-pub fn getComponent(self: EntityHandle, comptime Comp: type) ?*Comp {
+pub fn getComponent(self: EntityHandle, comptime Comp: type) ?Comp {
     return self.com.getComponent(self.ent, Comp);
 }
 
