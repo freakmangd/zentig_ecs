@@ -50,3 +50,7 @@ pub fn newChildWith(self: EntityHandle, child_components: anytype) !EntityHandle
     try self.giveChild(child);
     return child;
 }
+
+pub fn remove(self: EntityHandle) !void {
+    try self.com.removeEnt(self.ent);
+}
