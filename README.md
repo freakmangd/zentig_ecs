@@ -77,6 +77,9 @@ test "running systems" {
   
   // Support for user defined stages
   try world.runStageList(&.{ .post_process, .pre_reset, .post_mortem });
+
+  // important for resetting the frame arena, such as FrameAlloc
+  world.cleanForNextFrame();
 }
 ```
 
