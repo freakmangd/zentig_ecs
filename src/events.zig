@@ -84,7 +84,7 @@ test "events" {
         }
     };
 
-    var world = try events_test_mod.World.init(std.testing.allocator);
+    var world = try events_test_mod.World.init(std.testing.allocator, .{});
     defer world.deinit();
     try world.runStage(.update);
 }

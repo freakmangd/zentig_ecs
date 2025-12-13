@@ -51,30 +51,28 @@ pub fn Init(comptime stage_defs: []const StageDef) type {
             comptime catch_errs: bool,
             comptime errCallback: if (catch_errs) fn (anyerror) void else void,
         ) !void {
-            const stage = @field(inner, std.meta.fieldInfo(Inner, stage_field).name);
+            const stage = @field(inner, @tagName(stage_field));
 
-            inline for (std.meta.fields(@TypeOf(stage))) |label_info| {
-                try runSystemTuple(label_info.type.before, world, catch_errs, errCallback);
-                try runSystemTuple(label_info.type.during, world, catch_errs, errCallback);
-                try runSystemTuple(label_info.type.after, world, catch_errs, errCallback);
-            }
-        }
+            inline for (@typeInfo(@TypeOf(stage)).@"struct".fields) |label_info| {
+                inline for (&.{ "before", "during", "after" }) |tuple_name| {
+                    const substage = @field(label_info.type, tuple_name);
+                    inline for (@typeInfo(@TypeOf(substage)).@"struct".fields) |sys_field| {
+                        const sys = @field(substage, sys_field.name);
+                        const System = @TypeOf(sys);
+                        const params = @typeInfo(System).@"fn".params;
+                        const args = try world.initParamsForSystem(world.frame_arena.allocator(), params);
 
-        fn runSystemTuple(systems: anytype, world: anytype, comptime catch_errs: bool, comptime errCallback: if (catch_errs) fn (anyerror) void else void) !void {
-            inline for (systems) |sys| {
-                const System = @TypeOf(sys);
-                const params = @typeInfo(System).@"fn".params;
-                const args = try world.initParamsForSystem(world.frame_alloc, params);
+                        if (comptime ztg.meta.canReturnError(System)) {
+                            @call(.auto, sys, args) catch |err| {
+                                if (comptime catch_errs) errCallback(err) else return err;
+                            };
+                        } else {
+                            @call(.auto, sys, args);
+                        }
 
-                if (comptime ztg.meta.canReturnError(System)) {
-                    @call(.auto, sys, args) catch |err| {
-                        if (comptime catch_errs) errCallback(err) else return err;
-                    };
-                } else {
-                    @call(.auto, sys, args);
+                        try world.postSystemUpdate();
+                    }
                 }
-
-                try world.postSystemUpdate();
             }
         }
 
@@ -87,32 +85,23 @@ pub fn Init(comptime stage_defs: []const StageDef) type {
             const Stage = @TypeOf(@field(inner, std.meta.fieldInfo(Inner, stage_field).name));
 
             inline for (std.meta.fields(Stage)) |label_info| {
-                try runLabelSectionInParallel(world, label_info.type.before, catch_errs, errCallback);
-                try runLabelSectionInParallel(world, label_info.type.during, catch_errs, errCallback);
-                try runLabelSectionInParallel(world, label_info.type.after, catch_errs, errCallback);
+                inline for (&.{ "before", "during", "after" }) |tuple_name| {
+                    defer wait_group.reset();
+                    var stage_err: ?anyerror = null;
+
+                    inline for (@field(label_info.type, tuple_name)) |sys| {
+                        try thread_pool.spawn(runSystemInParallel, .{ world, sys, &stage_err, &wait_group });
+                    }
+
+                    thread_pool.waitAndWork(&wait_group);
+
+                    if (stage_err) |err| {
+                        if (comptime catch_errs) errCallback(err) else return err;
+                    }
+                }
             }
 
             _ = thread_arena.reset(.retain_capacity);
-        }
-
-        fn runLabelSectionInParallel(
-            world: anytype,
-            comptime systems_tuple: anytype,
-            comptime catch_errs: bool,
-            comptime errCallback: if (catch_errs) fn (anyerror) void else void,
-        ) !void {
-            defer wait_group.reset();
-            var stage_err: ?anyerror = null;
-
-            inline for (systems_tuple) |sys| {
-                try thread_pool.spawn(runSystemInParallel, .{ world, sys, &stage_err, &wait_group });
-            }
-
-            thread_pool.waitAndWork(&wait_group);
-
-            if (stage_err) |err| {
-                if (comptime catch_errs) errCallback(err) else return err;
-            }
         }
 
         fn runSystemInParallel(world: anytype, comptime f: anytype, stage_err: *?anyerror, group: *std.Thread.WaitGroup) void {

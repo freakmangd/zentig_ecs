@@ -222,7 +222,7 @@ const test_mod = struct {
 const MyWorld = ztg.WorldBuilder.init(&.{ ztg.base, test_mod }).Build();
 
 test "basic usage" {
-    var w = try MyWorld.init(std.testing.allocator);
+    var w = try MyWorld.init(std.testing.allocator, .{});
     defer w.deinit();
     const com = w.commands();
 
@@ -236,7 +236,7 @@ test "basic usage" {
 }
 
 test "running stages" {
-    var w = try MyWorld.init(std.testing.allocator);
+    var w = try MyWorld.init(std.testing.allocator, .{});
     defer w.deinit();
 
     // any errors that occur during the stage are propogated
@@ -245,7 +245,7 @@ test "running stages" {
 }
 
 test "adding/removing entities" {
-    var w = try MyWorld.init(std.testing.allocator);
+    var w = try MyWorld.init(std.testing.allocator, .{});
     defer w.deinit();
     const com = w.commands();
 

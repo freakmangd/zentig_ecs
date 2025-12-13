@@ -10,105 +10,85 @@ const Allocator = std.mem.Allocator;
 const TypeMap = ztg.meta.TypeMap;
 const TypeBuilder = ztg.meta.TypeBuilder;
 
-/// Used for storing pointer-stable objects on the heap
-const WorldInfo = struct {
-    frame_arena: std.heap.ArenaAllocator,
-    rng: std.Random.DefaultPrng,
+pub fn World(comptime options: struct {
+    max_entities: usize,
+    Resources: type,
+    comp_types: WorldBuilder.CompTypes,
+    StagesList: type,
+    EventPool: type,
+    added_resources: ztg.meta.TypeSet,
+    included: ztg.meta.TypeSet,
+    on_ent_overflow: WorldBuilder.OnEntOverflow,
+    on_crash_fn: WorldBuilder.OnCrashFn,
+    warnings: []const u8,
+}) type {
+    if (options.max_entities == 0) @compileError("Cannot have max_ents == 0.");
 
-    fn init(alloc: std.mem.Allocator) !*WorldInfo {
-        const self = try alloc.create(WorldInfo);
-        self.* = .{
-            .rng = std.Random.DefaultPrng.init(@bitCast(std.time.milliTimestamp())),
-            .frame_arena = std.heap.ArenaAllocator.init(alloc),
-        };
-        return self;
-    }
+    const comp_types_len = options.comp_types.types.len;
 
-    fn deinit(self: *WorldInfo, alloc: std.mem.Allocator) void {
-        self.frame_arena.deinit();
-        alloc.destroy(self);
-    }
-};
-
-pub fn World(
-    comptime max_entities: usize,
-    comptime Resources: type,
-    comptime comp_types: anytype,
-    comptime StagesList: type,
-    comptime EventPool: type,
-    comptime added_resources: anytype,
-    comptime included: anytype,
-    comptime on_ent_overflow: WorldBuilder.OnEntOverflow,
-    comptime on_crash_fn: WorldBuilder.OnCrashFn,
-    comptime warnings: anytype,
-) type {
-    if (max_entities == 0) @compileError("Cannot have max_ents == 0.");
-
-    const comp_types_len = comp_types.len;
-
-    const MinEntityIndex = std.math.IntFittingRange(0, max_entities);
+    const MinEntityIndex = std.math.IntFittingRange(0, options.max_entities);
     const ComponentArray = ca.ComponentArray(MinEntityIndex);
     const ComponentMask = std.bit_set.StaticBitSet(comp_types_len);
-    const EntityArray = ea.EntityArray(ComponentMask, max_entities);
+    const EntityArray = ea.EntityArray(ComponentMask, options.max_entities);
 
     return struct {
         const Self = @This();
 
-        info: *WorldInfo,
+        user_allocator: Allocator,
+        frame_arena: std.heap.ArenaAllocator,
+        rng: std.Random.DefaultPrng,
 
-        alloc: Allocator,
-        frame_arena: *std.heap.ArenaAllocator,
-        frame_alloc: Allocator,
-        rand: std.Random,
+        next_ent: ztg.Entity,
+        entities: *EntityArray,
 
-        next_ent: ztg.Entity = @enumFromInt(0),
-        entities: *EntityArray = undefined,
+        comp_arrays: [comp_types_len]ComponentArray,
+        resources: *options.Resources,
 
-        comp_arrays: [comp_types_len]ComponentArray = undefined,
-        resources: *Resources = undefined,
-
-        event_pools: EventPool,
+        event_pools: options.EventPool,
         changes_queue: ChangeQueue,
 
-        on_added_fns: [comp_types_len]*const fn (*Self, *anyopaque, ztg.Entity) anyerror!void = undefined,
-        on_removed_fns: [comp_types_len]*const fn (*Self, *anyopaque, ztg.Entity) anyerror!void = undefined,
+        on_added_fns: [comp_types_len]*const fn (*Self, *anyopaque, ztg.Entity) anyerror!void,
+        on_removed_fns: [comp_types_len]*const fn (*Self, *anyopaque, ztg.Entity) anyerror!void,
 
         /// User must call `.deinit()` once the world is to be descoped. (in a defer block preferrably)
         /// All systems that request an `Allocator` will get the one passed here.
-        pub fn init(user_allocator: std.mem.Allocator) !Self {
+        pub fn init(user_allocator: std.mem.Allocator, init_opt: struct {
+            rng_seed: ?u64 = null,
+        }) !Self {
             if (comptime builtin.mode == .Debug) {
-                if (warnings.len > 0)
-                    ztg.log.warn("\n====== World was constructed with warnings: ======\n{s}", .{warnings});
+                if (options.warnings.len > 0)
+                    ztg.log.warn("\n====== World was constructed with warnings: ======\n{s}", .{options.warnings});
 
-                if (max_entities > 500_000) ztg.log.warn("It isn't recommended to have a max_entities count over 500,000 as it could cause unstable performance.");
+                if (options.max_entities > 500_000) ztg.log.warn("It isn't recommended to have a max_entities count over 500,000 as it could cause unstable performance.");
             }
 
-            var info = try WorldInfo.init(user_allocator);
-            errdefer info.deinit(user_allocator);
+            try options.StagesList.init(user_allocator);
+            errdefer options.StagesList.deinit();
 
-            try StagesList.init(user_allocator);
-            errdefer StagesList.deinit();
+            const resources = try user_allocator.create(options.Resources);
+            resources.* = .{};
+            errdefer user_allocator.destroy(resources);
 
-            const frame_alloc = info.frame_arena.allocator();
+            const entities = try user_allocator.create(EntityArray);
+            entities.* = .{};
+            errdefer user_allocator.destroy(entities);
 
-            var self = Self{
-                .alloc = user_allocator,
-                .info = info,
-                .frame_arena = &info.frame_arena,
-                .frame_alloc = frame_alloc,
-                .rand = info.rng.random(),
+            var temp_io: std.Io.Threaded = .init_single_threaded;
+            const now = std.Io.Clock.now(.real, temp_io.io()) catch std.Io.Timestamp.zero;
 
+            var self: Self = .{
+                .user_allocator = user_allocator,
+                .frame_arena = .init(std.heap.page_allocator),
+                .rng = .init(init_opt.rng_seed orelse @bitCast(now.toMilliseconds())),
+                .next_ent = @enumFromInt(0),
+                .entities = entities,
+                .comp_arrays = undefined,
+                .resources = resources,
                 .event_pools = .{},
                 .changes_queue = .empty,
+                .on_added_fns = undefined,
+                .on_removed_fns = undefined,
             };
-
-            self.resources = try user_allocator.create(Resources);
-            self.resources.* = .{};
-            errdefer user_allocator.destroy(self.resources);
-
-            self.entities = try user_allocator.create(EntityArray);
-            self.entities.* = .{};
-            errdefer user_allocator.destroy(self.entities);
 
             if (comptime comp_types_len > 0) {
                 var last_successful_init_loop: usize = 0;
@@ -118,20 +98,16 @@ pub fn World(
 
                 util.resetCompIds();
                 util.allow_new_ids = true;
-                inline for (comp_types, 0..) |CT, i| {
+                inline for (options.comp_types.types, 0..) |CT, i| {
                     @setEvalBranchQuota(20_000);
                     const comp_id = util.compId(CT);
-                    self.comp_arrays[comp_id] = ComponentArray.init(CT);
+                    self.comp_arrays[comp_id] = .init(CT);
                     self.on_added_fns[comp_id] = generateAddRemSystem(CT, "onAdded");
                     self.on_removed_fns[comp_id] = generateAddRemSystem(CT, "onRemoved");
                     last_successful_init_loop = i;
                 }
                 util.allow_new_ids = false;
             }
-
-            self.getResPtr(Allocator).* = user_allocator;
-            self.getResPtr(ztg.FrameAlloc).* = .{frame_alloc};
-            self.getResPtr(std.Random).* = info.rng.random();
 
             ztg.profiler.init(user_allocator);
 
@@ -145,14 +121,14 @@ pub fn World(
         }
 
         pub fn deinit(self: *Self) void {
-            StagesList.deinit();
+            options.StagesList.deinit();
             ztg.profiler.deinit();
 
             self.postSystemUpdate() catch |err| {
                 ztg.log.err("Found error {} while trying to clean up world for deinit.", .{err});
             };
 
-            inline for (comp_types, &self.comp_arrays) |CT, *comp_arr| {
+            inline for (options.comp_types.types, &self.comp_arrays) |CT, *comp_arr| {
                 if (comptime @sizeOf(CT) > 0) {
                     for (comp_arr.entities.items) |ent| self.invokeOnRemoveForComponent(CT, comp_arr.getAs(CT, ent).?, ent) catch |err| {
                         std.log.err("Caught error {} while deinit'ing component list of type {s}", .{ err, @typeName(CT) });
@@ -162,30 +138,39 @@ pub fn World(
                         std.log.err("Caught error {} while deinit'ing component list of type {s}", .{ err, @typeName(CT) });
                     };
                 }
-                comp_arr.deinit(self.alloc);
+                comp_arr.deinit(self.user_allocator);
             }
 
             self.runStageCatchErrors(.deinit, deinit_errCallback) catch |err| switch (err) {
                 error.OutOfMemory => ztg.log.err("Encountered OOM error in deinit stage. Some systems may not have been run!", .{}),
             };
 
-            self.event_pools.deinit(self.frame_alloc);
-            self.changes_queue.deinit(self.frame_alloc);
+            self.event_pools.deinit(self.frame_arena.allocator());
+            self.changes_queue.deinit(self.frame_arena.allocator());
+            self.frame_arena.deinit();
 
-            self.alloc.destroy(self.entities);
-            self.alloc.destroy(self.resources);
-            self.info.deinit(self.alloc);
+            self.user_allocator.destroy(self.entities);
+            self.user_allocator.destroy(self.resources);
         }
 
-        fn generateAddRemSystem(comptime CT: type, comptime fn_name: []const u8) *const fn (*Self, *anyopaque, ztg.Entity) anyerror!void {
+        fn generateAddRemSystem(comptime CT: type, comptime func_name: []const u8) *const fn (*Self, *anyopaque, ztg.Entity) anyerror!void {
             return struct {
                 fn f(self: *Self, comp_ptr_aop: *anyopaque, ent: ztg.Entity) anyerror!void {
-                    if (comptime !util.isContainer(CT) or !@hasDecl(CT, fn_name)) return;
+                    if (comptime !util.isContainer(CT)) return;
+
+                    const func = comptime func: {
+                        if (@hasDecl(CT, func_name)) break :func @field(CT, func_name);
+                        if (@field(options.comp_types.get(CT).?, func_name)) |func_ptr| {
+                            const Func = *const @field(options.comp_types.get(CT).?, "O" ++ func_name[1..] ++ "Fn");
+                            break :func @as(Func, @ptrCast(@alignCast(func_ptr))).*;
+                        }
+                        break :func null;
+                    };
+                    if (@TypeOf(func) == @TypeOf(null)) return;
 
                     const comp: *CT = @ptrCast(@alignCast(comp_ptr_aop));
-                    const func = @field(CT, fn_name);
 
-                    const member_fn_type = comptime ztg.meta.memberFnType(CT, fn_name);
+                    const member_fn_type = comptime ztg.meta.memberFnType(CT, @TypeOf(func));
                     const fn_params = @typeInfo(@TypeOf(func)).@"fn".params;
                     const maybe_ent_param_idx = if (comptime member_fn_type == .non_member) 0 else 1;
                     const has_ent_param = comptime maybe_ent_param_idx < fn_params.len and fn_params[maybe_ent_param_idx].type.? == ztg.Entity;
@@ -207,7 +192,7 @@ pub fn World(
 
                     var params: Params = undefined;
                     inline for (params, 0..) |param, i| {
-                        params[i] = self.initParam(self.frame_alloc, @TypeOf(param)) catch |err| {
+                        params[i] = self.initParam(self.frame_arena.allocator(), @TypeOf(param)) catch |err| {
                             std.debug.panic("Failed to get args for deinit system for type `{}`. Error: {}", .{ CT, err });
                         };
                     }
@@ -229,19 +214,19 @@ pub fn World(
         }
 
         /// If you are going to run multiple stages in a row, consider `.runStageList()`
-        pub fn runStage(self: *Self, comptime stage_id: StagesList.StageField) !void {
-            try StagesList.runStage(self, stage_id, false, {});
+        pub fn runStage(self: *Self, comptime stage_id: options.StagesList.StageField) !void {
+            try options.StagesList.runStage(self, stage_id, false, {});
         }
 
-        pub fn runStageInParallel(self: *Self, comptime stage_id: StagesList.StageField) !void {
-            try StagesList.runStageInParallel(self, stage_id, false, {});
+        pub fn runStageInParallel(self: *Self, comptime stage_id: options.StagesList.StageField) !void {
+            try options.StagesList.runStageInParallel(self, stage_id, false, {});
         }
 
         /// Runs a stage and catches every error ensures every system in the stage is run. Useful for stages
         /// that are run at the end to free resources.
         /// Calls errCallback whenever an error occurs and passes it the error.
-        pub fn runStageCatchErrors(self: *Self, comptime stage_id: StagesList.StageField, comptime errCallback: fn (anyerror) void) error{OutOfMemory}!void {
-            StagesList.runStage(self, stage_id, true, errCallback) catch |err| switch (err) {
+        pub fn runStageCatchErrors(self: *Self, comptime stage_id: options.StagesList.StageField, comptime errCallback: fn (anyerror) void) error{OutOfMemory}!void {
+            options.StagesList.runStage(self, stage_id, true, errCallback) catch |err| switch (err) {
                 error.OutOfMemory => |e| return e, // this is from allocating slices for queries
                 else => unreachable, // all other errors are sent to errCallback
             };
@@ -249,7 +234,7 @@ pub fn World(
 
         /// If you are going to run multiple stages in a row, consider `.runStageNameList()`
         pub fn runStageByName(self: *Self, stage_name: []const u8) !void {
-            StagesList.runStageByName(self, stage_name, false, {}) catch |err| switch (err) {
+            options.StagesList.runStageByName(self, stage_name, false, {}) catch |err| switch (err) {
                 error.UnknownStage => std.debug.panic("Cannot find stage {s} in stage list.", .{stage_name}),
                 else => |e| return e,
             };
@@ -259,7 +244,7 @@ pub fn World(
             try commandsCast(ptr).runStageByName(stage_name);
         }
 
-        pub fn runStageList(self: *Self, comptime stage_ids: []const StagesList.StageField) !void {
+        pub fn runStageList(self: *Self, comptime stage_ids: []const options.StagesList.StageField) !void {
             inline for (stage_ids) |sid| {
                 try runStage(self, sid);
             }
@@ -299,7 +284,7 @@ pub fn World(
                 switch (rem) {
                     .added_component => |comp| {
                         var arr = &self.comp_arrays[comp.component_id];
-                        const comp_ptr = try arr.assignData(self.alloc, comp.ent, comp.data);
+                        const comp_ptr = try arr.assignData(self.user_allocator, comp.ent, comp.data);
                         try self.on_added_fns[comp.component_id](self, comp_ptr, comp.ent);
                     },
                     .removed_ent => |ent| try self.removeEntAndAssociatedComponents(ent),
@@ -307,7 +292,7 @@ pub fn World(
                         const comp = self.comp_arrays[rem_comp.component_id].get(rem_comp.ent) orelse {
                             if (builtin.mode == .Debug) {
                                 ztg.log.err("Trying to remove a component of type {s} from ent {} when ent does not have that component", .{
-                                    util.nameFromTypeArrayIndex(comp_types, rem_comp.component_id),
+                                    options.comp_types.nameOfIndex(rem_comp.component_id),
                                     rem_comp.ent,
                                 });
                             }
@@ -319,18 +304,18 @@ pub fn World(
                 }
             }
 
-            self.changes_queue.clearAndFree(self.frame_alloc);
+            self.changes_queue.clearAndFree(self.frame_arena.allocator());
         }
 
         fn removeEntAndAssociatedComponents(self: *Self, ent: ztg.Entity) !void {
             if (!self.entities.hasEntity(ent)) return;
 
-            const children = try self.getEntChildren(self.frame_alloc, ent);
-            defer self.frame_alloc.free(children);
+            const children = try self.getEntChildren(self.frame_arena.allocator(), ent);
+            defer self.frame_arena.allocator().free(children);
 
             for (children) |c| try self.removeEntAndAssociatedComponents(c);
 
-            inline for (comp_types, &self.comp_arrays) |CT, *list| {
+            inline for (options.comp_types.types, &self.comp_arrays) |CT, *list| {
                 if (list.getAs(CT, ent)) |comp| {
                     try self.invokeOnRemoveForComponent(CT, comp, ent);
                     _ = list.swapRemove(ent);
@@ -364,7 +349,7 @@ pub fn World(
         /// `.overwrite_first` => returns the first entity in the entity list, after removing all of its components
         pub fn newEnt(self: *Self) ztg.Entity {
             const ent = blk: {
-                if (self.next_ent.toInt() >= max_entities) {
+                if (self.next_ent.toInt() >= options.max_entities) {
                     break :blk getOpenEntityId(self.entities, @enumFromInt(0)) orelse self.handleEntOverflow();
                 } else if (!self.entities.hasEntity(self.next_ent)) {
                     break :blk self.next_ent;
@@ -388,14 +373,14 @@ pub fn World(
         }
 
         fn getOpenEntityId(entities: *const EntityArray, from: ztg.Entity) ?ztg.Entity {
-            for (from.toInt()..max_entities) |e| if (!entities.hasEntity(@enumFromInt(e))) return @enumFromInt(e);
+            for (from.toInt()..options.max_entities) |e| if (!entities.hasEntity(@enumFromInt(e))) return @enumFromInt(e);
             for (0..from.toInt()) |e| if (!entities.hasEntity(@enumFromInt(e))) return @enumFromInt(e);
             return null;
         }
 
         fn handleEntOverflow(self: *Self) ztg.Entity {
-            return switch (on_ent_overflow) {
-                .crash => self.crash(std.fmt.comptimePrint("Exceeded entity limit of {}.", .{max_entities}), .hit_ent_limit),
+            return switch (options.on_ent_overflow) {
+                .crash => self.crash(std.fmt.comptimePrint("Exceeded entity limit of {}.", .{options.max_entities}), .hit_ent_limit),
                 .overwrite_last => blk: {
                     const ent = self.entities.getEntityAt(self.entities.len - 1);
                     try self.reuseEntity(ent);
@@ -445,7 +430,7 @@ pub fn World(
 
         fn commands_getEntChildren(ptr: *const anyopaque, ent: ztg.Entity) ![]const ztg.Entity {
             const self = commandsCastConst(ptr);
-            return self.getEntChildren(self.frame_alloc, ent);
+            return self.getEntChildren(self.frame_arena.allocator(), ent);
         }
 
         /// Set's the entity `child`'s parent to `ent`
@@ -455,7 +440,7 @@ pub fn World(
 
         /// Queues the removal of all components in lists correlated with `ent` and `ent` itself
         pub fn removeEnt(self: *Self, ent: ztg.Entity) Allocator.Error!void {
-            try self.changes_queue.append(self.frame_alloc, .{ .removed_ent = ent });
+            try self.changes_queue.append(self.frame_arena.allocator(), .{ .removed_ent = ent });
         }
 
         fn commands_removeEnt(ptr: *anyopaque, ent: ztg.Entity) Allocator.Error!void {
@@ -463,15 +448,15 @@ pub fn World(
         }
 
         fn giveComponentSingle(self: *Self, ent: ztg.Entity, comp: anytype) anyerror!void {
-            if (comptime comp_types.len == 0) @compileError("World has no registered components and cannot add components");
+            if (comptime options.comp_types.types.len == 0) @compileError("World has no registered components and cannot add components");
             if (!self.entities.hasEntity(ent)) return error.EntityDoesntExist;
 
             const Component = @TypeOf(comp);
-            const comp_id = comptime util.indexOfType(comp_types, Component) orelse
+            const comp_id = comptime options.comp_types.indexOf(Component) orelse
                 util.compileError("Tried to give entity Component of type `{s}`, which was not registred.", .{@typeName(Component)});
 
             self.entities.comp_masks[ent.toInt()].set(comp_id);
-            const comp_ptr = try self.comp_arrays[comp_id].assign(self.alloc, ent, comp);
+            const comp_ptr = try self.comp_arrays[comp_id].assign(self.user_allocator, ent, comp);
             try self.on_added_fns[comp_id](self, comp_ptr, ent);
         }
 
@@ -487,7 +472,7 @@ pub fn World(
         ///
         /// This has a chance to invalidate component pointers
         pub fn giveComponents(self: *Self, ent: ztg.Entity, components: anytype) !void {
-            if (comptime comp_types.len == 0) @compileError("World has no registered components and cannot add components");
+            if (comptime options.comp_types.types.len == 0) @compileError("World has no registered components and cannot add components");
             const Components = @TypeOf(components);
 
             if (@typeInfo(Components) == .@"struct" and
@@ -516,10 +501,10 @@ pub fn World(
             alignment: u29,
             data: *const anyopaque,
         ) anyerror!void {
-            if (comptime comp_types.len == 0) @compileError("World has no registered components and cannot add components");
+            if (comptime options.comp_types.types.len == 0) @compileError("World has no registered components and cannot add components");
             var self = commandsCast(ptr);
 
-            if (component_id >= comp_types.len) return error.UnregisteredComponent;
+            if (component_id >= options.comp_types.types.len) return error.UnregisteredComponent;
             if (!self.entities.hasEntity(ent)) return error.EntityDoesntExist;
 
             self.entities.comp_masks[ent.toInt()].set(component_id);
@@ -537,15 +522,15 @@ pub fn World(
                 // only because we have an alignment at runtime instead of comptime :,(
                 //
                 // TODO: amortize this
-                const alloced_data = self.frame_alloc.rawAlloc(arr.components_data.entry_size, .fromByteUnits(alignment), @returnAddress()) orelse return error.OutOfMemory;
+                const alloced_data = self.frame_arena.allocator().rawAlloc(arr.components_data.entry_size, .fromByteUnits(alignment), @returnAddress()) orelse return error.OutOfMemory;
                 @memcpy(alloced_data, @as([*]const u8, @ptrCast(data))[0..arr.components_data.entry_size]);
-                try self.changes_queue.append(self.frame_alloc, .{ .added_component = .{
+                try self.changes_queue.append(self.frame_arena.allocator(), .{ .added_component = .{
                     .ent = ent,
                     .component_id = component_id,
                     .data = alloced_data,
                 } });
             } else {
-                const comp_ptr = try arr.assignData(self.alloc, ent, data);
+                const comp_ptr = try arr.assignData(self.user_allocator, ent, data);
                 try self.on_added_fns[component_id](self, comp_ptr, ent);
             }
         }
@@ -556,7 +541,7 @@ pub fn World(
             ent: ztg.Entity,
             comptime Component: type,
         ) (error{EntityDoesntExist} || Allocator.Error)!void {
-            try self.removeComponent_fromCompId(ent, comptime util.indexOfType(comp_types, Component) orelse
+            try self.removeComponent_fromCompId(ent, comptime util.indexOfType(options.comp_types, Component) orelse
                 util.compileError("Component of type `{s}` was not registered and cannot be removed", .{@typeName(Component)}));
         }
 
@@ -565,7 +550,7 @@ pub fn World(
             ent: ztg.Entity,
             comp_id: util.CompId,
         ) ztg.Commands.RemoveComponentError!void {
-            if (comp_id >= comp_types.len) return error.UnregisteredComponent;
+            if (comp_id >= options.comp_types.types.len) return error.UnregisteredComponent;
             try commandsCast(ptr).removeComponent_fromCompId(ent, comp_id);
         }
 
@@ -574,10 +559,10 @@ pub fn World(
             ent: ztg.Entity,
             comp_id: util.CompId,
         ) ztg.Commands.RemoveComponentError!void {
-            if (comptime comp_types.len == 0) @compileError("World has no registered components to remove.");
+            if (comptime options.comp_types.types.len == 0) @compileError("World has no registered components to remove.");
             if (!self.entities.hasEntity(ent)) return error.EntityDoesntExist;
 
-            try self.changes_queue.append(self.frame_alloc, .{ .removed_component = .{
+            try self.changes_queue.append(self.frame_arena.allocator(), .{ .removed_component = .{
                 .ent = ent,
                 .component_id = comp_id,
             } });
@@ -586,13 +571,13 @@ pub fn World(
         /// Returns true or false depending on whether `ent` has been assigned a component of type `Component`
         pub fn checkEntHas(self: *Self, ent: ztg.Entity, comptime Component: type) bool {
             return self.comp_arrays[
-                comptime util.indexOfType(comp_types, Component) orelse
+                comptime options.comp_types.indexOf(Component) orelse
                     util.compileError("Component of type `{s}` was not registered", .{@typeName(Component)})
             ].contains(ent);
         }
 
         fn commands_checkEntHas(ptr: *anyopaque, ent: ztg.Entity, component_id: util.CompId) ztg.Commands.ComponentError!bool {
-            if (comptime comp_types.len == 0) @compileError("World has no registered components to check for.");
+            if (comptime options.comp_types.types.len == 0) @compileError("World has no registered components to check for.");
             const self = commandsCast(ptr);
             for (self.changes_queue.items) |ch| switch (ch) {
                 .added_component => |added| if (added.ent == ent and added.component_id == component_id) return true,
@@ -603,7 +588,7 @@ pub fn World(
 
         /// Returns an optional pointer to the component assigned to `ent`
         pub fn getComponentPtr(self: *Self, ent: ztg.Entity, comptime Component: type) ?*anyopaque {
-            return self.getComponentPtr_fromCompId(ent, comptime util.indexOfType(comp_types, Component) orelse
+            return self.getComponentPtr_fromCompId(ent, comptime util.indexOfType(options.comp_types, Component) orelse
                 util.compileError("Component of type `{s}` was not registered and no pointer can be obtained.", .{@typeName(Component)}));
         }
 
@@ -612,28 +597,35 @@ pub fn World(
         }
 
         fn getComponentPtr_fromCompId(self: *Self, ent: ztg.Entity, comp_id: util.CompId) ?*anyopaque {
-            if (comptime comp_types.len == 0) @compileError("World has no registered components to get the pointer of.");
+            if (comptime options.comp_types.types.len == 0)
+                @compileError("World has no registered components to get the pointer of.");
+
             for (self.changes_queue.items) |ch| switch (ch) {
                 .added_component => |added| if (added.ent == ent and added.component_id == comp_id) return added.data,
                 else => {},
             };
+
             return self.comp_arrays[comp_id].get(ent);
         }
 
         /// Returns a copy of the resource T in this world
         pub fn getRes(self: Self, comptime T: type) T {
-            if (comptime !util.typeArrayHas(added_resources, T)) util.compileError("World does not have resource of type `{s}`", .{@typeName(T)});
-            return @field(self.resources, std.fmt.comptimePrint("{}", .{util.indexOfType(added_resources, T).?}));
+            if (comptime !options.added_resources.has(T))
+                util.compileError("World does not have resource of type `{s}`", .{@typeName(T)});
+
+            return @field(self.resources, std.fmt.comptimePrint("{}", .{options.added_resources.indexOf(T).?}));
         }
 
         /// Returns a pointer to the resource T in this world
         pub fn getResPtr(self: *Self, comptime T: type) *T {
-            if (comptime !util.typeArrayHas(added_resources, T)) util.compileError("World does not have resource of type `{s}`", .{@typeName(T)});
-            return &@field(self.resources, std.fmt.comptimePrint("{}", .{util.indexOfType(added_resources, T).?}));
+            if (comptime !options.added_resources.has(T))
+                util.compileError("World does not have resource of type `{s}`", .{@typeName(T)});
+
+            return &@field(self.resources, std.fmt.comptimePrint("{}", .{options.added_resources.indexOf(T).?}));
         }
 
         fn commands_getResPtr(ptr: *anyopaque, utp: ztg.meta.Utp) error{UnregisteredResource}!*anyopaque {
-            inline for (added_resources, 0..) |T, i| {
+            inline for (options.added_resources.types, 0..) |T, i| {
                 if (ztg.meta.utpOf(T) == utp) return @ptrCast(&@field(commandsCast(ptr).resources, std.fmt.comptimePrint("{}", .{i})));
             }
             return error.UnregisteredResource;
@@ -781,7 +773,7 @@ pub fn World(
 
             for (comp_ids_list) |ids| for (ids) |id| comp_mask.set(id);
             for (negative_ids_list) |ids| for (ids) |id| {
-                if (builtin.mode == .Debug and id >= comp_types.len)
+                if (builtin.mode == .Debug and id >= options.comp_types.types.len)
                     std.debug.panic("Trying to query without ID {}, which isn't registered", .{id});
                 negative_mask.set(id);
             };
@@ -842,23 +834,31 @@ pub fn World(
         }
 
         fn initParam(self: *Self, alloc: std.mem.Allocator, comptime T: type) Allocator.Error!T {
-            if (comptime T == ztg.Commands) {
+            if (T == ztg.Commands) {
                 return self.commands();
-            } else if (comptime @typeInfo(T) == .@"struct" and @hasDecl(T, "IsQueryType")) {
+            } else if (T == std.mem.Allocator) {
+                return self.user_allocator;
+            } else if (T == std.Random) {
+                return self.rng.random();
+            } else if (T == ztg.FrameAlloc) {
+                return .{self.frame_arena.allocator()};
+            } else if (@typeInfo(T) == .@"struct" and @hasDecl(T, "IsQueryType")) {
                 return self.query(alloc, T);
-            } else if (comptime @typeInfo(T) == .@"struct" and @hasDecl(T, "EventSendType")) {
+            } else if (@typeInfo(T) == .@"struct" and @hasDecl(T, "EventSendType")) {
                 return .{
                     .alloc = alloc,
                     .event_pool = self.event_pools.getPtr(T.EventSendType),
                 };
-            } else if (comptime @typeInfo(T) == .@"struct" and @hasDecl(T, "EventRecvType")) {
+            } else if (@typeInfo(T) == .@"struct" and @hasDecl(T, "EventRecvType")) {
                 return .{
                     .events = self.event_pools.getPtr(T.EventRecvType),
                 };
-            } else if (comptime util.typeArrayHas(added_resources, ztg.meta.DerefType(T)) or util.typeArrayHas(added_resources, T)) {
-                if (comptime util.typeArrayHas(added_resources, T)) {
+            } else if (comptime options.added_resources.has(ztg.meta.DerefType(T)) or
+                options.added_resources.has(T))
+            {
+                if (comptime options.added_resources.has(T)) {
                     return self.getRes(T);
-                } else if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .one) {
+                } else if (@typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .one) {
                     return self.getResPtr(@typeInfo(T).pointer.child);
                 }
             }
@@ -878,15 +878,15 @@ pub fn World(
         /// Returns whether the underlying WorldBuilder included a namespace
         /// while it was being built.
         pub fn hasIncluded(comptime Namespace: type) bool {
-            comptime return included.has(Namespace);
+            comptime return options.included.has(Namespace);
         }
 
         fn commands_hasIncluded(type_utp: ztg.meta.Utp) bool {
-            return util.typeArrayHasUtp(included, type_utp);
+            return options.included.hasUtp(type_utp);
         }
 
         fn getListOf(self: *Self, comptime T: type) *ComponentArray {
-            const idx = comptime util.indexOfType(comp_types, T) orelse util.compileError("Tried to get list of Component `{s}`, which was not registred.", .{@typeName(T)});
+            const idx = comptime util.indexOfType(options.comp_types.types, T) orelse util.compileError("Tried to get list of Component `{s}`, which was not registred.", .{@typeName(T)});
             return &self.comp_arrays[idx];
         }
 
@@ -904,7 +904,7 @@ pub fn World(
         }
 
         fn crash(self: *Self, comptime crash_msg: []const u8, r: ztg.CrashReason) noreturn {
-            on_crash_fn(self.commands(), r) catch |err| ztg.log.err("onCrashFn errored due to {}", .{err});
+            options.on_crash_fn(self.commands(), r) catch |err| ztg.log.err("onCrashFn errored due to {}", .{err});
             @panic(crash_msg);
         }
     };
@@ -984,17 +984,17 @@ const MyWorld = WorldBuilder.init(&.{
 }).Build();
 
 test "creation" {
-    var world = try MyWorld.init(std.testing.allocator);
+    var world = try MyWorld.init(std.testing.allocator, .{});
     defer world.deinit();
 }
 
 test "bad alloc" {
-    const world = MyWorld.init(std.testing.failing_allocator);
+    const world = MyWorld.init(std.testing.failing_allocator, .{});
     try std.testing.expectError(error.OutOfMemory, world);
 }
 
 test "adding/removing entities" {
-    var world = try MyWorld.init(std.testing.allocator);
+    var world = try MyWorld.init(std.testing.allocator, .{});
     defer world.deinit();
 
     // Generally, youd do this by requesting a Commands argument in your system
@@ -1027,7 +1027,7 @@ test "adding/removing entities" {
 }
 
 test "adding/removing components" {
-    var world = try MyWorld.init(std.testing.allocator);
+    var world = try MyWorld.init(std.testing.allocator, .{});
     defer world.deinit();
 
     const com = world.commands();
@@ -1056,7 +1056,7 @@ test "adding/removing components" {
 }
 
 test "overwriting components" {
-    var world = try MyWorld.init(std.testing.allocator);
+    var world = try MyWorld.init(std.testing.allocator, .{});
     defer world.deinit();
 
     const com = world.commands();
@@ -1080,7 +1080,7 @@ test "overwriting components" {
 }
 
 test "resources" {
-    var world = try MyWorld.init(std.testing.allocator);
+    var world = try MyWorld.init(std.testing.allocator, .{});
     defer world.deinit();
 
     try testing.expectEqual(@as(usize, 0), world.getRes(my_file.MyResource).frames);
@@ -1096,7 +1096,7 @@ test "resources" {
 }
 
 test "querying" {
-    var world = try MyWorld.init(std.testing.allocator);
+    var world = try MyWorld.init(std.testing.allocator, .{});
     defer world.deinit();
 
     _ = try world.newEntWith(.{
@@ -1162,7 +1162,7 @@ test "callbacks" {
         break :blk wb.Build();
     };
 
-    var world = try EmptyCbWorld.init(std.testing.allocator);
+    var world = try EmptyCbWorld.init(std.testing.allocator, .{});
     defer world.deinit();
 
     try world.runStage(.load);
