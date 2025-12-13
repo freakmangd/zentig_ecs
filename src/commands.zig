@@ -37,7 +37,7 @@ pub const Vtable = struct {
 };
 
 /// If you are going to run multiple stages in a row, consider `.runStageList()`
-pub fn runStage(self: Commands, comptime stage_id: ztg.meta.EnumLiteral) anyerror!void {
+pub fn runStage(self: Commands, comptime stage_id: @EnumLiteral()) anyerror!void {
     try self.vtable.run_stage(self.ctx, @tagName(stage_id));
 }
 
@@ -46,7 +46,7 @@ pub fn runStageByName(self: Commands, stage_id: []const u8) anyerror!void {
     try self.vtable.run_stage(self.ctx, stage_id);
 }
 
-pub fn runStageList(self: Commands, comptime stage_ids: []const ztg.meta.EnumLiteral) anyerror!void {
+pub fn runStageList(self: Commands, comptime stage_ids: []const @EnumLiteral()) anyerror!void {
     inline for (stage_ids) |sid| {
         try runStage(self, sid);
     }

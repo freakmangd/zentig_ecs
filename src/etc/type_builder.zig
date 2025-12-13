@@ -4,105 +4,72 @@ const Type = std.builtin.Type;
 
 const TypeBuilder = @This();
 
-fields: []const Type.StructField = &.{},
-is_tuple: bool = false,
 layout: Type.ContainerLayout = .auto,
+backing_integer: ?type = null,
+field_names: []const []const u8 = &.{},
+field_types: []const type = &.{},
+field_attrs: []const Type.StructField.Attributes = &.{},
 
 pub fn initFrom(comptime T: type) TypeBuilder {
     const ti = @typeInfo(T).@"struct";
+
+    var types: [ti.fields.len]type = undefined;
+    var attrs: [ti.fields.len]Type.StructField.Attributes = undefined;
+    for (ti.fields, &types, &attrs) |field, *t, *a| {
+        t.* = field.type;
+        a.* = .{
+            .default_value_ptr = field.default_value_ptr,
+            .@"align" = field.alignment,
+            .@"comptime" = field.is_comptime,
+        };
+    }
+
     return .{
-        .fields = ti.fields,
-        .is_tuple = ti.is_tuple,
         .layout = ti.layout,
+        .backing_integer = ti.backing_integer,
+        .field_names = std.meta.fieldNames(T),
+        .field_types = &types,
+        .field_attrs = &attrs,
     };
 }
 
 pub fn addFieldExtra(
     comptime self: *TypeBuilder,
-    comptime name: [:0]const u8,
+    comptime name: []const u8,
     comptime T: type,
     comptime default_value: ?*const anyopaque,
     comptime is_comptime: ?bool,
-    comptime alignment: ?comptime_int,
+    comptime alignment: ?usize,
 ) void {
-    self.fields = self.fields ++ &[_]Type.StructField{.{
-        .type = T,
-        .name = name,
+    self.field_names = self.field_names ++ &[_][]const u8{name};
+    self.field_types = self.field_types ++ &[_]type{T};
+    self.field_attrs = self.field_attrs ++ &[_]Type.StructField.Attributes{.{
         .default_value_ptr = default_value,
-        .alignment = alignment orelse @alignOf(T),
-        .is_comptime = is_comptime orelse false,
+        .@"align" = alignment,
+        .@"comptime" = is_comptime orelse false,
     }};
 }
 
-pub fn addField(comptime self: *TypeBuilder, comptime name: [:0]const u8, comptime T: type, comptime default_value: ?*const anyopaque) void {
+pub fn addField(
+    comptime self: *TypeBuilder,
+    comptime name: []const u8,
+    comptime T: type,
+    comptime default_value: ?*const anyopaque,
+) void {
     return addFieldExtra(self, name, T, default_value, null, null);
 }
 
-pub fn addTupleField(comptime self: *TypeBuilder, comptime index: usize, comptime T: type, comptime default_value: ?*const anyopaque) void {
-    return addField(self, std.fmt.comptimePrint("{}", .{index}), T, default_value);
-}
-
-pub fn appendTupleField(comptime self: *TypeBuilder, comptime T: type, comptime default_value: ?*const anyopaque) void {
-    return addField(self, std.fmt.comptimePrint("{}", .{self.fields.len}), T, default_value);
-}
-
-pub fn addTupleFieldExtra(
-    comptime self: *TypeBuilder,
-    comptime index: usize,
-    comptime T: type,
-    comptime default_value: ?*const anyopaque,
-    comptime is_comptime: ?bool,
-    comptime alignment: ?comptime_int,
-) void {
-    return addFieldExtra(self, std.fmt.comptimePrint("{}", .{index}), T, default_value, is_comptime, alignment);
-}
-
-pub fn appendTupleFieldExtra(
-    comptime self: *TypeBuilder,
-    comptime T: type,
-    comptime default_value: ?*const anyopaque,
-    comptime is_comptime: ?bool,
-    comptime alignment: ?comptime_int,
-) void {
-    return addFieldExtra(self, std.fmt.comptimePrint("{}", .{self.fields.len}), T, default_value, is_comptime, alignment);
-}
+pub const addTupleField = @compileError("Tuples have been restricted, just use a []const type and ++");
+pub const addTupleFieldExtra = @compileError("Tuples have been restricted, just use a []const type and ++");
+pub const appendTupleField = @compileError("Tuples have been restricted, just use a []const type and ++");
+pub const appendTupleFieldExtra = @compileError("Tuples have been restricted, just use a []const type and ++");
 
 pub fn Build(comptime self: TypeBuilder) type {
-    return @Type(.{ .@"struct" = .{
-        .fields = self.fields,
-        .is_tuple = self.is_tuple,
-        .layout = self.layout,
-        .decls = &.{},
-    } });
-}
-
-pub fn prettyPrint(comptime T: type) *const [std.fmt.count(prettyPrintFmt(T), prettyPrintArgs(T)):0]u8 {
-    return std.fmt.comptimePrint(prettyPrintFmt(T), prettyPrintArgs(T));
-}
-
-fn prettyPrintFmt(comptime T: type) []const u8 {
-    var fmt: []const u8 = "struct {{";
-    inline for (std.meta.fields(T)) |_| {
-        fmt = fmt ++ "{s}: {s} ";
-    }
-    return fmt ++ "}},";
-}
-
-fn PrettyPrintArgs(comptime T: type) type {
-    return std.meta.Tuple(&[_]type{[]const u8} ** (std.meta.fields(T).len * 2));
-}
-
-fn prettyPrintArgs(comptime T: type) PrettyPrintArgs(T) {
-    var out: PrettyPrintArgs(T) = undefined;
-
-    const MAX_DEPTH = 10;
-    comptime var i: usize = 0;
-    const out_fields = std.meta.fields(T);
-    inline for (out_fields) |field| {
-        out[i] = field.name;
-        out[i + 1] = if (util.isContainer(field.type) and i / 2 < MAX_DEPTH) prettyPrint(field.type) else @typeName(field.type);
-        i += 2;
-    }
-
-    return out;
+    return @Struct(
+        self.layout,
+        self.backing_integer,
+        self.field_names,
+        self.field_types[0..self.field_names.len],
+        self.field_attrs[0..self.field_names.len],
+    );
 }

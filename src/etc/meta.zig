@@ -2,9 +2,8 @@ const std = @import("std");
 const util = @import("../util.zig");
 
 pub const TypeBuilder = @import("type_builder.zig");
-pub const TypeMap = @import("type_map.zig");
-
-pub const EnumLiteral = @TypeOf(.enum_literal);
+pub const TypeMap = @import("type_map.zig").TypeMap;
+pub const TypeSet = TypeMap(void);
 
 /// Returns whether a function type can return an error
 pub fn canReturnError(comptime Fn: type) bool {
@@ -20,10 +19,13 @@ pub const MemberFnType = enum {
 
 /// Returns whether a function is a member function
 /// and whether it takes by value, ptr, or const ptr
-pub fn memberFnType(comptime Container: type, comptime fn_name: []const u8) MemberFnType {
+pub fn memberFnTypeByName(comptime Container: type, comptime fn_name: []const u8) MemberFnType {
     if (!@hasDecl(Container, fn_name)) util.compileError("Function `{s}` is not part of the `{s}` namespace.", .{ fn_name, @typeName(Container) });
+    return memberFnType(Container, @field(Container, fn_name));
+}
 
-    const params = @typeInfo(@TypeOf(@field(Container, fn_name))).@"fn".params;
+pub fn memberFnType(comptime Container: type, comptime Func: anytype) MemberFnType {
+    const params = @typeInfo(Func).@"fn".params;
     if (comptime params.len == 0) return .non_member;
 
     const Param0 = params[0].type orelse return .non_member;
@@ -65,22 +67,29 @@ pub fn CombineStructTypes(comptime types: []const type) type {
         field_count += @typeInfo(T).@"struct".fields.len;
     }
 
-    var field_types: [field_count]std.builtin.Type.StructField = undefined;
-    var field_types_i: usize = 0;
+    var field_names_buffer: [field_count][]const u8 = undefined;
+    var field_names: std.ArrayList([]const u8) = .initBuffer(&field_names_buffer);
+
+    var field_types_buffer: [field_count]type = undefined;
+    var field_types: std.ArrayList(type) = .initBuffer(&field_types_buffer);
+
+    var field_attrs_buffer: [field_count]std.builtin.Type.StructField.Attributes = undefined;
+    var field_attrs: std.ArrayList(std.builtin.Type.StructField.Attributes) = .initBuffer(&field_attrs_buffer);
 
     for (types) |T| {
-        for (std.meta.fields(T)) |field| {
-            field_types[field_types_i] = field;
-            field_types_i += 1;
+        field_names.appendSliceAssumeCapacity(std.meta.fieldNames(T));
+
+        for (@typeInfo(T).@"struct".fields) |field| {
+            field_types.appendAssumeCapacity(field.type);
+            field_attrs.appendAssumeCapacity(.{
+                .default_value_ptr = field.default_value_ptr,
+                .@"comptime" = field.is_comptime,
+                .@"align" = field.alignment,
+            });
         }
     }
 
-    return @Type(.{ .@"struct" = .{
-        .fields = &field_types,
-        .decls = &.{},
-        .layout = .auto,
-        .is_tuple = false,
-    } });
+    return @Struct(.auto, null, &field_names_buffer, &field_types_buffer, &field_attrs_buffer);
 }
 
 test CombineStructTypes {
@@ -97,29 +106,25 @@ test CombineStructTypes {
 
 pub fn CombineEnumTypes(comptime types: []const type) type {
     var field_count: usize = 0;
+    var is_exhaustive = true;
 
     for (types) |T| {
-        if (comptime !@typeInfo(T).@"enum".is_exhaustive) @compileError("Cannot combine enums that are non-exhaustive");
+        if (!@typeInfo(T).@"enum".is_exhaustive) is_exhaustive = false;
         field_count += @typeInfo(T).@"enum".fields.len;
     }
 
-    var field_types: [field_count]std.builtin.Type.EnumField = undefined;
-    var field_types_i: usize = 0;
+    var field_names_buffer: [field_count][]const u8 = &.{};
+    var field_names: std.ArrayList([]const u8) = .initBuffer(&field_names_buffer);
+    for (types) |T| field_names.appendAssumeCapacity(std.meta.fieldNames(T));
 
-    for (types) |T| for (std.meta.fields(T)) |field| {
-        field_types[field_types_i] = std.builtin.Type.EnumField{
-            .name = field.name,
-            .value = field_types_i,
-        };
-        field_types_i += 1;
-    };
+    const TagInt = std.math.IntFittingRange(0, field_count);
 
-    return @Type(.{ .@"enum" = std.builtin.Type.Enum{
-        .fields = &field_types,
-        .decls = &.{},
-        .tag_type = std.math.IntFittingRange(0, field_count),
-        .is_exhaustive = true,
-    } });
+    return @Enum(
+        TagInt,
+        if (is_exhaustive) .exhaustive else .nonexhaustive,
+        &field_names_buffer,
+        &std.simd.iota(TagInt, field_count),
+    );
 }
 
 fn DeclsToTuple(comptime T: type) type {
@@ -145,22 +150,35 @@ pub fn checkMixin(comptime T: type, comptime Mixin: type) void {
     }
 }
 
-pub fn EnumFromLiterals(comptime literals: []const EnumLiteral) type {
-    var fields: [literals.len]std.builtin.Type.EnumField = undefined;
+pub fn prettyPrint(comptime T: type) *const [std.fmt.count(prettyPrintFmt(T), prettyPrintArgs(T)):0]u8 {
+    return std.fmt.comptimePrint(prettyPrintFmt(T), prettyPrintArgs(T));
+}
 
-    for (&fields, literals, 0..) |*o, lit, i| {
-        o.* = std.builtin.Type.EnumField{
-            .name = @tagName(lit),
-            .value = i,
-        };
+fn prettyPrintFmt(comptime T: type) []const u8 {
+    var fmt: []const u8 = "struct {{";
+    inline for (std.meta.fields(T)) |_| {
+        fmt = fmt ++ "{s}: {s} ";
+    }
+    return fmt ++ "}},";
+}
+
+fn PrettyPrintArgs(comptime T: type) type {
+    return std.meta.Tuple(&[_]type{[]const u8} ** (std.meta.fields(T).len * 2));
+}
+
+fn prettyPrintArgs(comptime T: type) PrettyPrintArgs(T) {
+    var out: PrettyPrintArgs(T) = undefined;
+
+    const MAX_DEPTH = 10;
+    comptime var i: usize = 0;
+    const out_fields = std.meta.fields(T);
+    inline for (out_fields) |field| {
+        out[i] = field.name;
+        out[i + 1] = if (util.isContainer(field.type) and i / 2 < MAX_DEPTH) prettyPrint(field.type) else @typeName(field.type);
+        i += 2;
     }
 
-    return @Type(.{ .@"enum" = std.builtin.Type.Enum{
-        .fields = &fields,
-        .decls = &.{},
-        .tag_type = std.math.IntFittingRange(0, literals.len),
-        .is_exhaustive = true,
-    } });
+    return out;
 }
 
 pub const Utp = *const opaque {};

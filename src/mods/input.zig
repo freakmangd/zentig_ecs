@@ -5,8 +5,8 @@ const log = std.log.scoped(.zentig_input);
 const Options = struct {
     max_controllers: usize = 4,
     update_stage: struct {
-        stage: ztg.meta.EnumLiteral = .pre_update,
-        label: ztg.meta.EnumLiteral = .body,
+        stage: @EnumLiteral() = .pre_update,
+        label: @EnumLiteral() = .body,
         order: ztg.SystemOrder = .during,
     } = .{},
 };
@@ -18,41 +18,23 @@ pub fn Build(
     comptime options: Options,
 ) type {
     const ButtonBindings = blk: {
-        var buttons_struct_fields: [std.meta.fields(Button).len]std.builtin.Type.StructField = undefined;
-        for (&buttons_struct_fields, std.enums.values(Button)) |*field, a| {
-            field.* = std.builtin.Type.StructField{
-                .name = @tagName(a),
-                .type = []const Wrapper.ButtonType,
-                .alignment = @alignOf([]const Wrapper.ButtonType),
-                .is_comptime = false,
-                .default_value_ptr = @ptrCast(&@as([]const Wrapper.ButtonType, &.{})),
-            };
-        }
-        break :blk @Type(.{ .@"struct" = .{
-            .fields = &buttons_struct_fields,
-            .decls = &.{},
-            .layout = .auto,
-            .is_tuple = false,
-        } });
+        break :blk @Struct(
+            .auto,
+            null,
+            std.meta.fieldNames(Button),
+            &@splat([]const Wrapper.ButtonType),
+            &@splat(.{ .default_value_ptr = @ptrCast(&@as([]const Wrapper.ButtonType, &.{})) }),
+        );
     };
 
     const AxesBindings = blk: {
-        var axes_struct_fields: [std.meta.fields(Axis).len]std.builtin.Type.StructField = undefined;
-        for (&axes_struct_fields, std.enums.values(Axis)) |*field, a| {
-            field.* = std.builtin.Type.StructField{
-                .name = @tagName(a),
-                .type = []const Wrapper.AxisType,
-                .alignment = @alignOf([]const Wrapper.AxisType),
-                .is_comptime = false,
-                .default_value_ptr = @ptrCast(&@as([]const Wrapper.AxisType, &.{})),
-            };
-        }
-        break :blk @Type(.{ .@"struct" = .{
-            .fields = &axes_struct_fields,
-            .decls = &.{},
-            .layout = .auto,
-            .is_tuple = false,
-        } });
+        break :blk @Struct(
+            .auto,
+            null,
+            std.meta.fieldNames(Axis),
+            &@splat([]const Wrapper.AxisType),
+            &@splat(.{ .default_value_ptr = @ptrCast(&@as([]const Wrapper.AxisType, &.{})) }),
+        );
     };
 
     const AddBindings = struct {

@@ -3,7 +3,7 @@ const ztg = @import("init.zig");
 
 const meta = ztg.meta;
 const Entity = ztg.Entity;
-const TypeMap = ztg.meta.TypeMap;
+const TypeSet = ztg.meta.TypeSet;
 
 /// Takes tuple of types: `.{ Player, Position, Sprite }` and returns
 /// an object that can be used to iterate through entities that have
@@ -125,31 +125,31 @@ pub fn Query(comptime query_types: anytype) type {
 }
 
 fn classifyTypes(comptime query_types: anytype) struct {
-    required: TypeMap,
-    optional: TypeMap,
-    with: TypeMap,
-    without: TypeMap,
+    required: TypeSet,
+    optional: TypeSet,
+    with: TypeSet,
+    without: TypeSet,
 } {
-    var required: TypeMap = .{};
-    var optional: TypeMap = .{};
-    var with: TypeMap = .{};
-    var without: TypeMap = .{};
+    var required: TypeSet = .empty;
+    var optional: TypeSet = .empty;
+    var with: TypeSet = .empty;
+    var without: TypeSet = .empty;
 
     for (query_types) |T| {
         if (T == Entity) continue;
 
         switch (@typeInfo(T)) {
-            .optional => |opt| optional.append(opt.child),
+            .optional => |opt| optional.append(opt.child, {}),
             .@"struct" => str: {
                 if (@hasDecl(T, "QueryWith")) {
-                    with.append(T.QueryWith);
+                    with.append(T.QueryWith, {});
                     break :str;
                 } else if (@hasDecl(T, "QueryWithout")) {
-                    without.append(T.QueryWithout);
+                    without.append(T.QueryWithout, {});
                     break :str;
                 }
 
-                required.append(T);
+                required.append(T, {});
             },
             else => |t| @compileError(std.fmt.comptimePrint("Type in query cannot be of type {}", .{@tagName(t)})),
         }

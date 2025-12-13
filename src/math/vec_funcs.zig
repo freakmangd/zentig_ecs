@@ -204,9 +204,8 @@ pub fn GenerateFunctions(comptime Self: type) type {
         }
 
         const Component = blk: {
-            var info = @typeInfo(std.meta.FieldEnum(Self)).@"enum";
-            info.tag_type = i32;
-            break :blk @Type(.{ .@"enum" = info });
+            const field_names = std.meta.fieldNames(Self);
+            break :blk @Enum(i32, .exhaustive, field_names, &std.simd.iota(i32, field_names.len));
         };
 
         /// Returns the vector with its components ordered in the method defined in `comps`

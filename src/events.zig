@@ -102,19 +102,25 @@ fn EventArray(comptime T: type) type {
     };
 }
 
-pub fn EventPools(comptime event_types: anytype) type {
+pub fn EventPools(comptime event_types: ztg.meta.TypeSet) type {
     const Inner = blk: {
-        var tb = ztg.meta.TypeBuilder{};
-        inline for (event_types) |T| {
-            tb.appendTupleField(EventArray(T), &EventArray(T){});
+        var types: [event_types.types.len]type = undefined;
+        for (event_types.types, &types) |T, *t| {
+            t.* = EventArray(T);
         }
-        break :blk tb.Build();
+        break :blk @Tuple(&types);
     };
 
     return struct {
         const Self = @This();
 
-        inner: Inner = .{},
+        inner: Inner = inner: {
+            var inner: Inner = undefined;
+            for (0..event_types.types.len) |i| {
+                inner[i] = .{};
+            }
+            break :inner inner;
+        },
 
         pub fn deinit(self: *Self, alloc: std.mem.Allocator) void {
             inline for (std.meta.fields(Inner)) |field| {
@@ -123,7 +129,8 @@ pub fn EventPools(comptime event_types: anytype) type {
         }
 
         pub fn getPtr(self: *Self, comptime EventType: type) *EventArray(EventType) {
-            const field_name = comptime std.fmt.comptimePrint("{}", .{util.indexOfType(event_types, EventType) orelse util.compileError("Event `{s}` was not registered.", .{@typeName(EventType)})});
+            const field_name = comptime std.fmt.comptimePrint("{}", .{event_types.indexOf(EventType) orelse
+                util.compileError("Event `{s}` was not registered.", .{@typeName(EventType)})});
             return &@field(self.inner, field_name);
         }
 
