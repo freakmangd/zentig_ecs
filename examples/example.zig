@@ -46,7 +46,7 @@ const player = struct {
         // Use the PlayerBundle struct as a blueprint
         const plr_ent = try com.newEntWith(player.PlayerBundle{
             .{ .name = "Player" },
-            ztg.base.Transform.initWith(.{ .pos = ztg.vec3(10, 10, 0) }),
+            ztg.base.Transform.fromPos(.init(10, 10, 0)),
         });
 
         try plr_ent.giveComponents(.{Mover{
@@ -76,7 +76,7 @@ const Mover = struct {
         // A default transform is provided in case the entity doesnt have one.
         // The defaults of a transform place it at { 0, 0, 0 } with a scale of
         // { 1, 1, 1 } and a rotation of 0.
-        if (!com.checkEntHas(ent, ztg.base.Transform)) try com.giveComponents(ent, .{ztg.base.Transform{}});
+        if (!com.checkEntHas(ent, ztg.base.Transform)) try com.giveComponents(ent, .{ztg.base.Transform.identity});
     }
 
     pub fn include(comptime wb: *ztg.WorldBuilder) void {
@@ -97,11 +97,11 @@ const Mover = struct {
 };
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const alloc = gpa.allocator();
+    var dba_state: std.heap.DebugAllocator(.{}) = .init;
+    const gpa = dba_state.allocator();
 
     // Init the world
-    var world = try MyWorld.init(alloc);
+    var world: MyWorld = try .init(gpa, .{});
     defer world.deinit();
 
     // runs the .load stage

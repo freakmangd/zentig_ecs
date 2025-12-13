@@ -5,7 +5,7 @@ const ztg = @import("zentig");
 const testing = std.testing;
 
 test "ztg.World" {
-    var world = try game_file.MyWorld.init(std.testing.allocator);
+    var world = try game_file.MyWorld.init(std.testing.allocator, .{});
     defer world.deinit();
 
     try world.runStageList(&.{ .init, .update });

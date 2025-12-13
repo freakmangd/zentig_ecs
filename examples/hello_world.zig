@@ -41,7 +41,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
-    var world = try World.init(alloc);
+    var world = try World.init(alloc, .{});
     defer world.deinit();
 
     try world.runStage(.load);
