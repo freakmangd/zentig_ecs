@@ -227,7 +227,7 @@ test "basic usage" {
     const com = w.commands();
 
     _ = try com.newEntWith(.{
-        ztg.base.Transform{},
+        ztg.base.Transform.identity,
         test_mod.MyComponent{
             .speed = 1_000,
             .dir = .init(0.7, 2),
