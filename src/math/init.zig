@@ -170,9 +170,31 @@ pub fn divf32(a: anytype, b: anytype) error{DivideByZero}!f32 {
     return div(f32, a, b);
 }
 
+/// Returns a circular difference between two angles
+/// Takes angles in radians
 fn angleDifference(from: anytype, to: anytype) @TypeOf(from, to) {
-    const difference = (to - from) % std.math.tau;
-    return ((2.0 * difference) % std.math.tau) - difference;
+    const difference = @mod(to - from, std.math.tau);
+    return @mod(2 * difference, std.math.tau) - difference;
+}
+
+test angleDifference {
+    const expected = std.math.degreesToRadians(-10);
+    const from = std.math.degreesToRadians(350);
+    const to = std.math.degreesToRadians(-20);
+
+    try std.testing.expectApproxEqRel(expected, angleDifference(from, to), std.math.floatEps(f32));
+}
+
+/// Returns a circular difference between two angles
+/// Takes angles in degrees
+/// The difference between the angles 350 and 20 is 30
+fn angleDifferenceDegrees(from: anytype, to: anytype) @TypeOf(from, to) {
+    const difference = @mod(to - from, 360);
+    return @mod(2 * difference, 360) - difference;
+}
+
+test angleDifferenceDegrees {
+    try std.testing.expectApproxEqRel(30, angleDifferenceDegrees(350, 20), std.math.floatEps(f32));
 }
 
 /// Clamps v between 0 and 1

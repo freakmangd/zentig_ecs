@@ -36,17 +36,18 @@ pub const Vec2 = @import("math/vec2.zig").Vec2;
 pub const Vec3 = @import("math/vec3.zig").Vec3;
 pub const Vec4 = @import("math/vec4.zig").Vec4;
 
-pub const vec2 = Vec2.init;
-pub const splat2 = Vec2.splat;
 pub const from2 = Vec2.from;
-
-pub const vec3 = Vec3.init;
-pub const splat3 = Vec3.splat;
 pub const from3 = Vec3.from;
-
-pub const vec4 = Vec4.init;
-pub const splat4 = Vec4.splat;
 pub const from4 = Vec4.from;
+
+pub const vec2 = @compileError("Use .init");
+pub const splat2 = @compileError("Use .splat");
+
+pub const vec3 = @compileError("Use .init");
+pub const splat3 = @compileError("Use .splat");
+
+pub const vec4 = @compileError("Use .init");
+pub const splat4 = @compileError("Use .splat");
 
 pub const WorldBuilder = @import("worldbuilder.zig");
 pub const Commands = @import("commands.zig");

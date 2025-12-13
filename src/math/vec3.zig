@@ -18,7 +18,11 @@ pub const Vec3 = extern struct {
     pub const forward: Vec3 = .{ .z = 1 };
     pub const backward: Vec3 = .{ .z = -1 };
 
-    pub fn init(x: anytype, y: anytype, z: anytype) Vec3 {
+    pub fn init(x: f32, y: f32, z: f32) Vec3 {
+        return .{ .x = x, .y = y, .z = z };
+    }
+
+    pub fn initAny(x: anytype, y: anytype, z: anytype) Vec3 {
         return .{
             .x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x,
             .y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y,
@@ -26,7 +30,13 @@ pub const Vec3 = extern struct {
         };
     }
 
-    pub fn set(self: *Vec3, x: anytype, y: anytype, z: anytype) void {
+    pub fn set(self: *Vec3, x: f32, y: f32, z: f32) void {
+        self.x = x;
+        self.y = y;
+        self.z = z;
+    }
+
+    pub fn setAny(self: *Vec3, x: anytype, y: anytype, z: anytype) void {
         self.x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x;
         self.y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y;
         self.z = if (comptime @typeInfo(@TypeOf(z)) == .int) @floatFromInt(z) else z;

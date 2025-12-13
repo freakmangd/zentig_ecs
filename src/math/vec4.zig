@@ -21,7 +21,14 @@ pub const Vec4 = extern struct {
     pub const inward: Vec4 = .{ .w = 1 };
     pub const outward: Vec4 = .{ .w = -1 };
 
-    pub fn init(x: anytype, y: anytype, z: anytype, w: anytype) Vec4 {
+    /// Shorthand for .{ .w = 1 }
+    pub const identity: Vec4 = .{ .w = 1 };
+
+    pub fn init(x: f32, y: f32, z: f32, w: f32) Vec4 {
+        return .{ .x = x, .y = y, .z = z, .w = w };
+    }
+
+    pub fn initAny(x: anytype, y: anytype, z: anytype, w: anytype) Vec4 {
         return .{
             .x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x,
             .y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y,
@@ -30,15 +37,19 @@ pub const Vec4 = extern struct {
         };
     }
 
-    pub fn set(self: *Vec4, x: anytype, y: anytype, z: anytype, w: anytype) void {
+    pub fn set(self: *Vec4, x: f32, y: f32, z: f32, w: f32) void {
+        self.x = x;
+        self.y = y;
+        self.z = z;
+        self.w = w;
+    }
+
+    pub fn setAny(self: *Vec4, x: anytype, y: anytype, z: anytype, w: anytype) void {
         self.x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x;
         self.y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y;
         self.z = if (comptime @typeInfo(@TypeOf(z)) == .int) @floatFromInt(z) else z;
         self.w = if (comptime @typeInfo(@TypeOf(w)) == .int) @floatFromInt(w) else w;
     }
-
-    /// Shorthand for .{ .w = 1 }
-    pub const identity: Vec4 = .{ .w = 1 };
 
     /// Returns T with all of its components set to the original vector's
     /// T's only required components must be `x`, `y`, `z`, and `w`

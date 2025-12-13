@@ -17,14 +17,23 @@ pub const Vec2 = extern struct {
     pub const up: Vec2 = .{ .y = 1 };
     pub const down: Vec2 = .{ .y = -1 };
 
-    pub fn init(x: anytype, y: anytype) Vec2 {
+    pub fn init(x: f32, y: f32) Vec2 {
+        return .{ .x = x, .y = y };
+    }
+
+    pub fn initAny(x: anytype, y: anytype) Vec2 {
         return .{
             .x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x,
             .y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y,
         };
     }
 
-    pub fn set(self: *Vec2, x: anytype, y: anytype) void {
+    pub fn set(self: *Vec2, x: f32, y: f32) void {
+        self.x = x;
+        self.y = y;
+    }
+
+    pub fn setAny(self: *Vec2, x: anytype, y: anytype) void {
         self.x = if (comptime @typeInfo(@TypeOf(x)) == .int) @floatFromInt(x) else x;
         self.y = if (comptime @typeInfo(@TypeOf(y)) == .int) @floatFromInt(y) else y;
     }
