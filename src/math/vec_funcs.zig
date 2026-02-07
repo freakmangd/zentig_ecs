@@ -305,6 +305,8 @@ pub fn isBitcastable(comptime Self: type, comptime Other: type) bool {
             other_ti.vector.len == s_fields.len and
             other_ti.vector.child == f32) break :blk true;
 
+        if (other_ti == .array) break :blk true;
+
         if (other_ti.@"struct".layout != .@"extern") break :blk false;
 
         const o_fields: []const builtin.Type.StructField = other_ti.@"struct".fields;

@@ -16,6 +16,16 @@ pub const Vec2 = extern struct {
     pub const left: Vec2 = .{ .x = -1 };
     pub const up: Vec2 = .{ .y = 1 };
     pub const down: Vec2 = .{ .y = -1 };
+    pub const flip_x: @This() = flip: {
+        var v = one;
+        v.x = -1;
+        break :flip v;
+    };
+    pub const flip_y: @This() = flip: {
+        var v = one;
+        v.y = -1;
+        break :flip v;
+    };
 
     pub fn init(x: f32, y: f32) Vec2 {
         return .{ .x = x, .y = y };

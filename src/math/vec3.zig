@@ -17,6 +17,21 @@ pub const Vec3 = extern struct {
     pub const down: Vec3 = .{ .y = -1 };
     pub const forward: Vec3 = .{ .z = 1 };
     pub const backward: Vec3 = .{ .z = -1 };
+    pub const flip_x: @This() = flip: {
+        var v = one;
+        v.x = -1;
+        break :flip v;
+    };
+    pub const flip_y: @This() = flip: {
+        var v = one;
+        v.y = -1;
+        break :flip v;
+    };
+    pub const flip_z: @This() = flip: {
+        var v = one;
+        v.z = -1;
+        break :flip v;
+    };
 
     pub fn init(x: f32, y: f32, z: f32) Vec3 {
         return .{ .x = x, .y = y, .z = z };

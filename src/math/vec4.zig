@@ -20,6 +20,26 @@ pub const Vec4 = extern struct {
     pub const backward: Vec4 = .{ .z = -1 };
     pub const inward: Vec4 = .{ .w = 1 };
     pub const outward: Vec4 = .{ .w = -1 };
+    pub const flip_x: @This() = flip: {
+        var v = one;
+        v.x = -1;
+        break :flip v;
+    };
+    pub const flip_y: @This() = flip: {
+        var v = one;
+        v.y = -1;
+        break :flip v;
+    };
+    pub const flip_z: @This() = flip: {
+        var v = one;
+        v.z = -1;
+        break :flip v;
+    };
+    pub const flip_w: @This() = flip: {
+        var v = one;
+        v.w = -1;
+        break :flip v;
+    };
 
     /// Shorthand for .{ .w = 1 }
     pub const identity: Vec4 = .{ .w = 1 };

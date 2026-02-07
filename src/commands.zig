@@ -179,6 +179,10 @@ pub fn hasIncluded(self: Commands, comptime Namespace: type) bool {
     return self.vtable.has_included(ztg.meta.utpOf(Namespace));
 }
 
+pub fn worldPtr(self: Commands, World: type) *World {
+    return @ptrCast(@alignCast(self.ctx));
+}
+
 fn panicOnUnregistered(comptime T: type, comptime t: enum { component, resource }) noreturn {
     switch (t) {
         .component => std.debug.panic("Component of type {s} has not been registered, use addComponents in WorldBuilder to register a component.", .{@typeName(T)}),
