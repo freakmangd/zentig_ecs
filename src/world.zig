@@ -34,6 +34,7 @@ pub fn World(comptime options: struct {
     return struct {
         const Self = @This();
 
+        user_io: std.Io,
         user_allocator: Allocator,
         frame_arena: std.heap.ArenaAllocator,
         rng: std.Random.DefaultPrng,
@@ -54,16 +55,16 @@ pub fn World(comptime options: struct {
         /// All systems that request an `Allocator` will get the one passed here.
         pub fn init(user_allocator: std.mem.Allocator, init_opt: struct {
             rng_seed: ?u64 = null,
+            /// requesting systems will get this Io, it is also used to
+            /// get a millitimestamp seed for RNG if rng_seed is not provided
+            ///
+            /// if left null, systems will be provided a std.Io.Threaded.init_single_threaded
+            io: ?std.Io = null,
         }) !Self {
             if (comptime builtin.mode == .Debug) {
                 if (options.warnings.len > 0)
                     ztg.log.warn("\n====== World was constructed with warnings: ======\n{s}", .{options.warnings});
-
-                if (options.max_entities > 500_000) ztg.log.warn("It isn't recommended to have a max_entities count over 500,000 as it could cause unstable performance.");
             }
-
-            try options.StagesList.init(user_allocator);
-            errdefer options.StagesList.deinit();
 
             const resources = try user_allocator.create(options.Resources);
             resources.* = .{};
@@ -74,10 +75,18 @@ pub fn World(comptime options: struct {
             errdefer user_allocator.destroy(entities);
 
             var temp_io: std.Io.Threaded = .init_single_threaded;
-            const now = std.Io.Clock.now(.real, temp_io.io()) catch std.Io.Timestamp.zero;
+            const now = std.Io.Clock.now(.real, init_opt.io orelse temp_io.io()) catch std.Io.Timestamp.zero;
 
             var self: Self = .{
                 .user_allocator = user_allocator,
+                .user_io = init_opt.io orelse .{
+                    .vtable = @ptrFromInt(@alignOf(std.Io.VTable)),
+                    .userdata = userdata: {
+                        const userdata = try user_allocator.create(std.Io.Threaded);
+                        userdata.* = .init_single_threaded;
+                        break :userdata userdata;
+                    },
+                },
                 .frame_arena = .init(std.heap.page_allocator),
                 .rng = .init(init_opt.rng_seed orelse @bitCast(now.toMilliseconds())),
                 .next_ent = @enumFromInt(0),
@@ -121,8 +130,11 @@ pub fn World(comptime options: struct {
         }
 
         pub fn deinit(self: *Self) void {
-            options.StagesList.deinit();
             ztg.profiler.deinit();
+
+            if (@intFromPtr(self.user_io.vtable) == @alignOf(std.Io.VTable)) {
+                self.user_allocator.destroy(@as(*const std.Io.Threaded, @ptrCast(@alignCast(self.user_io.userdata.?))));
+            }
 
             self.postSystemUpdate() catch |err| {
                 ztg.log.err("Found error {} while trying to clean up world for deinit.", .{err});
@@ -218,10 +230,6 @@ pub fn World(comptime options: struct {
             try options.StagesList.runStage(self, stage_id, false, {});
         }
 
-        pub fn runStageInParallel(self: *Self, comptime stage_id: options.StagesList.StageField) !void {
-            try options.StagesList.runStageInParallel(self, stage_id, false, {});
-        }
-
         /// Runs a stage and catches every error ensures every system in the stage is run. Useful for stages
         /// that are run at the end to free resources.
         /// Calls errCallback whenever an error occurs and passes it the error.
@@ -260,12 +268,6 @@ pub fn World(comptime options: struct {
         pub fn runUpdateStages(self: *Self) !void {
             inline for (&.{ .pre_update, .update, .post_update }) |stage| {
                 try runStage(self, stage);
-            }
-        }
-
-        pub fn runUpdateStagesIp(self: *Self) !void {
-            inline for (&.{ .pre_update, .update, .post_update }) |stage| {
-                try runStageInParallel(self, stage);
             }
         }
 
@@ -820,9 +822,6 @@ pub fn World(comptime options: struct {
 
         /// Generates the arguments tuple for a desired system based on its parameters.
         /// You shouldn't need to use this, just add the function to the desired stage.
-        ///
-        /// There's a bug since 0.15.1 where passing a re-sliced slice of ?type to a function
-        /// causes a compiler segfault, so if you're calling this function be careful
         pub fn initParamsForSystem(self: *Self, alloc: std.mem.Allocator, comptime params: []const std.builtin.Type.Fn.Param) Allocator.Error!ParamsForSystem(params) {
             if (comptime params.len == 0) return .{};
 
@@ -842,6 +841,8 @@ pub fn World(comptime options: struct {
                 return self.rng.random();
             } else if (T == ztg.FrameAlloc) {
                 return .{self.frame_arena.allocator()};
+            } else if (T == std.Io) {
+                return self.io();
             } else if (@typeInfo(T) == .@"struct" and @hasDecl(T, "IsQueryType")) {
                 return self.query(alloc, T);
             } else if (@typeInfo(T) == .@"struct" and @hasDecl(T, "EventSendType")) {
@@ -893,6 +894,14 @@ pub fn World(comptime options: struct {
         fn getListById(self: *Self, id: util.CompId) !*ComponentArray {
             if (comptime builtin.mode == .Debug) if (id >= self.comp_arrays.len) return error.UnregisteredComponent;
             return &self.comp_arrays[id];
+        }
+
+        fn io(self: Self) std.Io {
+            if (@intFromPtr(self.user_io.vtable) == @alignOf(std.Io.VTable)) {
+                const impl: *std.Io.Threaded = @ptrCast(@alignCast(self.user_io.userdata.?));
+                return impl.io();
+            }
+            return self.user_io;
         }
 
         fn commandsCast(ptr: *anyopaque) *Self {
