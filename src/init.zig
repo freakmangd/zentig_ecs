@@ -62,6 +62,12 @@ pub const log = std.log.scoped(.zentig);
 pub const meta = @import("etc/meta.zig");
 pub const profiler = @import("etc/profiler.zig");
 
+pub const Mask = @import("mask.zig").Mask;
+
+pub const Array2d = @import("etc/dimensional_array.zig").Array2d;
+pub const Array3d = @import("etc/dimensional_array.zig").Array3d;
+pub const array_nd = @import("etc/dimensional_array.zig");
+
 /// A resource that can be requested, represents an arena allocator that gets reset each frame
 pub const FrameAlloc = struct { std.mem.Allocator };
 

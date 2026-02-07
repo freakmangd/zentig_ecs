@@ -19,20 +19,30 @@ const InputWrapper = struct {
     pub const ButtonType = Buttons;
     // there are no axes in this example
     pub const AxisType = void;
+    // the source is arbitrary arrays, usually this would look something like
+    // union(enum) {
+    //     keyboard,
+    //     gamepad: usize,
+    // }
+    pub const InputSource = void;
 
-    pub fn isButtonPressed(_: usize, button: ButtonType) bool {
+    pub fn isButtonPressed(source: void, button: ButtonType) bool {
+        _ = source;
         return input_state[@intFromEnum(button)].pressed;
     }
 
-    pub fn isButtonDown(_: usize, button: ButtonType) bool {
+    pub fn isButtonDown(source: void, button: ButtonType) bool {
+        _ = source;
         return input_state[@intFromEnum(button)].down;
     }
 
-    pub fn isButtonReleased(_: usize, button: ButtonType) bool {
+    pub fn isButtonReleased(source: void, button: ButtonType) bool {
+        _ = source;
         return input_state[@intFromEnum(button)].released;
     }
 
-    pub fn getAxis(axis: AxisType) f32 {
+    pub fn getAxis(source: void, axis: AxisType) f32 {
+        _ = source;
         _ = axis;
         return 0.0;
     }
@@ -51,12 +61,8 @@ const World = blk: {
     break :blk wb.Build();
 };
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
-
-    var world = try World.init(alloc, .{});
+pub fn main(init: std.process.Init) !void {
+    var world = try World.init(init.gpa, .{});
     defer world.deinit();
 
     // required to set up Input
@@ -64,7 +70,6 @@ pub fn main() !void {
     // required to update Input
     try world.runStage(.update);
 
-    // `input_state[0].down` is set to `false`
     std.debug.print("Update spacebar down state to `true`\n", .{});
     changeInputState();
 
@@ -72,19 +77,18 @@ pub fn main() !void {
     try world.runStage(.update);
 }
 
-const PLAYER_ONE = 0;
-
 fn ini_setupInput(input: *Input) !void {
-    try input.addBindings(0, .{
+    try input.addBindings(.{
         .buttons = .{
             .jump = &.{Buttons.space},
         },
         .axes = .{},
     });
+    _ = input.receiveController({});
 }
 
 fn up_readInput(input: Input) void {
-    std.debug.print("Is Jump down? {}\n", .{input.isDown(PLAYER_ONE, .jump)});
+    std.debug.print("Is Jump down? {}\n", .{input.controllers[0].isDown(.jump)});
 }
 
 fn changeInputState() void {
