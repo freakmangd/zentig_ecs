@@ -132,7 +132,7 @@ fn DeclsToTuple(comptime T: type) type {
     for (&types, std.meta.declarations(T)) |*o, decl| {
         o.* = @TypeOf(@field(T, decl.name));
     }
-    return std.meta.Tuple(&types);
+    return @Tuple(&types);
 }
 
 pub fn declsToTuple(comptime T: type) DeclsToTuple(T) {
@@ -163,7 +163,7 @@ fn prettyPrintFmt(comptime T: type) []const u8 {
 }
 
 fn PrettyPrintArgs(comptime T: type) type {
-    return std.meta.Tuple(&[_]type{[]const u8} ** (std.meta.fields(T).len * 2));
+    return @Tuple(&@as([std.meta.fields(T).len * 2]type, @splat([]const u8)));
 }
 
 fn prettyPrintArgs(comptime T: type) PrettyPrintArgs(T) {

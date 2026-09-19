@@ -301,7 +301,7 @@ pub fn Build(
         fn update_Self(self: *Self) void {
             for (&self.controllers) |*ct| {
                 if (comptime std.meta.fields(Button).len > 0) {
-                    ct.buttons = Controller.ButtonsBitSet.initEmpty();
+                    ct.buttons = .empty;
                 }
                 if (comptime std.meta.fields(Axis).len > 0) {
                     for (ct.axis_bindings.items) |ab| ct.axes[ab.index] = 0;
@@ -356,10 +356,10 @@ fn ControllerBuilder(
         const Self = @This();
         pub const ButtonsBitSet: type = std.StaticBitSet(buttons_len * 3);
 
-        buttons: ButtonsBitSet = ButtonsBitSet.initEmpty(),
-        button_bindings: std.ArrayListUnmanaged(ButtonBinding) = .{},
+        buttons: ButtonsBitSet = .empty,
+        button_bindings: std.ArrayList(ButtonBinding) = .empty,
 
-        axes: [axes_len]f32 = .{0.0} ** axes_len,
-        axis_bindings: std.ArrayListUnmanaged(AxisBinding) = .{},
+        axes: [axes_len]f32 = @splat(0.0),
+        axis_bindings: std.ArrayList(AxisBinding) = .empty,
     };
 }

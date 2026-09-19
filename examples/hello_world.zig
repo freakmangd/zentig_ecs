@@ -37,9 +37,9 @@ fn spawnEntities(com: ztg.Commands) !void {
 
 pub fn main() !void {
     // Standard allocator setup
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    var dba: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = dba.deinit();
+    const alloc = dba.allocator();
 
     var world = try World.init(alloc, .{});
     defer world.deinit();

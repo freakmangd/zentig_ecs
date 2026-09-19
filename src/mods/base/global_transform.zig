@@ -3,7 +3,7 @@ const ztg = @import("../../init.zig");
 
 const GlobalTransform = @This();
 
-basis: ztg.zmath.Mat,
+basis: [4 * 4]f32,
 __data: struct {
     rot: ztg.Vec4,
     scale: ztg.Vec3,
@@ -11,7 +11,7 @@ __data: struct {
 },
 
 pub const identity: GlobalTransform = .{
-    .basis = ztg.zmath.identity(),
+    .basis = ztg.math.flatMat(ztg.zmath.identity()),
     .__data = .{
         .rot = ztg.Vec4.identity,
         .scale = ztg.Vec3.one,
@@ -19,7 +19,7 @@ pub const identity: GlobalTransform = .{
 };
 
 pub fn getPos(self: GlobalTransform) ztg.Vec3 {
-    return ztg.Vec3.fromZMath(self.basis[3]);
+    return ztg.Vec3.fromZMath(self.basis[3 * 4 ..][0..4].*);
 }
 
 pub fn getRot(self: GlobalTransform) ztg.Vec4 {
@@ -51,13 +51,13 @@ fn updateBasis(self: *GlobalTransform, com: ztg.Commands, ent: ztg.Entity) void 
         return;
     };
 
-    self.basis = ztg.zmath.mul(local_tr.getUpdatedBasis(), parent_gtr.getUpdatedBasis(com, parent_ent));
+    self.basis = ztg.math.flatMat(ztg.zmath.mul(ztg.zmath.matFromArr(local_tr.getUpdatedBasis()), ztg.zmath.matFromArr(parent_gtr.getUpdatedBasis(com, parent_ent))));
     self.__data.rot = local_tr.getRot().quatMultiply(parent_gtr.getRot());
     self.__data.scale = local_tr.getScale().scale(parent_gtr.getScale());
     self.__data.basis_is_dirty = false;
 }
 
-fn getUpdatedBasis(self: *GlobalTransform, com: ztg.Commands, ent: ztg.Entity) ztg.zmath.Mat {
+fn getUpdatedBasis(self: *GlobalTransform, com: ztg.Commands, ent: ztg.Entity) [4 * 4]f32 {
     if (self.__data.basis_is_dirty) self.updateBasis(com, ent);
     return self.basis;
 }

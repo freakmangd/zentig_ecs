@@ -7,7 +7,7 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
 
         const IndexTagType = std.math.IntFittingRange(0, size + 1);
         pub const Index = enum(IndexTagType) {
-            NULL = std.math.maxInt(IndexTagType),
+            null = std.math.maxInt(IndexTagType),
             _,
 
             pub fn toEntity(idx: Index) ztg.Entity {
@@ -19,20 +19,20 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
             }
         };
 
-        ents: [size]Index = .{Index.NULL} ** size,
-        idx_lookup: [size]Index = .{Index.NULL} ** size,
-        parent_lookup: [size]Index = .{Index.NULL} ** size,
+        ents: [size]Index = @splat(.null),
+        idx_lookup: [size]Index = @splat(.null),
+        parent_lookup: [size]Index = @splat(.null),
         comp_masks: [size]ComponentMask = undefined,
 
         len: usize = 0,
 
         pub fn getIndexOf(self: *const Self, ent: ztg.Entity) ?usize {
-            if (self.idx_lookup[ent.toInt()] == Index.NULL) return null;
+            if (self.idx_lookup[ent.toInt()] == .null) return null;
             return @intFromEnum(self.idx_lookup[ent.toInt()]);
         }
 
         pub fn getEntityAt(self: *const Self, idx: usize) ?ztg.Entity {
-            if (self.ents[idx] == Index.NULL) return null;
+            if (self.ents[idx] == .null) return null;
             return self.ents[idx].toEntity();
         }
 
@@ -45,12 +45,12 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
         pub fn setParent(self: *Self, ent: ztg.Entity, parent: ?ztg.Entity) !void {
             if (!self.hasEntity(ent)) return error.EntityDoesntExist;
             if (parent) |p| if (!self.hasEntity(p)) return error.ParentDoesntExist;
-            self.parent_lookup[ent.toInt()] = if (parent) |p| .fromEntity(p) else Index.NULL;
+            self.parent_lookup[ent.toInt()] = if (parent) |p| .fromEntity(p) else .null;
         }
 
         pub fn getParent(self: *const Self, ent: ztg.Entity) !?ztg.Entity {
             if (!self.hasEntity(ent)) return error.EntityDoesntExist;
-            if (self.parent_lookup[ent.toInt()] != Index.NULL) return self.parent_lookup[ent.toInt()].toEntity();
+            if (self.parent_lookup[ent.toInt()] != .null) return self.parent_lookup[ent.toInt()].toEntity();
             return null;
         }
 
@@ -63,7 +63,7 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
         }
 
         pub fn append(self: *Self, ent: ztg.Entity) void {
-            self.set(self.len, ent, ComponentMask.initEmpty());
+            self.set(self.len, ent, .empty);
             self.len += 1;
         }
 
@@ -79,20 +79,20 @@ pub fn EntityArray(comptime ComponentMask: type, comptime size: usize) type {
                 const popped = self.pop();
                 self.set(idx, popped.ent, popped.mask);
             } else {
-                self.ents[idx] = Index.NULL;
+                self.ents[idx] = .null;
                 self.len -= 1;
             }
 
-            self.idx_lookup[ent.toInt()] = Index.NULL;
-            self.comp_masks[ent.toInt()] = ComponentMask.initEmpty();
+            self.idx_lookup[ent.toInt()] = .null;
+            self.comp_masks[ent.toInt()] = .empty;
             return true;
         }
 
         pub fn pop(self: *Self) struct { ent: ztg.Entity, mask: ComponentMask } {
             const last = self.getEntityAt(self.len - 1).?;
-            self.idx_lookup[last.toInt()] = Index.NULL;
+            self.idx_lookup[last.toInt()] = .null;
             const mask = self.comp_masks[last.toInt()];
-            self.comp_masks[last.toInt()] = ComponentMask.initEmpty();
+            self.comp_masks[last.toInt()] = .empty;
 
             self.len -= 1;
 

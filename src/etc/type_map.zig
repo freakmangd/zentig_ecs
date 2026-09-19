@@ -28,7 +28,7 @@ pub fn TypeMap(comptime V: type) type {
             self.values = self.values ++ &[_]V{value};
         }
 
-        pub fn has(self: Self, T: type) bool {
+        pub fn has(comptime self: Self, T: type) bool {
             @setEvalBranchQuota(20_000);
             return comptime has_type: {
                 for (self.types) |t| {
@@ -38,7 +38,7 @@ pub fn TypeMap(comptime V: type) type {
             };
         }
 
-        pub fn indexOf(self: Self, T: type) ?usize {
+        pub fn indexOf(comptime self: Self, T: type) ?usize {
             @setEvalBranchQuota(20_000);
             return comptime index: {
                 for (self.types, 0..) |t, i| {
@@ -48,7 +48,7 @@ pub fn TypeMap(comptime V: type) type {
             };
         }
 
-        pub fn get(self: Self, T: type) ?V {
+        pub fn get(comptime self: Self, T: type) ?V {
             @setEvalBranchQuota(20_000);
             return comptime value: {
                 for (self.types, 0..) |t, i| {
@@ -58,7 +58,7 @@ pub fn TypeMap(comptime V: type) type {
             };
         }
 
-        pub fn set(self: *Self, T: type, value: V) void {
+        pub fn set(comptime self: *Self, T: type, value: V) void {
             const idx = self.indexOf(T) orelse {
                 self.append(T, value);
                 return;
@@ -67,7 +67,7 @@ pub fn TypeMap(comptime V: type) type {
             self.values = self.values[0..idx] ++ [_]V{value} ++ self.values[idx + 1 ..];
         }
 
-        pub fn nameOfIndex(self: Self, index: usize) [:0]const u8 {
+        pub fn nameOfIndex(comptime self: Self, index: usize) [:0]const u8 {
             if (@inComptime()) {
                 return @typeName(self.types[index]);
             }
@@ -78,7 +78,7 @@ pub fn TypeMap(comptime V: type) type {
             return "OUT_OF_BOUNDS_TYPE";
         }
 
-        pub fn hasUtp(self: Self, utp: ztg.meta.Utp) bool {
+        pub fn hasUtp(comptime self: Self, utp: ztg.meta.Utp) bool {
             inline for (self.types) |T| {
                 if (ztg.meta.utpOf(T) == utp) return true;
             }

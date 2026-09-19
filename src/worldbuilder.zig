@@ -60,7 +60,7 @@ pub const StageDef = struct {
     labels: ztg.ComptimeList(StageLabel),
 };
 
-pub const CompTypes = TypeMap(struct {
+pub const CompTypes = ztg.meta.TypeMap(struct {
     onRemoved: ?*const anyopaque,
     OnRemovedFn: type,
     onAdded: ?*const anyopaque,
@@ -635,7 +635,7 @@ test WorldBuilder {
 
 test "adding systems" {
     const namespace = struct {
-        var stages_were_run = [_]bool{false} ** 5;
+        var stages_were_run: [5]bool = @splat(false);
 
         pub fn include(comptime wb: *WorldBuilder) void {
             wb.addSystemsToStage(.load, sys0);

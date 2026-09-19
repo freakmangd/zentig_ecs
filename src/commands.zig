@@ -7,7 +7,6 @@ const util = @import("util.zig");
 const builtin = @import("builtin");
 
 const Allocator = std.mem.Allocator;
-const TypeMap = ztg.meta.TypeMap;
 const Entity = ztg.Entity;
 
 const Commands = @This();

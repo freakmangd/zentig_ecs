@@ -1,4 +1,5 @@
 const std = @import("std");
+const ztg = @import("../init.zig");
 const util = @import("../util.zig");
 const expectEqual = std.testing.expectEqual;
 
@@ -308,6 +309,8 @@ test swizzleVec {
     try expectEqual(@Vector(2, f32){ 2, 2 }, swizzleVec(@Vector(2, f32){ 1, 2 }, .{ 1, 1 }));
     try expectEqual(@Vector(2, f32){ 2, 1 }, swizzleVec(@Vector(2, f32){ 1, 2 }, .{ 1, 0 }));
 }
+
+pub const flatMat = ztg.zmath.matToArr;
 
 test {
     _ = @import("vec2.zig");

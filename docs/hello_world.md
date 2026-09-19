@@ -36,16 +36,15 @@ Right now, lets just create the world and try to use it:
 Starting at line 6:
 ```zig
 06:  pub fn main() !void {
-07:     // Standard allocator setup
-08:     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
-09:     defer _ = gpa.deinit();
-10:     const alloc = gpa.allocator();
-11:
-12:     var world = try World.init(alloc);
-13:     defer world.deinit();
-13:
-15:     world.runStage(.load);
-16: }
+07:     var gpa: std.heap.DebugAllocator(.{}) = .init;
+08:     defer _ = gpa.deinit();
+09:     const alloc = gpa.allocator();
+10:
+11:     var world = try World.init(alloc);
+12:     defer world.deinit();
+12:
+14:     world.runStage(.load);
+15: }
 ```
 
 The `World.runStage` function runs the `.load` stage. Which doesnt have any systems in it yet,

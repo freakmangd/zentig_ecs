@@ -15,8 +15,8 @@ pub fn ComponentArray(comptime Index: type) type {
         component_name: if (debug_info) []const u8 else void,
 
         components_data: ByteArray,
-        entities: std.ArrayListUnmanaged(ztg.Entity) = .{},
-        ent_to_comp_idx: std.AutoHashMapUnmanaged(ztg.Entity, Index) = .{},
+        entities: std.ArrayList(ztg.Entity) = .empty,
+        ent_to_comp_idx: std.hash_map.AutoHashMapUnmanaged(ztg.Entity, Index) = .empty,
 
         pub fn init(comptime T: type) Self {
             return .{

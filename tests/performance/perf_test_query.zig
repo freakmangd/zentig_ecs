@@ -25,9 +25,9 @@ pub fn include(comptime wb: *ztg.WorldBuilder) void {
 var collected_ents: usize = 0;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    var dba: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = dba.deinit();
+    const alloc = dba.allocator();
 
     var w = try World.init(alloc);
     defer w.deinit();

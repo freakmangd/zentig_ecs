@@ -4,7 +4,7 @@ const zmath = @import("zmath");
 
 const Transform = @This();
 
-basis: zmath.Mat = zmath.identity(),
+basis: [4 * 4]f32 = ztg.math.flatMat(zmath.identity()),
 /// Read only
 rotation: ztg.Vec4 = .identity,
 /// Read only
@@ -13,7 +13,7 @@ scale: ztg.Vec3 = .one,
 basis_is_dirty: bool = false,
 
 pub const identity: Transform = .{
-    .basis = zmath.identity(),
+    .basis = ztg.math.flatMat(zmath.identity()),
     .rotation = .identity,
     .scale = .one,
     .basis_is_dirty = false,
@@ -21,7 +21,7 @@ pub const identity: Transform = .{
 
 pub fn init(pos: ztg.Vec3, rot: ztg.Vec4, scale: ztg.Vec3) Transform {
     return .{
-        .basis = zmath.translation(pos.x, pos.y, pos.z),
+        .basis = ztg.math.flatMat(zmath.translation(pos.x, pos.y, pos.z)),
         .rotation = rot,
         .scale = scale,
     };
@@ -50,17 +50,17 @@ pub fn fromScale(scale: ztg.Vec3) Transform {
 }
 
 pub fn getPos(self: Transform) ztg.Vec3 {
-    return .fromZMath(self.basis[3]);
+    return .fromZMath(self.basis[3 * 4 ..][0..4].*);
 }
 
 pub fn setPos(self: *Transform, new_pos: ztg.Vec3) void {
-    self.basis[3][0] = new_pos.x;
-    self.basis[3][1] = new_pos.y;
-    self.basis[3][2] = new_pos.z;
+    ztg.zmath.storeArr3(self.basis[3 * 4 ..][0..3], new_pos.intoZMath());
 }
 
 pub fn translate(self: *Transform, by: ztg.Vec3) void {
-    self.basis[3] += by.intoZMath();
+    self.basis[3 * 4 + 0] += by.x;
+    self.basis[3 * 4 + 1] += by.y;
+    self.basis[3 * 4 + 2] += by.z;
 }
 
 pub fn getRot(self: Transform) ztg.Vec4 {
@@ -111,7 +111,7 @@ pub fn scaleBy(self: *Transform, scalar: ztg.Vec3) void {
 
 pub fn updateBasis(self: *Transform) void {
     self.basis_is_dirty = false;
-    self.basis = self.calculateLatestMatrix();
+    self.basis = ztg.math.flatMat(self.calculateLatestMatrix());
 }
 
 pub fn calculateLatestMatrix(self: Transform) zmath.Mat {
@@ -120,7 +120,7 @@ pub fn calculateLatestMatrix(self: Transform) zmath.Mat {
     return zmath.mul(mat1, zmath.translationV(self.getPos().intoZMath()));
 }
 
-pub fn getUpdatedBasis(self: *Transform) zmath.Mat {
+pub fn getUpdatedBasis(self: *Transform) [4 * 4]f32 {
     if (self.basis_is_dirty) self.updateBasis();
     return self.basis;
 }

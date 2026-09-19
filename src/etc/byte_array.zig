@@ -2,17 +2,19 @@ const std = @import("std");
 
 const ByteArray = @This();
 
-entry_size: usize,
-bytes: std.ArrayListUnmanaged(u8) = .empty,
+bytes: std.ArrayList(u8) = .empty,
+element_size: usize,
 len: usize = 0,
 
 pub fn init(comptime T: type) ByteArray {
-    return .{ .entry_size = @sizeOf(T) };
+    return .{
+        .element_size = @sizeOf(T),
+    };
 }
 
 pub fn initCapacity(comptime T: type, alloc: std.mem.Allocator, num: usize) !ByteArray {
     return .{
-        .entry_size = @sizeOf(T),
+        .element_size = @sizeOf(T),
         .bytes = try .initCapacity(alloc, @sizeOf(T) * num),
     };
 }
@@ -22,43 +24,43 @@ pub fn deinit(self: *ByteArray, alloc: std.mem.Allocator) void {
 }
 
 pub fn append(self: *ByteArray, alloc: std.mem.Allocator, entry: anytype) !void {
-    if (@sizeOf(@TypeOf(entry)) != self.entry_size) @panic("Wrong type.");
+    if (@sizeOf(@TypeOf(entry)) != self.element_size) @panic("Wrong type.");
     try self.bytes.appendSlice(alloc, std.mem.asBytes(&entry));
     self.len += 1;
 }
 
 pub fn appendAssumeCapacity(self: *ByteArray, entry: anytype) void {
-    if (@sizeOf(@TypeOf(entry)) != self.entry_size) @panic("Wrong type.");
+    if (@sizeOf(@TypeOf(entry)) != self.element_size) @panic("Wrong type.");
     self.bytes.appendSliceAssumeCapacity(std.mem.asBytes(&entry));
     self.len += 1;
 }
 
 pub fn appendPtr(self: *ByteArray, alloc: std.mem.Allocator, bytes_start: *const anyopaque) !*anyopaque {
-    try self.bytes.appendSlice(alloc, @as([*]const u8, @ptrCast(bytes_start))[0..self.entry_size]);
+    try self.bytes.appendSlice(alloc, @as([*]const u8, @ptrCast(bytes_start))[0..self.element_size]);
     self.len += 1;
-    return if (self.entry_size == 0) undefined else &self.bytes.items[(self.len - 1) * self.entry_size];
+    return if (self.element_size == 0) undefined else &self.bytes.items[(self.len - 1) * self.element_size];
 }
 
 pub fn appendPtrAssumeCapacity(self: *ByteArray, bytes_start: *const anyopaque) void {
-    self.bytes.appendSliceAssumeCapacity(@as([*]const u8, @ptrCast(bytes_start))[0..self.entry_size]);
+    self.bytes.appendSliceAssumeCapacity(@as([*]const u8, @ptrCast(bytes_start))[0..self.element_size]);
     self.len += 1;
 }
 
 pub fn getCapacity(self: ByteArray) usize {
-    if (self.entry_size == 0) return std.math.maxInt(usize);
-    return self.bytes.capacity / self.entry_size;
+    if (self.element_size == 0) return std.math.maxInt(usize);
+    return self.bytes.capacity / self.element_size;
 }
 
 pub fn set(self: *ByteArray, index: usize, bytes_start: *const anyopaque) void {
     @memcpy(
-        self.bytes.items[index * self.entry_size ..][0..self.entry_size],
-        @as([*]const u8, @ptrCast(bytes_start))[0..self.entry_size],
+        self.bytes.items[index * self.element_size ..][0..self.element_size],
+        @as([*]const u8, @ptrCast(bytes_start))[0..self.element_size],
     );
 }
 
 pub fn get(self: ByteArray, index: usize) *anyopaque {
-    if (self.entry_size == 0) return @ptrFromInt(std.math.maxInt(usize));
-    return &self.bytes.items[index * self.entry_size];
+    if (self.element_size == 0) return @ptrFromInt(std.math.maxInt(usize));
+    return &self.bytes.items[index * self.element_size];
 }
 
 pub fn getAs(self: ByteArray, comptime T: type, index: usize) *T {
@@ -66,30 +68,30 @@ pub fn getAs(self: ByteArray, comptime T: type, index: usize) *T {
 }
 
 pub fn getAsBytes(self: ByteArray, index: usize) []const u8 {
-    return @as([*]const u8, @ptrCast(&self.bytes.items[index * self.entry_size]))[0..self.entry_size];
+    return @as([*]const u8, @ptrCast(&self.bytes.items[index * self.element_size]))[0..self.element_size];
 }
 
 pub fn slicedAs(self: *ByteArray, comptime T: type) []T {
-    if (@sizeOf(T) != self.entry_size) @panic("Wrong type.");
-    return @as([*]T, @ptrCast(@alignCast(self.bytes.items.ptr)))[0 .. self.bytes.items.len / self.entry_size];
+    if (@sizeOf(T) != self.element_size) @panic("Wrong type.");
+    return @as([*]T, @ptrCast(@alignCast(self.bytes.items.ptr)))[0 .. self.bytes.items.len / self.element_size];
 }
 
 pub fn pop(self: *ByteArray) []const u8 {
     if (self.bytes.items.len == 0) @panic("Cannot pop an empty array.");
 
-    const out = self.getAsBytes(self.bytes.items.len / self.entry_size - 1);
-    self.bytes.items.len -= self.entry_size;
+    const out = self.getAsBytes(self.bytes.items.len / self.element_size - 1);
+    self.bytes.items.len -= self.element_size;
     self.len -= 1;
     return out;
 }
 
 pub fn swapRemove(self: *ByteArray, index: usize) void {
-    if (self.entry_size == 0) {
+    if (self.element_size == 0) {
         self.len -= 1;
         return;
     }
 
-    if ((self.bytes.items.len / self.entry_size) - 1 == index) {
+    if ((self.bytes.items.len / self.element_size) - 1 == index) {
         _ = self.pop();
         return;
     }
@@ -105,15 +107,15 @@ fn cast(comptime T: type, data: *anyopaque) *T {
 
 pub const ByteIterator = struct {
     buffer: []u8,
-    entry_size: usize,
+    element_size: usize,
     index: usize = 0,
 
     pub fn next(self: *ByteIterator) ?*anyopaque {
-        std.debug.assert(self.entry_size > 0);
+        std.debug.assert(self.element_size > 0);
 
-        if (self.index >= self.buffer.len / self.entry_size) return null;
+        if (self.index >= self.buffer.len / self.element_size) return null;
         self.index += 1;
-        return self.buffer.ptr + (self.index - 1) * self.entry_size;
+        return self.buffer.ptr + (self.index - 1) * self.element_size;
     }
 
     pub fn nextAs(self: *ByteIterator, comptime T: type) ?*T {
@@ -125,7 +127,7 @@ pub const ByteIterator = struct {
 pub fn iterator(self: *ByteArray) ByteIterator {
     return .{
         .buffer = self.bytes.items,
-        .entry_size = self.entry_size,
+        .element_size = self.element_size,
     };
 }
 

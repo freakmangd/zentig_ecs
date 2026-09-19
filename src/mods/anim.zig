@@ -62,7 +62,7 @@ fn Builder(
             break :blk map;
         },
         from_any_transitions: std.EnumSet(AnimationTag) = blk: {
-            var map = std.EnumSet(AnimationTag).initEmpty();
+            var map: std.EnumSet(AnimationTag) = .empty;
             if (@hasField(@TypeOf(transitions), "any")) {
                 for (transitions.any) |tag| map.insert(tag);
             }
@@ -96,7 +96,7 @@ fn Builder(
             to: AnimationTag,
         ) void {
             const vtrs: *std.EnumSet(AnimationTag) = self.valid_transitions.getPtr(from) orelse vtrs_blk: {
-                self.valid_transitions.put(from, std.EnumSet(AnimationTag).initEmpty());
+                self.valid_transitions.put(from, .empty);
                 break :vtrs_blk self.valid_transitions.getPtr(from).?;
             };
             vtrs.insert(to);

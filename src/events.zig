@@ -91,7 +91,7 @@ test "events" {
 
 fn EventArray(comptime T: type) type {
     return struct {
-        arr: std.ArrayListUnmanaged(T) = .{},
+        arr: std.ArrayList(T) = .empty,
         index: usize = 0,
 
         pub fn next(self: *@This()) ?*T {

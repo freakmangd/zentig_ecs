@@ -28,8 +28,8 @@ pub fn build(b: *std.Build) void {
     const docs_step = b.step("autodocs", "Build and install documentation");
     docs_step.dependOn(&install_docs.step);
 
-    b.modules.put("zmath", zmath) catch @panic("OOM");
-    b.modules.put("zmath_options", zmath.import_table.get("zmath_options").?) catch @panic("OOM");
+    b.modules.put(b.allocator, "zmath", zmath) catch @panic("OOM");
+    b.modules.put(b.allocator, "zmath_options", zmath.import_table.get("zmath_options").?) catch @panic("OOM");
 
     // local testing
 

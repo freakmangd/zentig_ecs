@@ -7,7 +7,6 @@ const ca = @import("component_array.zig");
 const WorldBuilder = @import("worldbuilder.zig");
 
 const Allocator = std.mem.Allocator;
-const TypeMap = ztg.meta.TypeMap;
 const TypeBuilder = ztg.meta.TypeBuilder;
 
 pub fn World(comptime options: struct {
@@ -28,7 +27,7 @@ pub fn World(comptime options: struct {
 
     const MinEntityIndex = std.math.IntFittingRange(0, options.max_entities);
     const ComponentArray = ca.ComponentArray(MinEntityIndex);
-    const ComponentMask = std.bit_set.StaticBitSet(comp_types_len);
+    const ComponentMask = std.bit_set.Static(comp_types_len);
     const EntityArray = ea.EntityArray(ComponentMask, options.max_entities);
 
     return struct {
@@ -75,7 +74,7 @@ pub fn World(comptime options: struct {
             errdefer user_allocator.destroy(entities);
 
             var temp_io: std.Io.Threaded = .init_single_threaded;
-            const now = std.Io.Clock.now(.real, init_opt.io orelse temp_io.io()) catch std.Io.Timestamp.zero;
+            const now = std.Io.Clock.now(.real, init_opt.io orelse temp_io.io());
 
             var self: Self = .{
                 .user_allocator = user_allocator,
@@ -143,11 +142,11 @@ pub fn World(comptime options: struct {
             inline for (options.comp_types.types, &self.comp_arrays) |CT, *comp_arr| {
                 if (comptime @sizeOf(CT) > 0) {
                     for (comp_arr.entities.items) |ent| self.invokeOnRemoveForComponent(CT, comp_arr.getAs(CT, ent).?, ent) catch |err| {
-                        std.log.err("Caught error {} while deinit'ing component list of type {s}", .{ err, @typeName(CT) });
+                        ztg.log.err("Caught error {} while deinit'ing component list of type {s}", .{ err, @typeName(CT) });
                     };
                 } else {
                     for (comp_arr.entities.items) |ent| self.invokeOnRemoveForComponent(CT, undefined, ent) catch |err| {
-                        std.log.err("Caught error {} while deinit'ing component list of type {s}", .{ err, @typeName(CT) });
+                        ztg.log.err("Caught error {} while deinit'ing component list of type {s}", .{ err, @typeName(CT) });
                     };
                 }
                 comp_arr.deinit(self.user_allocator);
@@ -199,13 +198,13 @@ pub fn World(comptime options: struct {
                     const Params = comptime Params: {
                         var types: [fn_params_no_self.len]type = undefined;
                         for (fn_params_no_self, &types) |p, *t| t.* = p.type.?;
-                        break :Params std.meta.Tuple(&types);
+                        break :Params @Tuple(&types);
                     };
 
                     var params: Params = undefined;
                     inline for (params, 0..) |param, i| {
                         params[i] = self.initParam(self.frame_arena.allocator(), @TypeOf(param)) catch |err| {
-                            std.debug.panic("Failed to get args for deinit system for type `{}`. Error: {}", .{ CT, err });
+                            std.debug.panic("Failed to get args for system for type `{}`. Error: {}", .{ CT, err });
                         };
                     }
 
@@ -276,12 +275,11 @@ pub fn World(comptime options: struct {
         pub fn postSystemUpdate(self: *Self) !void {
             if (comptime comp_types_len == 0) return;
 
-            // using a while loop since the changes_queue.items can be realloced
+            // using a while loop since the changes_queue.items can be appended
             // inside the loop.
             var i: usize = 0;
             while (i < self.changes_queue.items.len) : (i += 1) {
-                // skip bounds check, length cant change
-                const rem = (@as([*]const ChangeQueueItem, @ptrCast(self.changes_queue.items)) + i)[0];
+                const rem = self.changes_queue.items[i];
 
                 switch (rem) {
                     .added_component => |comp| {
@@ -514,7 +512,7 @@ pub fn World(comptime options: struct {
 
             if (self.getComponentPtr_fromCompId(ent, component_id)) |comp_ptr| {
                 // entity already has this component, so just overwrite it
-                @memcpy(@as([*]u8, @ptrCast(@alignCast(comp_ptr))), @as([*]const u8, @ptrCast(data))[0..arr.components_data.entry_size]);
+                @memcpy(@as([*]u8, @ptrCast(@alignCast(comp_ptr))), @as([*]const u8, @ptrCast(data))[0..arr.components_data.element_size]);
                 try self.on_added_fns[component_id](self, comp_ptr, ent);
             } else if (arr.willResize()) {
                 // we cant add the component right now, because then the pointers in the calling system will become invalid,
@@ -524,8 +522,8 @@ pub fn World(comptime options: struct {
                 // only because we have an alignment at runtime instead of comptime :,(
                 //
                 // TODO: amortize this
-                const alloced_data = self.frame_arena.allocator().rawAlloc(arr.components_data.entry_size, .fromByteUnits(alignment), @returnAddress()) orelse return error.OutOfMemory;
-                @memcpy(alloced_data, @as([*]const u8, @ptrCast(data))[0..arr.components_data.entry_size]);
+                const alloced_data = self.frame_arena.allocator().rawAlloc(arr.components_data.element_size, .fromByteUnits(alignment), @returnAddress()) orelse return error.OutOfMemory;
+                @memcpy(alloced_data, @as([*]const u8, @ptrCast(data))[0..arr.components_data.element_size]);
                 try self.changes_queue.append(self.frame_arena.allocator(), .{ .added_component = .{
                     .ent = ent,
                     .component_id = component_id,
@@ -770,8 +768,8 @@ pub fn World(comptime options: struct {
             comp_ids_list: []const []const util.CompId,
             negative_ids_list: []const []const util.CompId,
         ) struct { ComponentMask, ComponentMask } {
-            var comp_mask = ComponentMask.initEmpty();
-            var negative_mask = ComponentMask.initEmpty();
+            var comp_mask: ComponentMask = .empty;
+            var negative_mask: ComponentMask = .empty;
 
             for (comp_ids_list) |ids| for (ids) |id| comp_mask.set(id);
             for (negative_ids_list) |ids| for (ids) |id| {
@@ -811,13 +809,13 @@ pub fn World(comptime options: struct {
         }
 
         fn entPassesCompMasks(ent_mask: ComponentMask, comp_mask: ComponentMask, negative_mask: ComponentMask) bool {
-            return ent_mask.supersetOf(comp_mask) and ent_mask.intersectWith(negative_mask).eql(ComponentMask.initEmpty());
+            return ent_mask.supersetOf(comp_mask) and ent_mask.intersectWith(negative_mask).eql(.empty);
         }
 
         fn ParamsForSystem(comptime params: []const std.builtin.Type.Fn.Param) type {
             var types: [params.len]type = undefined;
             for (params, &types) |p, *t| t.* = p.type.?;
-            return std.meta.Tuple(&types);
+            return @Tuple(&types);
         }
 
         /// Generates the arguments tuple for a desired system based on its parameters.
